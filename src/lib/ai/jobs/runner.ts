@@ -3,6 +3,7 @@ import { cachedProfile as fetchProfile } from '../profile-cache';
 import { plan } from '../generate/plan';
 import { fillSection } from '../generate/fill';
 import { assemble } from '../generate/assemble';
+import { compositionToFiles } from '../generate/to-files';
 import { validateComposition } from '../composition/validate';
 import { withOneRepair } from '../generate/repair';
 import { nearestTemplate } from '../generate/fallback';
@@ -123,6 +124,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
         await emit('done');
         await advance('done', {
             composition,
+            files: compositionToFiles(composition),
             endedAt: Date.now(),
             ledger: [...ledger.all()],
         });

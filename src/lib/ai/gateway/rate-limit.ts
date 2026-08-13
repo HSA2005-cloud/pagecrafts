@@ -7,6 +7,8 @@ const MINUTE_MS = 60_000;
 interface Spend {
     at: number;
     tokens: number;
+    /** Set by `acquire` so a concurrent caller sees the budget as spent before `record`. */
+    reserved?: boolean;
 }
 
 /** Where a limiter's window survives between processes. */
@@ -28,6 +30,12 @@ export class RateLimiter {
     private readonly now: () => number;
     private readonly sleep: (ms: number) => Promise<void>;
     private readonly store?: WindowStore;
+    /**
+     * D18 — concurrent `acquire` used to all see the same empty window, all
+     * proceed, and over-admit. One waiter at a time, and a reservation so the
+     * next waiter sees the budget as spent before the HTTP call returns.
+     */
+    private tail: Promise<unknown> = Promise.resolve();
 
     constructor(
         private readonly quota: Pick<ProviderQuota, 'rpm' | 'tpm'>,
@@ -45,6 +53,20 @@ export class RateLimiter {
                 this.window = [];
             }
         }
+    }
+
+    private persist(): void {
+        try {
+            this.store?.save(this.window);
+        } catch {
+            // Unusable state degrades pacing, never the call.
+        }
+    }
+
+    private enqueue<T>(fn: () => Promise<T>): Promise<T> {
+        const run = this.tail.then(fn, fn);
+        this.tail = run.then(() => undefined, () => undefined);
+        return run;
     }
 
     private prune(at: number): void {
@@ -76,28 +98,38 @@ export class RateLimiter {
 
     /** Wait until this request fits the per-minute budget; returns ms spent waiting. */
     async acquire(estimatedInput: number): Promise<number> {
-        const need = estimatedInput + this.avgOutput;
-        let waited = 0;
-        // Each wait retires the oldest slice, so this terminates.
-        for (let wait = this.waitFor(need); wait > 0; wait = this.waitFor(need)) {
-            await this.sleep(wait);
-            waited += wait;
-        }
-        return waited;
+        return this.enqueue(async () => {
+            const need = estimatedInput + this.avgOutput;
+            let waited = 0;
+            // Each wait retires the oldest slice, so this terminates.
+            for (let wait = this.waitFor(need); wait > 0; wait = this.waitFor(need)) {
+                await this.sleep(wait);
+                waited += wait;
+            }
+            // Reserve before returning so a concurrent waiter cannot take the
+            // same slice. `record` replaces this with the actual cost.
+            this.window.push({ at: this.now(), tokens: need, reserved: true });
+            this.prune(this.now());
+            this.persist();
+            return waited;
+        });
     }
 
     /** Record what the call actually cost, and refine the output estimate. */
     record(inputTokens: number, outputTokens: number): void {
-        this.window.push({ at: this.now(), tokens: inputTokens + outputTokens });
+        const actual = inputTokens + outputTokens;
+        const reserved = this.window.find((s) => s.reserved);
+        if (reserved) {
+            reserved.tokens = actual;
+            reserved.reserved = false;
+        } else {
+            this.window.push({ at: this.now(), tokens: actual });
+        }
         if (outputTokens > 0) {
             this.avgOutput = Math.round(this.avgOutput * 0.7 + outputTokens * 0.3);
         }
         this.prune(this.now());
-        try {
-            this.store?.save(this.window);
-        } catch {
-            // Unusable state degrades pacing, never the call.
-        }
+        this.persist();
     }
 }
 

@@ -1,4 +1,4 @@
-import type { Composition } from '@/lib/contracts';
+import type { Composition, FileMap } from '@/lib/contracts';
 import type { LedgerRow } from '../cost/ledger';
 
 export type JobStatus =
@@ -33,6 +33,8 @@ export interface Job {
     events: JobEvent[];
     ledger: LedgerRow[];
     composition?: Composition;
+    /** Generated file tree, present when generation produced a site rather than a fallback. */
+    files?: FileMap;
     /** Set when generation was abandoned and a template was substituted. */
     fallbackTemplateId?: string;
     error?: string;

@@ -120,6 +120,7 @@ describe('the job runner', () => {
         const job = await settled(data.job_id);
         expect(job.status).toBe('done');
         expect(job.composition).toBeDefined();
+        expect(job.files?.['index.html']).toMatch(/^<!doctype html>/i);
         expect(job.sectionsDone).toBe(job.sectionsTotal);
         expect(job.sectionsTotal).toBeGreaterThan(0);
     });
@@ -187,6 +188,7 @@ describe('GET /api/v1/jobs/{id}', () => {
             sections_total: expect.any(Number),
             provider: expect.any(String),
             elapsed_ms: expect.any(Number),
+            files_ready: true,
         });
     });
 

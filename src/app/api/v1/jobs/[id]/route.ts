@@ -29,6 +29,7 @@ export const GET = withRoute<undefined, Params>({
             elapsed_ms: (job.endedAt ?? Date.now()) - job.startedAt,
             ...(job.fallbackTemplateId ? { fallback_template_id: job.fallbackTemplateId } : {}),
             ...(job.error ? { error: job.error } : {}),
+            files_ready: Boolean(job.files && Object.keys(job.files).length),
         });
     },
 });

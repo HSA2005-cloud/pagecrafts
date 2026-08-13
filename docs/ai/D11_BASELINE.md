@@ -3,12 +3,12 @@
 Owner: Hanish (R5 · AI). The corpus, the grader and the ranking machinery for the
 30-vertical quality pass.
 
-> **Status: machinery landed, numbers not yet measured.**
+> **Status: machinery landed, baseline measured on 12 Aug 2026.**
 >
-> Every table below marked _(unmeasured)_ is waiting on one command and the
-> provider capacity to run it. Nothing in this file is estimated, inferred or
-> filled in from a mock — a baseline that was guessed is worse than no baseline,
-> because D12's before/after would be measured against fiction.
+> The tables below are from `evals/grader/results/2026-08-12T18-00-38-385Z-baseline-full`.
+> Twenty-one of thirty verticals never reached a page — Groq 429 / timeout, then
+> Gemini's 20 RPD. The nine that completed all passed. That is a capacity
+> finding, not a quality finding, and the two must not be averaged together.
 
 ---
 
@@ -146,44 +146,53 @@ pinned the stale seventeen now pins the invariant instead.
 
 ## Results
 
-### Pass rate _(unmeasured)_
+Run: `evals/grader/results/2026-08-12T18-00-38-385Z-baseline-full`
+Provider order: Groq `openai/gpt-oss-120b` → Gemini `gemini-3.5-flash` · prompts v1.
+
+### Pass rate
 
 | Group | Passed | Total | Rate |
 |---|---|---|---|
-| Overall | — | 30 | — |
-| **No template** (the claim under test) | — | 18 | — |
-| Template (control) | — | 8 | — |
-| Adversarial | — | 2 | — |
-| Non-Latin-script | — | 2 | — |
+| Overall | 9 | 30 | 30% |
+| **Completed (the quality sample)** | **9** | **9** | **100%** |
+| **No template** (the claim under test) | 9 | 18 | 50% |
+| Template (control) | 0 | 8 | 0% |
+| Adversarial | 0 | 2 | 0% |
+| Non-Latin-script | 0 | 2 | 0% |
 
-### Diversity — R-NEW-C _(unmeasured)_
+The control group, the adversarial pair and the non-Latin pair all sit after the
+quota cliff. Interleaving (added after this run) exists so a partial re-run
+samples every group; this baseline did not have it, which is why every pass is
+a no-template vertical.
 
-Thresholds: no theme above 30% of the corpus, no motion above 40%. Looser than
-the 15/25 proposed for the curated catalogue, because thirty generations is a
-smaller sample.
+`completedButFailed` is **0**. Every vertical that produced a page passed the
+objective bar without fallback.
+
+### Diversity — R-NEW-C
+
+Measured on the nine completed pages only.
 
 | Metric | Value | Limit |
 |---|---|---|
-| Dominant theme share | — | ≤ 0.30 |
-| Dominant motion share | — | ≤ 0.40 |
-| Distinct variant sets | — | — |
+| Dominant theme share | clinical-blue 22% | ≤ 0.30 |
+| Dominant motion share | **calm 56%** | ≤ 0.40 |
+| Distinct variant sets | 8 / 9 | — |
 
-**If `dominantThemeShare` comes back at 1.0, that is the headline finding of D11
-and it outranks the pass rate.** A product where every business gets the same
-look has a problem a good pass rate conceals rather than contradicts. The grader
-prints it as `HEADLINE:` for that reason, and D12's tuning shifts from copy to
-art direction.
+**Headline: motion collapsed, theme did not.** Five of eight themes appeared in
+nine pages. Motion failed the 40% cap because `calm` took half the corpus.
+That is the D12 input: if a tuning slot is spent on art direction, spend it on
+motion, not theme.
 
-### Failure clusters _(unmeasured)_
+### Failure clusters
 
-Ranked by count × impact. **The top three go into D12 and nothing else does** —
-capping the list is what stops D11 overrunning into D12's slot.
+Ranked by count × impact. Every cluster is a provider outage, not a prompt
+failure — D12 must not chase these.
 
 | # | Stage | Symptom | Count | Verticals |
 |---|---|---|---|---|
-| 1 | — | — | — | — |
-| 2 | — | — | — | — |
-| 3 | — | — | — | — |
+| 1 | fill | timeout | 11 | driving-school, packers-movers, residents-association, physiotherapy, tuition-centre, wedding-planner, electrician, accountant, restaurant, portfolio, saas |
+| 2 | profile | provider-error | 7 | shop, blog, agency, unspecified, vague-modern, sweet-shop, saree-shop |
+| 3 | plan | timeout | 1 | music-school |
 
 ### Human columns _(unread)_
 
@@ -193,14 +202,32 @@ capping the list is what stops D11 overrunning into D12's slot.
 | sectionSelectionAppropriate | null | 30 |
 | artDirectionAppropriate | null | 30 |
 
-A blank sheet is written to the results directory on every run. Means stay `null`
-until a column is fully read.
+A blank sheet is in the results directory. Means stay `null` until a column is
+fully read.
 
-### Spend _(unmeasured)_
+### Spend
 
 | | Requests | Tokens |
 |---|---|---|
-| Baseline run | — | — |
+| Baseline run | 163 | 195,358 |
+| Completed verticals only | 91 | 96,595 |
+
+### NFR-003 — first clean figure
+
+`latencyMs` on this run excludes pacing and Retry-After. On the nine completed
+verticals:
+
+| Figure | Value | Budget |
+|---|---|---|
+| Mean model time | 19.6s | 45s |
+| P95 model time | **27.4s** | 45s |
+| Max | 27.4s (hospital) | 45s |
+
+**Met**, on the sample that finished. It is not a 30-vertical P95. A third
+corpus run that actually completes 30 is still the number to publish; this is
+the first number that is allowed to be compared with the requirement at all.
+
+---
 
 ---
 
@@ -222,8 +249,8 @@ not comparable to the D5/D8 numbers.** Do not put them in the same table.
 
 | Item | Why |
 |---|---|
-| Run the baseline | Needs ~2 days of Groq free-tier capacity, or an afternoon with billing |
+| Finish the 30 | Quota, not quality — 9/9 completed passed; 21 never started a page |
 | Read the 30 outputs | Three human columns; not machine-derivable |
-| A clean NFR-003 P95 | Still owed from D8 — both existing figures included pacing |
+| Motion diversity | `calm` at 56% — the one D12-shaped finding from this run |
 | `vertical_profiles` table | Migration written (`20260812090000`); needs provisioning by E1 |
 | Gallery category filter | Three pre-existing failures in discovery, unrelated to this work |

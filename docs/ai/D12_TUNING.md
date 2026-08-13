@@ -5,9 +5,11 @@ the sampling sweep.
 
 > **Status: v2 written and selectable, comparison not yet run.**
 >
-> The before/after table is empty because D11's baseline has not been measured.
-> `AI_PROMPT_PLAN` and `AI_PROMPT_FILL` still default to **v1** — v2 ships
-> alongside and is switched on by config once a comparison says it earns it.
+> D11's taxonomy is now known: every failure cluster is a quota cliff, and the
+> one quality-shaped finding is motion collapsing to `calm`. v2 does not touch
+> motion — it was written against D5 copy/shape observations — so flipping it
+> on would not be the tuning pass this day called for. `AI_PROMPT_PLAN` and
+> `AI_PROMPT_FILL` still default to **v1**.
 
 ---
 
@@ -198,8 +200,9 @@ zero regressions.**
 | Criterion | State |
 |---|---|
 | v1 untouched on disk; v2 alongside | ✅ hash-pinned in CI |
-| Full 30-vertical re-run with v2 | ❌ not run |
-| Before/after table published | ❌ harness ready, no data |
+| Full 30-vertical re-run with v2 | ❌ not run — D11 spent the day's quota |
+| Before/after table published | ❌ harness ready, no v2 data |
 | Pass rate up, zero regressions | ❌ unproven |
 | Generation config recorded as data, not code | ✅ `config.ts`, plumbed to both providers |
 | Profile caching live — repeat vertical costs zero requests | ⚠️ code and migration done; table not provisioned |
+| D11 taxonomy drove v2 | ⚠️ D11's clusters were quota; v2 still answers D5 copy/shape observations |
