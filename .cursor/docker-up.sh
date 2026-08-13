@@ -28,8 +28,19 @@ ensure_dockerd() {
     return 1
   fi
 
-  # Let the rest of the environment use the socket without sudo.
-  sudo chmod 666 /var/run/docker.sock || true
+  # The Supabase CLI and the helper commands below run unprivileged, so the
+  # socket must be usable without sudo. Wait until that is actually true rather
+  # than assuming a single chmod raced ahead of the socket being (re)created.
+  for _ in $(seq 1 30); do
+    docker info >/dev/null 2>&1 && break
+    sudo chmod 666 /var/run/docker.sock 2>/dev/null || true
+    sleep 1
+  done
+
+  if ! docker info >/dev/null 2>&1; then
+    echo "docker socket is not accessible without sudo" >&2
+    return 1
+  fi
 }
 
 fix_bridge_networking() {
