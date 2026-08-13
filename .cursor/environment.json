@@ -1,0 +1,12 @@
+{
+  "name": "Pagecrafts",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "next-dev",
+      "command": "npm run dev"
+    }
+  ],
+  "ports": [3000, 54321, 54323]
+}
