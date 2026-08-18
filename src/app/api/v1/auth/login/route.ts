@@ -28,9 +28,15 @@ function throttled(result: LimitResult, scope: string) {
 export async function POST(request: NextRequest) {
   return guard(async () => {
     const ip = clientIp(request.headers);
+    // #region agent log
+    require("node:fs").appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "A,B", location: "src/app/api/v1/auth/login/route.ts:POST-entry", message: "login request entered", data: { hasKnownIp: ip !== UNKNOWN_IP }, timestamp: Date.now() }) + "\n");
+    // #endregion
 
     if (ip !== UNKNOWN_IP) {
       const byIp = await consume("login:ip", ip, LOGIN_PER_IP);
+      // #region agent log
+      require("node:fs").appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "A,B", location: "src/app/api/v1/auth/login/route.ts:ip-limit", message: "IP limiter consumed", data: { allowed: byIp.allowed, remaining: byIp.remaining, retryAfterSeconds: byIp.retryAfterSeconds, degraded: byIp.degraded }, timestamp: Date.now() }) + "\n");
+      // #endregion
 
       if (!byIp.allowed) {
         return throttled(byIp, "ip");
@@ -44,6 +50,9 @@ export async function POST(request: NextRequest) {
     }
 
     const credentials = readCredentials(body);
+    // #region agent log
+    require("node:fs").appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "B", location: "src/app/api/v1/auth/login/route.ts:credentials", message: "login body classified", data: { hasJsonBody: body !== null, credentialsValid: credentials.ok }, timestamp: Date.now() }) + "\n");
+    // #endregion
 
     if (!credentials.ok) {
       return fail("unauthorized", GENERIC_FAILURE);
@@ -51,6 +60,9 @@ export async function POST(request: NextRequest) {
 
     const email = credentials.value.email.trim().toLowerCase();
     const byEmail = await consume("login:email", email, LOGIN_PER_EMAIL);
+    // #region agent log
+    require("node:fs").appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "C", location: "src/app/api/v1/auth/login/route.ts:email-limit", message: "email limiter consumed", data: { allowed: byEmail.allowed, remaining: byEmail.remaining, retryAfterSeconds: byEmail.retryAfterSeconds, degraded: byEmail.degraded }, timestamp: Date.now() }) + "\n");
+    // #endregion
 
     if (!byEmail.allowed) {
       return throttled(byEmail, "email");
@@ -61,6 +73,9 @@ export async function POST(request: NextRequest) {
       email: credentials.value.email,
       password: credentials.value.password,
     });
+    // #region agent log
+    require("node:fs").appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "D", location: "src/app/api/v1/auth/login/route.ts:supabase-result", message: "auth provider returned", data: { hasUser: Boolean(data.user), hasError: Boolean(error), errorStatus: error?.status ?? null, errorCode: error?.code ?? null }, timestamp: Date.now() }) + "\n");
+    // #endregion
 
     if (error) {
       if (error.status === 429) {
