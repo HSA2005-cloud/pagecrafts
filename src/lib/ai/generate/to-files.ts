@@ -1,7 +1,6 @@
 import type { Composition, FileMap, SectionInstance, SectionKey } from '@/lib/contracts';
 import { compositionShell } from '@/lib/render/page-shell';
 import { SITE_NAV_CSS } from '@/lib/render/site-chrome';
-import { appendFileSync } from 'node:fs';
 import { contractFor } from '../sections/contracts';
 import { sectionContentKey } from './schema';
 import type { StyleId } from './styles';
@@ -112,10 +111,6 @@ function renderInner(
 ): string {
     const h = (tag: 'h1' | 'h2', text: string) =>
         text ? slot(tag, `${key}.heading`, escapeHtml(text)) : '';
-
-    // #region agent log
-    appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify({ hypothesisId: 'A,D', location: 'src/lib/ai/generate/to-files.ts:renderInner', message: 'render section branch', data: { type, key, hasHeading: Boolean(heading) }, timestamp: Date.now() })}\n`);
-    // #endregion
 
     switch (type) {
         case 'hero':
@@ -367,10 +362,6 @@ export function compositionToFiles(composition: Composition, style?: StyleId): F
     const title = composition.meta.title || 'Home';
     const styleAttr = style ? ` data-style="${escapeHtml(style)}"` : '';
 
-    // #region agent log
-    appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify({ hypothesisId: 'A,B,C,D', location: 'src/lib/ai/generate/to-files.ts:compositionToFiles', message: 'renderer entry', data: { sectionCount: composition.sections.length, visibleCount: visible.length, types: visible.map((section) => section.type), style: style ?? null }, timestamp: Date.now() })}\n`);
-    // #endregion
-
     const body = [
         `<style>${PAGE_CSS}</style>`,
         `<div class="site"${styleAttr}>`,
@@ -390,10 +381,6 @@ export function compositionToFiles(composition: Composition, style?: StyleId): F
             body,
         }),
     };
-
-    // #region agent log
-    appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify({ hypothesisId: 'B,C,D', location: 'src/lib/ai/generate/to-files.ts:compositionToFiles', message: 'renderer exit', data: { htmlLength: files['index.html'].length, hasNav: files['index.html'].includes('class="site-nav"'), hasForm: files['index.html'].includes('class="form"'), hrefs: [...files['index.html'].matchAll(/href="#([^"]+)"/g)].map((match) => match[1]) }, timestamp: Date.now() })}\n`);
-    // #endregion
 
     return files;
 }
