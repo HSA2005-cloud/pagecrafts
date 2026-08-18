@@ -113,13 +113,13 @@ describe('compositionToFiles — D15, a composition becomes a site', () => {
     });
 
     it('is a working page: nav, CTA, form, and accordion', () => {
-        expect(html).toContain('href="#s_04"');
+        expect(html).toContain('href="#contact"');
         expect(html).toContain('class="cta"');
         expect(html).toContain('<form class="form"');
         expect(html).toContain('type="email"');
         expect(html).toContain('<button type="submit">');
         expect(html).toContain('<details class="faq-item">');
-        expect(html).toContain('class="grid"');
+        expect(html).toContain('class="cards"');
         expect(html).toContain('class="card"');
     });
 
@@ -136,6 +136,13 @@ describe('compositionToFiles — D15, a composition becomes a site', () => {
         expect(html).toContain('>Services<');
         expect(html).toContain('>FAQ<');
         expect(html).toContain('>Contact<');
+    });
+
+    it('only emits fragment links with matching page anchors', () => {
+        const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]));
+        const fragments = [...html.matchAll(/href="#([^"]+)"/g)].map((match) => match[1]);
+        expect(fragments.length).toBeGreaterThan(0);
+        expect(fragments.every((fragment) => ids.has(fragment))).toBe(true);
     });
 
     it('tags copy with data-slot so the content panel can edit it', () => {
