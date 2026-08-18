@@ -65,6 +65,37 @@ async function poll(
     throw new Error(`Deployment ${deploymentId} never settled`);
 }
 
+async function createPublishableProject(
+    request: APIRequestContext,
+    name: string,
+): Promise<string> {
+    const templates = await request.get('/api/v1/templates?tier=free');
+    const templatesBody = (await templates.json()) as Envelope;
+    const items = templatesBody.data?.items as Array<{ id: string }> | undefined;
+
+    expect(templates.status(), 'listing templates for a new project').toBe(200);
+    expect(items?.length, 'a publish walk needs at least one template').toBeGreaterThan(0);
+
+    const detail = await request.get(`/api/v1/templates/${items![0].id}`);
+    const detailBody = (await detail.json()) as Envelope;
+    const sourceTemplateId = detailBody.data?.forkId as string | undefined;
+
+    expect(detail.status(), 'reading the template selected for a new project').toBe(200);
+    expect(sourceTemplateId, 'a template detail needs its fork id').toBeTruthy();
+
+    const created = await request.post('/api/v1/projects', {
+        data: { name, sourceTemplateId },
+    });
+    const createdBody = (await created.json()) as Envelope;
+
+    expect(created.status(), 'creating a project from a template').toBe(201);
+    expect(createdBody.ok).toBe(true);
+
+    const projectId = createdBody.data!.id as string;
+    expect(projectId).toBeTruthy();
+    return projectId;
+}
+
 test.describe('signup to a live URL', () => {
     test.skip(!withAuth, 'needs Upstash: set E2E_WITH_AUTH=1');
 
@@ -92,16 +123,7 @@ test.describe('signup to a live URL', () => {
         expect(before.status()).toBe(200);
         expect((beforeBody.data!.items as unknown[]).length).toBe(0);
 
-        const created = await page.request.post('/api/v1/projects', {
-            data: { name: 'My E2E Site' },
-        });
-        const createdBody = (await created.json()) as Envelope;
-
-        expect(created.status(), 'creating a project').toBe(201);
-        expect(createdBody.ok).toBe(true);
-
-        const projectId = createdBody.data!.id as string;
-        expect(projectId).toBeTruthy();
+        const projectId = await createPublishableProject(page.request, 'My E2E Site');
 
         // Publishing without having paid must be refused, and refused in words. This is a
         // real failure path and it runs on every CI machine, credentials or not.
@@ -194,10 +216,7 @@ test.describe('signup to a live URL', () => {
         const me = (await (await page.request.get('/api/v1/auth/me')).json()) as Envelope;
         const user = me.data!.user as { id: string };
 
-        const created = (await (
-            await page.request.post('/api/v1/projects', { data: { name: 'Twice' } })
-        ).json()) as Envelope;
-        const projectId = created.data!.id as string;
+        const projectId = await createPublishableProject(page.request, 'Twice');
 
         await grantPublish(user.id, projectId);
 

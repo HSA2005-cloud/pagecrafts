@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { signIn } from './support/sign-in';
+import { newAccount, signUp } from './support/sign-up';
 import { STATE } from './support/users';
 
 // Signing in goes through the login rate limiter, which fails closed when it
@@ -47,11 +48,17 @@ test.describe('the happy path', () => {
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     });
 
-    // Its own context: signing out of the shared session would leave every test after
-    // this one unauthenticated, which is what happened the first time.
+    // Logging out revokes the Supabase session server-side, so a second context loaded from
+    // STATE.first is not independent: it carries the same refresh token as every later test.
+    // Use a disposable account to test logout without invalidating the suite's seeded session.
     test('signing out ends the session', async ({ browser }) => {
-        const context = await browser.newContext({ storageState: STATE.first });
+        const context = await browser.newContext({ storageState: undefined });
         const page = await context.newPage();
+        const outcome = await signUp(page, newAccount());
+        if (outcome === 'needs-email') {
+            await context.close();
+            test.skip(true, 'this run confirms by email; no inbox here');
+        }
 
         const out = await page.request.post('/api/v1/auth/logout');
         expect(out.status()).toBe(200);
