@@ -28,10 +28,13 @@ if ! command -v supabase >/dev/null 2>&1; then
   sudo dpkg -i /tmp/supabase.deb
 fi
 
-# 2. Node dependencies. The committed lockfile is authoritative.
+# 2. Default `gh` / GH_REPO to upstream AdithyaPatil-1609/pagecrafts (not the fork).
+bash "$here/../scripts/setup-upstream-default.sh" || true
+
+# 3. Node dependencies. The committed lockfile is authoritative.
 npm ci
 
-# 3. Pre-pull container images (Redis, SRH, and the whole Supabase stack) so they
+# 4. Pre-pull container images (Redis, SRH, and the whole Supabase stack) so they
 #    are baked into the environment snapshot. Best-effort: if Docker cannot come
 #    up during the build, `start` will pull the images on first boot instead.
 if bash "$here/docker-up.sh"; then

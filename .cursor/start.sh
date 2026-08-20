@@ -7,6 +7,9 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 cd "$here/.."
 
+# Every boot: PRs and `gh` default to upstream AdithyaPatil-1609/pagecrafts.
+bash "$here/../scripts/setup-upstream-default.sh" || true
+
 bash "$here/docker-up.sh"
 
 # The app doesn't use realtime, edge functions, or analytics; those services are
