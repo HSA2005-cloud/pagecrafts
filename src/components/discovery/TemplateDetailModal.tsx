@@ -142,7 +142,7 @@ export function TemplateDetailModal({
             // failure. Checking the connection is sound advice here and nowhere else.
             setState({
                 status: "error",
-                message: "We could not reach PageCraft. Check your connection and try again.",
+                message: "We could not reach PageCrafts. Check your connection and try again.",
             });
         }
     }, [templateId]);

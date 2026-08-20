@@ -19,7 +19,7 @@ export function SettingsSlide({ account }: { account: AccountResponse | null }) 
                         Settings
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        Your account, the details on a receipt, and what PageCraft does with your
+                        Your account, the details on a receipt, and what PageCrafts does with your
                         work.
                     </p>
                 </header>

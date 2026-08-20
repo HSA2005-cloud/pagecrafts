@@ -10,7 +10,7 @@ export function SitesEmpty() {
         <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-14 text-center">
             <p className="text-base font-semibold text-foreground">No sites yet</p>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                Describe the site you want and PageCraft will build a first draft you can edit.
+                Describe the site you want and PageCrafts will build a first draft you can edit.
             </p>
 
             <Link

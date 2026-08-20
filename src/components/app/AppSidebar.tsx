@@ -103,7 +103,7 @@ export function AppSidebar({
                 href="/"
                 className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-                <BrandMark />
+                <BrandMark size="sidebar" />
             </Link>
 
             <Link

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SiteScene } from "@/components/site/SiteScene";
@@ -17,20 +17,17 @@ function slideIndex(path: string): number {
 export function PageFlow({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const rootRef = useRef<HTMLDivElement>(null);
-    const previous = useRef(pathname);
+    const [previousPath, setPreviousPath] = useState(pathname);
     const quiet = pathname.startsWith("/editor");
     const landing = pathname === "/";
 
-    const dir = useMemo(() => {
-        const from = slideIndex(previous.current);
-        const to = slideIndex(pathname);
-        if (from < 0 || to < 0 || from === to) return "in";
-        return to > from ? "forward" : "back";
-    }, [pathname]);
+    if (previousPath !== pathname) {
+        setPreviousPath(pathname);
+    }
 
-    useEffect(() => {
-        previous.current = pathname;
-    }, [pathname]);
+    const from = slideIndex(previousPath);
+    const to = slideIndex(pathname);
+    const dir = from < 0 || to < 0 || from === to ? "in" : to > from ? "forward" : "back";
 
     useEffect(() => {
         document.documentElement.classList.toggle("deck-snap", landing);

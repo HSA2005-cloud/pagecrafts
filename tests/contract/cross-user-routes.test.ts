@@ -8,7 +8,7 @@ import { getProject, listProjects } from "@/lib/data/projects";
 import { getProjectFiles, getProjectFile } from "@/lib/data/project-files";
 import { listCommits } from "@/lib/data/commits";
 import { listDeployments } from "@/lib/data/deployments";
-import { checkEditPermission } from "@/lib/data/entitlements";
+import { assertCanEdit, checkEditPermission } from "@/lib/data/entitlements";
 import { createFakeDb, type FakeDb } from "../support/fake-db";
 
 // The cross-user half of the D19 route audit (SEC-14, R3 D19).
@@ -59,6 +59,7 @@ const CROSS_USER: Record<string, "covered" | { skipped: string }> = {
     "/commits": "covered",
     "/composition": "covered",
     "/content": "covered",
+    "/copy-edits": "covered",
     "/deployments": "covered",
     "/edits": "covered",
     "/edits/apply": "covered",
@@ -145,6 +146,11 @@ describe("the audit covers every route under /projects/{id}", () => {
 });
 
 describe("a signed-in stranger, asking for somebody else's project", () => {
+    it("cannot rewrite copy on it", async () => {
+        const { db, theirs } = twoPeople();
+        await expectHidden("POST /copy-edits", () => getProject(db.asUser(STRANGER), theirs));
+    });
+
     it("cannot read the project", async () => {
         const { db, theirs } = twoPeople();
         await expectHidden("GET /projects/{id}", () => getProject(db.asUser(STRANGER), theirs));
@@ -194,6 +200,27 @@ describe("a signed-in stranger, asking for somebody else's project", () => {
         const { db, theirs } = twoPeople();
         const permission = await checkEditPermission(db.asUser(STRANGER), STRANGER, theirs);
         expect(permission.reason).toBe("never_published");
+    });
+
+    it("cannot ask for a copy rewrite on it", async () => {
+        // Worth reading, because the route's first line is not what protects it.
+        //
+        // /copy-edits opens with assertCanEdit. For a project a stranger cannot see there
+        // is no publish history, so the edit gate reads "never published" and *allows* --
+        // the same shape as the /checkout-with-pro case below, where an entitlement check
+        // answers about the account rather than the project.
+        //
+        // The refusal arrives one line later at getProject, which is RLS-scoped. The route
+        // is safe, and it is safe by its second guard rather than its first. Recorded so
+        // nobody reorders those two calls believing the gate is doing the work (R3 D20).
+        const { db, theirs } = twoPeople();
+
+        const permission = await assertCanEdit(db.asUser(STRANGER), STRANGER, theirs);
+        expect(permission.allowed, "the edit gate does not hide other people's projects").toBe(
+            true,
+        );
+
+        await expectHidden("POST /copy-edits", () => getProject(db.asUser(STRANGER), theirs));
     });
 
     it("cannot start a checkout for it", async () => {

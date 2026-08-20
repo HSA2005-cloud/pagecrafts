@@ -1,4 +1,5 @@
 import { model } from '../gateway';
+import { contain } from '../containment/envelope';
 import { stripFences, sanitise, sanitiseDeep } from '../sanitise';
 import type { ContentSchema, Field } from '@/lib/contracts';
 
@@ -108,14 +109,19 @@ export async function rewriteTemplateCopy(
     latencyMs: number;
 } }> {
     const copy = currentCopy(schema, content);
+    // Page copy is untrusted (FR-110). The instruction is not — it was typed by
+    // the person who owns the project, same as proposeEdit.
+    const contained = contain(
+        'Rewrite the words on a website. Keep the same structure. Do not invent a phone, email, address or price that the instruction does not give. Return JSON only.',
+        { content: JSON.stringify(copy) },
+    );
     const reply = await model.fast.complete({
         job: 'edit',
-        system:
-            'Rewrite the words on a website. Keep the same structure. Do not invent a phone, email, address or price that the instruction does not give. Return JSON only.',
+        system: contained.system,
         user: [
             'Rewrite the words on this page.',
             `Instruction: ${instruction.trim()}`,
-            `Current copy: ${JSON.stringify(copy)}`,
+            `Current copy: ${contained.values.content}`,
             'Reply with JSON: {"explanation":"...","values":{"hero":{"headline":"..."}}}',
             'Only include fields you are changing. Never include image fields.',
         ].join('\n'),

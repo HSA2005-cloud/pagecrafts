@@ -1,4 +1,6 @@
 'use client';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { useEditorStore } from '@/lib/editor-store';
 
 function statusLine(saving: boolean, saveError: string | null, unsaved: number, savedAt: string | null) {
@@ -90,6 +92,13 @@ export default function TopBar({
                 >
                     {advanced ? 'Exit Advanced' : 'Advanced'}
                 </button>
+                <Link
+                    href="/#build"
+                    className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                    <ArrowLeft className="size-4 shrink-0" aria-hidden />
+                    Back to Templates
+                </Link>
                 <button
                     type="button"
                     disabled={dirtyPaths.length === 0 || saving}

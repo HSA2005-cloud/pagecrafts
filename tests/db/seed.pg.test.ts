@@ -217,9 +217,13 @@ describe("what twenty-one migrations left behind", () => {
             "projects.repo_full_name",
             // Nobody has signed in with GitHub, and nobody has set a display name.
             "users.avatar_url",
+            "users.billing_city",
+            "users.billing_line",
             "users.encrypted_token",
             "users.github_id",
+            "users.gstin",
             "users.handle",
+            "users.phone",
         ].sort());
     });
 

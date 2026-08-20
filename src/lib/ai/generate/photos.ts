@@ -98,9 +98,12 @@ function withUrl(value: unknown, url: string): Record<string, unknown> {
 export async function stampPhotoUrls(
     composition: Composition,
     lookup: (query: string) => Promise<string> = async (query) => bankPhotoUrl(query),
+    /** When set, only these section types receive photographs (Casual stamps the hero alone). */
+    onlyTypes?: ReadonlyArray<Composition['sections'][number]['type']>,
 ): Promise<Composition> {
     const cache = new Map<string, string>();
     const title = composition.meta.title ?? '';
+    const allowed = onlyTypes ? new Set(onlyTypes) : null;
 
     const resolve = async (query: string, fallback: string): Promise<string> => {
         const search = photoSearchQuery(composition.vertical, title, query || fallback);
@@ -116,6 +119,8 @@ export async function stampPhotoUrls(
     };
 
     const sections = await Promise.all(composition.sections.map(async (section) => {
+        if (allowed && !allowed.has(section.type)) return section;
+
         const props = { ...section.props };
         const fallback = `${composition.vertical} ${section.type}`;
 

@@ -21,14 +21,29 @@ import { createFakeDb, type FakeDb } from "../support/fake-db";
 // twice. One `supabase db reset` run against the real database is still owed before D10.
 
 const auth = vi.hoisted(() => ({ requireUser: vi.fn(), supabaseRoute: vi.fn() }));
+const password = vi.hoisted(() => ({ authenticateWithPassword: vi.fn() }));
 
 vi.mock("@/lib/auth/session", () => ({
     requireUser: auth.requireUser,
     supabaseRoute: auth.supabaseRoute,
 }));
 
+vi.mock("@/lib/auth/password-check", () => ({
+    authenticateWithPassword: password.authenticateWithPassword,
+    passwordAttemptResponse: (result: { code: string; message: string }) =>
+        Response.json(
+            { ok: false, error: { code: result.code, message: result.message } },
+            { status: result.code === "rate_limited" ? 429 : result.code === "forbidden" ? 403 : 401 },
+        ),
+    PASSWORD_GENERIC_FAILURE: "That email and password combination is not correct.",
+    PASSWORD_THROTTLED: "Too many sign-in attempts. Try again in a few minutes.",
+}));
+
 const OWNER = "11111111-1111-4111-8111-000000000001";
 const STRANGER = "11111111-1111-4111-8111-000000000002";
+const OWNER_EMAIL = "owner@pagecraft.test";
+const STRANGER_EMAIL = "stranger@pagecraft.test";
+const OWNER_PASSWORD = "correct-horse";
 const TEMPLATE_ID = "22222222-2222-4222-8222-000000000001";
 
 const CONTENT_SCHEMA = {
@@ -53,7 +68,8 @@ let db: FakeDb;
 /** Point the route kernel at one signed-in user for the next call. */
 function signedInAs(userId: string) {
     const supabase = db.asUser(userId);
-    auth.requireUser.mockResolvedValue({ userId, supabase });
+    const email = userId === OWNER ? OWNER_EMAIL : STRANGER_EMAIL;
+    auth.requireUser.mockResolvedValue({ userId, supabase, email });
     auth.supabaseRoute.mockResolvedValue(supabase);
 }
 
@@ -74,6 +90,7 @@ async function body(response: Response) {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    password.authenticateWithPassword.mockResolvedValue({ ok: true, user: { id: OWNER } });
     db = createFakeDb({
         users: [{ id: OWNER }, { id: STRANGER }],
         templates: [
@@ -172,9 +189,15 @@ describe("the owner's full round trip", () => {
         expect(history.json.data.items[0]).toMatchObject({ message: "Save the hero", author: "user" });
         expect(history.json.data.items[1]).toMatchObject({ message: "Created from Ember", author: "system" });
 
-        // 9. Delete removes our rows and their children.
+        // 9. Delete removes our rows and their children — only after the same
+        // password check as sign-in.
         signedInAs(OWNER);
-        const deleted = await body(await project.DELETE(url(`/api/v1/projects/${id}`), params({ id })));
+        const deleted = await body(
+            await project.DELETE(
+                url(`/api/v1/projects/${id}`, jsonBody("DELETE", { email: OWNER_EMAIL, password: OWNER_PASSWORD })),
+                params({ id }),
+            ),
+        );
         expect(deleted.json.data).toEqual({ deleted: true });
         expect(db.rows("projects")).toHaveLength(0);
         expect(db.rows("project_files")).toHaveLength(0);
@@ -327,7 +350,10 @@ describe("the owner's full round trip", () => {
         db.insert("deployments", { project_id: id, status: "live", live_url: "https://x.pagecraft.in" });
 
         signedInAs(OWNER);
-        await project.DELETE(url(`/api/v1/projects/${id}`), params({ id }));
+        await project.DELETE(
+            url(`/api/v1/projects/${id}`, jsonBody("DELETE", { email: OWNER_EMAIL, password: OWNER_PASSWORD })),
+            params({ id }),
+        );
 
         // Our row is gone. Nothing in this path reached out to the host.
         expect(db.rows("projects")).toHaveLength(0);
@@ -457,7 +483,10 @@ describe("a second user is denied at every step", () => {
         expect(db.rows("projects")[0]!.name).toBe("Kettle & Co.");
 
         signedInAs(STRANGER);
-        await project.DELETE(url(`/api/v1/projects/${id}`), params({ id }));
+        await project.DELETE(
+            url(`/api/v1/projects/${id}`, jsonBody("DELETE", { email: STRANGER_EMAIL, password: OWNER_PASSWORD })),
+            params({ id }),
+        );
         expect(db.rows("projects")).toHaveLength(1);
     });
 

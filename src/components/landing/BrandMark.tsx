@@ -1,18 +1,30 @@
 import { cn } from "@/lib/utils";
 
-/** The PageCraft lockup: gold "PC" tile plus the wordmark. */
-export function BrandMark({ className }: { className?: string }) {
+export const BRAND_LOCKUP_SRC = "/brand/pagecrafts-lockup.png";
+export const BRAND_NAME = "PageCrafts";
+
+/** Official PageCrafts lockup: PC monogram, wordmark, and tagline. */
+export function BrandMark({
+    className,
+    size = "header",
+}: {
+    className?: string;
+    size?: "header" | "sidebar";
+}) {
     return (
-        <span className={cn("flex items-center gap-3", className)}>
-            <span
-                aria-hidden
-                className="flex size-9 items-center justify-center rounded-xl border border-gold/45 bg-card font-display text-[0.68rem] font-bold tracking-[0.12em] text-gold"
-            >
-                PC
-            </span>
-            <span className="font-display text-xl font-bold tracking-tight text-foreground">
-                PageCraft
-            </span>
+        <span className={cn("inline-flex items-center", className)}>
+            {/* Native img so the lockup works in every shell without extra layout wrappers. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src={BRAND_LOCKUP_SRC}
+                alt={BRAND_NAME}
+                width={496}
+                height={161}
+                className={cn(
+                    "w-auto max-w-none bg-transparent object-contain object-left",
+                    size === "sidebar" ? "h-14" : "h-11",
+                )}
+            />
         </span>
     );
 }

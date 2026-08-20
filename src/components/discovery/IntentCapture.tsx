@@ -102,7 +102,21 @@ export function IntentCapture({
             return;
         }
 
-        router.push(`/editor/${encodeURIComponent(created.data.id)}`);
+        const text = `${composeBrief(next)}. Treat the chosen template as visual reference only. Generate a full working site with a home page, at least two other pages, and a Settings page last — not a copy of one homepage.`;
+        const started = await apiPost<GenerateJobResponse>(
+            `/api/v1/projects/${encodeURIComponent(created.data.id)}/generate`,
+            { prompt: text },
+        );
+
+        if (started.error || !started.data) {
+            setError(started.error ?? "The site could not be generated.");
+            setBusy(null);
+            return;
+        }
+
+        router.push(
+            `/editor/${encodeURIComponent(created.data.id)}?job=${encodeURIComponent(started.data.job_id)}`,
+        );
     }
 
     async function startGeneration(next: SiteBrief) {

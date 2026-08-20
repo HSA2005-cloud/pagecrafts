@@ -95,3 +95,9 @@ export interface PatchProjectRequest {
   siteMeta?: SiteMeta;
   formEndpoint?: string | null;
 }
+
+// DELETE /projects/{id} — same email + password shape as sign-in (C-11).
+export interface DeleteProjectRequest {
+  email: string;
+  password: string;
+}

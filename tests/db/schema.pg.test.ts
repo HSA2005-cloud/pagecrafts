@@ -63,7 +63,7 @@ describe("the migration stack", () => {
         // A count, deliberately. It is the one assertion that notices a migration file
         // being deleted or never committed — the failure mode where the stack still
         // applies cleanly because the broken one is simply gone. Bump it when you add one.
-        expect(migrationFiles().length).toBe(22);
+        expect(migrationFiles().length).toBe(24);
         expect(applied.rows[0]!.n).toBeGreaterThan(0);
     });
 

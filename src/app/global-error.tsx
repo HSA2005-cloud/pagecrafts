@@ -52,8 +52,20 @@ export default function GlobalError({
                 }}
             >
                 <main style={{ maxWidth: '28rem', textAlign: 'center' }}>
+                    <img
+                        src="/brand/pagecrafts-lockup.png"
+                        alt="PageCrafts"
+                        width={496}
+                        height={161}
+                        style={{
+                            display: 'block',
+                            height: '3rem',
+                            width: 'auto',
+                            margin: '0 auto 1.25rem',
+                        }}
+                    />
                     <h1 style={{ fontSize: '1.5rem', fontWeight: 600, margin: '0 0 0.75rem' }}>
-                        PageCraft could not load
+                        PageCrafts could not load
                     </h1>
 
                     <p style={{ fontSize: '0.875rem', lineHeight: 1.6, color: MUTED, margin: 0 }}>

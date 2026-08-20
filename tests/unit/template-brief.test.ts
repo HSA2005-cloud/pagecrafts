@@ -15,14 +15,22 @@ describe("choosing a template", () => {
     expect(page).toContain("sourceTemplateId");
     expect(capture).toContain("startFromDesign");
     expect(capture).toContain("Put this on the design");
+    expect(capture).toContain("/generate");
+    expect(capture).toContain("/editor/");
+    expect(capture).toContain("?job=");
+    expect(capture).toContain("visual reference");
   });
 
   it("keeps the editor as chat on the left and live preview on the right", () => {
     const shell = read("src", "components", "editor", "EditorShell.tsx");
-    const defaultSplit = shell.slice(shell.indexOf("lg:flex-[3]"));
+    const split = read("src", "components", "editor", "EditorSplit.tsx");
+
+    const defaultSplit = shell.slice(shell.indexOf("<EditorSplit"));
 
     expect(defaultSplit.indexOf("<ChatPanel")).toBeGreaterThan(0);
     expect(defaultSplit.indexOf("<PreviewPane")).toBeGreaterThan(defaultSplit.indexOf("<ChatPanel"));
     expect(shell.includes("ContentPanel")).toBe(false);
+    expect(split).toContain("DEFAULT_LEFT = 30");
+    expect(split).toContain("role=\"separator\"");
   });
 });

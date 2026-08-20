@@ -41,11 +41,11 @@ export function TrainingConsent({ initial }: { initial: boolean }) {
 
     return (
         <div className="rounded-2xl glass-panel p-5">
-            <p className="text-base font-semibold text-foreground">Help improve PageCraft</p>
+            <p className="text-base font-semibold text-foreground">Help improve PageCrafts</p>
 
             <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
                 {optedIn
-                    ? "Your descriptions and the sites made from them may be used to improve how PageCraft writes. You can turn this off at any time."
+                    ? "Your descriptions and the sites made from them may be used to improve how PageCrafts writes. You can turn this off at any time."
                     : "Your descriptions and the sites made from them are not used for anything but building your site. This is off unless you turn it on."}
             </p>
 

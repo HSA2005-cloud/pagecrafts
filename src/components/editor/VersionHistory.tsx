@@ -13,7 +13,7 @@ import type { Commit, CommitAuthor } from '@/lib/contracts';
 const AUTHOR_LABEL: Record<CommitAuthor, string> = {
     user: 'You',
     ai_edit: 'An AI edit',
-    system: 'PageCraft',
+    system: 'PageCrafts',
 };
 
 function when(iso: string): string {

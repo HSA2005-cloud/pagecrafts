@@ -71,7 +71,8 @@ describe('three looks stay on-brief for any vertical', () => {
 
         expect(html.casual).toContain('data-style="casual"');
         expect(html.casual).toContain('data-motion="none"');
-        expect(html.casual).not.toContain('images.unsplash.com');
+        expect(html.casual).toContain('images.unsplash.com');
+        expect(html.casual).toContain('<img src="');
         expect(html.casual).not.toContain('motion-stage');
         expect(html.casual).not.toContain('class="motion-motif"');
 

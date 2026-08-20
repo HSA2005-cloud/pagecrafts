@@ -13,7 +13,7 @@ const THROTTLED = "You have made a lot of requests. Try again in a little while.
 const BUSY = "We are handling a lot of requests right now. Try again in a moment.";
 const PAUSED = "Site generation is paused right now. Please try again later.";
 const USER_CAP = "You have reached today's generation limit. It resets at midnight UTC.";
-const GLOBAL_CAP = "Generation has reached today's limit across PageCraft. It resets at midnight UTC.";
+const GLOBAL_CAP = "Generation has reached today's limit across PageCrafts. It resets at midnight UTC.";
 
 export type UsageReport = Pick<Usage, "inputTokens" | "outputTokens">;
 

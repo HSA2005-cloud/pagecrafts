@@ -91,7 +91,7 @@ export default function ChatComposer({
 
             {banner && domainNote ? (
                 <p className="border-b border-border/70 px-3 py-2 text-xs leading-5 text-muted-foreground">
-                    Custom domains are coming. For now your site lives on a PageCraft
+                    Custom domains are coming. For now your site lives on a PageCrafts
                     address — we will let you know when you can point your own name at it.
                 </p>
             ) : null}
