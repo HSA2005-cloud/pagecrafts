@@ -28,7 +28,14 @@ const FILES = [{ path: "index.html", content: "<h1>hi</h1>", encoding: "utf-8" a
 function tables(repoFullName: string | null = null): Record<string, TableResponder> {
     return {
         projects: row({ id: PROJECT_ID, repo_full_name: repoFullName }),
-        deployments: row({ id: DEPLOYMENT_ID }),
+        deployments: (query) => {
+            // openDeployment selects in-flight rows. A blanket `row()` would make every
+            // publish look already running and never call the provider.
+            if (query.op === "select") {
+                return { data: query.shape === "many" ? [] : null, error: null };
+            }
+            return row({ id: DEPLOYMENT_ID })(query);
+        },
     };
 }
 
@@ -109,6 +116,7 @@ describe("publishProject", () => {
         expect(deploy.publish).toHaveBeenCalledWith(
             expect.objectContaining({ projectId: PROJECT_ID, files: FILES, idempotencyKey: KEY }),
             expect.any(Function),
+            expect.anything(),
         );
     });
 
@@ -121,6 +129,7 @@ describe("publishProject", () => {
         expect(deploy.publish).toHaveBeenCalledWith(
             expect.objectContaining({ siteId: "pagecraft/kettle-co" }),
             expect.any(Function),
+            expect.anything(),
         );
     });
 
