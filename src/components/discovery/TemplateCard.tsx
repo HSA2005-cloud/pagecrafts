@@ -13,14 +13,20 @@ export function TemplateCard({
     template,
     index,
     compact = false,
+    showPrice = true,
 }: {
     template: TemplateSummary;
     index: number;
     compact?: boolean;
+    showPrice?: boolean;
 }) {
     return (
         <article className="card-hover group relative overflow-hidden rounded-xl border border-border bg-card focus-within:border-primary/40">
-            <TemplateDetailModal templateId={template.id} templateName={template.name}>
+            <TemplateDetailModal
+                templateId={template.id}
+                templateName={template.name}
+                showPrice={showPrice}
+            >
                 <button
                     type="button"
                     className="block w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -59,12 +65,13 @@ export function TemplateCard({
                             <TemplatePreview preview={template.preview} priority={index <= 4} />
                         )}
 
-                        {/* The price, on the design, before any choice (UI Spec §7.5). */}
-                        <PriceBadge
-                            tier={template.tier}
-                            priceInr={template.priceInr}
-                            className="absolute right-2 top-2 z-[1] shadow-sm"
-                        />
+                        {showPrice ? (
+                            <PriceBadge
+                                tier={template.tier}
+                                priceInr={template.priceInr}
+                                className="absolute right-2 top-2 z-[1] shadow-sm"
+                            />
+                        ) : null}
                     </span>
 
                     <span

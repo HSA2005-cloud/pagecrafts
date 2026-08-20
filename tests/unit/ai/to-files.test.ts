@@ -73,9 +73,16 @@ describe('compositionToFiles — D15, a composition becomes a site', () => {
     const files = compositionToFiles(composition);
     const html = files['index.html'];
 
-    it('writes a single index.html', () => {
-        expect(Object.keys(files)).toEqual(['index.html']);
+    it('writes a multi-page site ending with Settings', () => {
+        const paths = Object.keys(files);
+        expect(paths).toContain('index.html');
+        expect(paths).toContain('about.html');
+        expect(paths).toContain('services.html');
+        expect(paths).toContain('faq.html');
+        expect(paths).toContain('contact.html');
+        expect(paths[paths.length - 1]).toBe('settings.html');
         expect(html).toMatch(/^<!doctype html>/i);
+        expect(paths.length).toBeGreaterThanOrEqual(4);
     });
 
     it('puts every art-direction dial on the page', () => {
@@ -90,10 +97,10 @@ describe('compositionToFiles — D15, a composition becomes a site', () => {
         expect(html).toContain('data-section-id="s_01"');
         expect(html).toContain('data-type="hero"');
         expect(html).toContain('Family dentistry');
-        expect(html).toContain('Do I need to book?');
-        expect(html).toContain('hi@x.in');
         expect(html).not.toContain('Should not render.');
         expect(html).not.toContain('id="s_hidden"');
+        expect(files['faq.html']).toContain('Do I need to book?');
+        expect(files['contact.html']).toContain('hi@x.in');
     });
 
     it('adds a nav so in-page links stay on the preview', () => {
@@ -108,7 +115,7 @@ describe('compositionToFiles — D15, a composition becomes a site', () => {
         // the nav is there, it carries the site's name, and its wordmark goes to the top.
         expect(html).toContain('class="site-header"');
         expect(html).toContain('href="#top"');
-        expect(html).toContain('href="#contact"');
+        expect(html).toContain('href="contact.html"');
         expect(html).toContain('Smile Dental');
         expect(html).toContain('<main id="top">');
     });
@@ -131,14 +138,17 @@ describe('compositionToFiles — D15, a composition becomes a site', () => {
     });
 
     it('is a working page: nav, CTA, form, and accordion', () => {
-        expect(html).toContain('href="#contact"');
+        expect(html).toContain('href="contact.html"');
         expect(html).toContain('class="cta"');
-        expect(html).toContain('<form class="form"');
-        expect(html).toContain('type="email"');
-        expect(html).toContain('<button type="submit">');
-        expect(html).toContain('<details>');
-        expect(html).toContain('class="cards"');
-        expect(html).toContain('class="card"');
+        expect(files['contact.html']).toContain('<form class="form"');
+        expect(files['contact.html']).toContain('mailto:hi@x.in');
+        expect(files['contact.html']).toContain('type="email"');
+        expect(files['contact.html']).toContain('<button type="submit">');
+        expect(files['faq.html']).toContain('<details>');
+        expect(files['services.html']).toContain('class="cards"');
+        expect(files['services.html']).toContain('class="card"');
+        expect(files['settings.html']).toContain('Settings');
+        expect(files['settings.html']).toContain('data-working-form');
     });
 
     it('marks sections for the motion observer', () => {
@@ -146,22 +156,26 @@ describe('compositionToFiles — D15, a composition becomes a site', () => {
         expect(html).toContain('IntersectionObserver');
     });
 
-    it('links every content page from the header using this site\'s headings', () => {
+    it('links every content page from the header', () => {
         expect(html).toContain('aria-label="Site"');
-        expect(html).toContain('href="#services"');
-        expect(html).toContain('href="#faq"');
-        expect(html).toContain('href="#contact"');
-        expect(html).toContain('>What we do<');
-        expect(html).toContain('>Questions<');
-        expect(html).toContain('>Find us<');
+        expect(html).toContain('href="services.html"');
+        expect(html).toContain('href="faq.html"');
+        expect(html).toContain('href="contact.html"');
+        expect(html).toContain('href="settings.html"');
+        expect(html).toContain('>Services<');
+        expect(html).toContain('>FAQ<');
+        expect(html).toContain('>Contact<');
+        expect(html).toContain('>Settings<');
         expect(html).not.toContain('>Gallery<');
         expect(html).not.toContain('>Testimonials<');
+        const lastNav = html.match(/<nav aria-label="Site">([\s\S]*?)<\/nav>/)?.[1] ?? '';
+        expect(lastNav.lastIndexOf('settings.html')).toBeGreaterThan(lastNav.lastIndexOf('contact.html'));
     });
 
     it('tags copy with data-slot so the content panel can edit it', () => {
         expect(html).toContain('data-slot="hero.heading"');
-        expect(html).toContain('data-slot="services.items.0.title"');
-        expect(html).toContain('data-slot="contact.email"');
+        expect(files['services.html']).toContain('data-slot="services.items.0.title"');
+        expect(files['contact.html']).toContain('data-slot="contact.email"');
         expect(html).toContain('data-slot="hero.image"');
     });
 

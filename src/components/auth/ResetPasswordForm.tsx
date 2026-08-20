@@ -70,7 +70,7 @@ export function ResetPasswordForm() {
                 {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
             </div>
 
-            <Button type="submit" className="mt-5 w-full" disabled={busy}>
+            <Button type="submit" variant="brand" className="mt-5 w-full" disabled={busy}>
                 {busy ? "Saving…" : "Save new password"}
             </Button>
         </form>

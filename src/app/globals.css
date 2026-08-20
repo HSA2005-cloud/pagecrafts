@@ -440,33 +440,29 @@
   padding: 0.7rem 1.35rem;
   font-size: 0.9375rem;
   font-weight: 700;
-  color: var(--signal-foreground);
-  background: color-mix(in srgb, var(--signal) 62%, var(--mix-gold));
-  box-shadow:
-    0 0 36px color-mix(in srgb, var(--signal) 58%, transparent),
-    0 0 58px color-mix(in srgb, var(--bloom-amber) 46%, transparent),
-    0 10px 28px color-mix(in srgb, var(--mix-gold) 34%, transparent);
+  color: var(--gold-foreground);
+  background: var(--gold);
+  border: 1px solid var(--gold);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--gold) 18%, transparent);
   transition:
     transform 180ms ease,
-    box-shadow 180ms ease,
-    filter 180ms ease;
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .welcome-prompt-cta:hover {
   transform: scale(1.045);
-  filter: brightness(1.08);
-  box-shadow:
-    0 0 44px color-mix(in srgb, var(--signal) 70%, transparent),
-    0 0 68px color-mix(in srgb, var(--bloom-amber) 54%, transparent),
-    0 12px 32px color-mix(in srgb, var(--mix-gold) 42%, transparent);
+  background: color-mix(in srgb, var(--gold) 88%, #fff);
+  border-color: color-mix(in srgb, var(--gold) 88%, #fff);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--gold) 22%, transparent);
 }
 
 .welcome-prompt-cta:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 2px var(--background),
-    0 0 0 4px var(--signal),
-    0 0 36px color-mix(in srgb, var(--bloom-amber) 46%, transparent);
+    0 0 0 4px var(--gold);
 }
 
 .hero-prompt-caret {
@@ -568,16 +564,47 @@ body {
   color: var(--foreground);
 }
 
+.page-flow-stage {
+  overflow: clip;
+}
+
 .page-flow {
-  animation: page-enter 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: page-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .page-flow[data-dir="forward"] {
-  animation: slide-forward 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: glide-in-forward 0.88s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .page-flow[data-dir="back"] {
-  animation: slide-back 0.72s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: glide-in-back 0.88s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page-glide-out {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.page-glide-out[data-dir="forward"] {
+  animation: glide-out-forward 0.88s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page-glide-out[data-dir="back"] {
+  animation: glide-out-back 0.88s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page-glide-out[data-dir="in"] {
+  animation: glide-out-in 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.stage-glide-out {
+  animation: glide-out-forward 0.88s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.stage-glide-in {
+  animation: glide-in-forward 0.88s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 html.deck-snap {
@@ -588,7 +615,8 @@ html.deck-snap {
    header would scroll away after Welcome. Keep snap; drop the page animation. */
 html.deck-snap .page-flow,
 html.deck-snap .page-flow[data-dir="forward"],
-html.deck-snap .page-flow[data-dir="back"] {
+html.deck-snap .page-flow[data-dir="back"],
+html.deck-snap .page-glide-out {
   animation: none;
 }
 
@@ -602,7 +630,8 @@ html.deck-snap .page-flow[data-dir="back"] {
   justify-content: safe center;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-  padding: 6.5rem 0 3rem;
+  /* Equal inset so centered copy sits in the middle of the viewport, not below it. */
+  padding: 4rem 0;
 }
 
 .page-slide-tall {
@@ -862,6 +891,31 @@ html.deck-snap .page-flow[data-dir="back"] {
   to { opacity: 1; transform: none; }
 }
 
+@keyframes glide-in-forward {
+  from { opacity: 0.4; transform: translate3d(22%, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes glide-out-forward {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translate3d(-16%, 0, 0); }
+}
+
+@keyframes glide-in-back {
+  from { opacity: 0.4; transform: translate3d(-22%, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes glide-out-back {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translate3d(16%, 0, 0); }
+}
+
+@keyframes glide-out-in {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translate3d(0, -12px, 0); }
+}
+
 @keyframes slide-forward {
   from { opacity: 0; transform: translate3d(10%, 0, 0); }
   to { opacity: 1; transform: none; }
@@ -967,6 +1021,9 @@ html.deck-snap .page-flow[data-dir="back"] {
   .page-flow,
   .page-flow[data-dir="forward"],
   .page-flow[data-dir="back"],
+  .page-glide-out,
+  .stage-glide-out,
+  .stage-glide-in,
   .site-blob,
   .site-ribbon-drift,
   .welcome-bloom,

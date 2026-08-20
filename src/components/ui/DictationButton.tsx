@@ -98,7 +98,7 @@ export function DictationButton({
             className={cn(
                 "flex size-11 cursor-pointer items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
                 listening
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-gold text-gold-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 className,
             )}

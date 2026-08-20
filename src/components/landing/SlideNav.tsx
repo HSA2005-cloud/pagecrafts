@@ -27,6 +27,8 @@ export function SlideNav({
 
     useEffect(() => {
         const present = catalog.filter((slide) => document.getElementById(slide.id));
+        // The catalog is filtered against the document, which only exists after mount.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIds(present.map((slide) => slide.id));
         if (present[0] && !present.some((slide) => slide.id === active)) {
             setActive(present[0].id);

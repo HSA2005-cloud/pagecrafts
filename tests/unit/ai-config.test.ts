@@ -88,8 +88,10 @@ describe('loadAiConfig', () => {
             GROQ_API_KEY_4: 'k4',
             GROQ_API_KEY_5: 'k5',
             GROQ_API_KEY_6: 'k6',
+            GROQ_API_KEY_7: 'k7',
+            GROQ_API_KEY_8: 'k8',
         });
-        expect(cfg.providers.groq.apiKeys).toEqual(['k1', 'k2', 'k3', 'k4', 'k5', 'k6']);
+        expect(cfg.providers.groq.apiKeys).toEqual(['k1', 'k2', 'k3', 'k4', 'k5', 'k6', 'k7', 'k8']);
         expect(cfg.providers.groq.apiKey).toBe('k1');
     });
 

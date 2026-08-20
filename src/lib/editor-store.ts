@@ -22,6 +22,11 @@ import { writeCompositionFiles, writeRenderedSite } from '@/lib/editor/sync-site
 import { sanitise } from '@/lib/ai/sanitise';
 import { sectionVariants } from '@/lib/editor/section-registry';
 import { isSiteGenerationRequest } from '@/lib/editor/site-intent';
+import {
+    parseRenameIntent,
+    renameComposition,
+    renameExplanation,
+} from '@/lib/editor/rename-site';
 import { generateSiteProposal, generationExplanation } from '@/lib/editor/generate-site';
 import { MAX_CLASSIFY_CHARS } from '@/lib/contracts';
 import { debounceTrigger } from '@/lib/debounce';
@@ -509,6 +514,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             return;
         }
 
+        // "Change Ravi Clothing to Pragna Clothing" is a whole-site rename, not a
+        // single-section AI tweak. Doing it here avoids the LLM and updates the
+        // title, footer, and every other place the old name appears.
+        const rename = parseRenameIntent(text, composition.meta.title);
+        if (rename) {
+            await requestSiteRename(get, set, text, rename.from, rename.to);
+            return;
+        }
+
         const section =
             composition.sections.find((item) => item.id === selectedSectionId) ??
             composition.sections.find((item) => !item.locked) ??
@@ -687,6 +701,74 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         await get().loadHistory();
     },
 }));
+
+/** Deterministic whole-site rename — no LLM, so it cannot return the generic internal error. */
+async function requestSiteRename(
+    get: () => EditorState,
+    set: (partial: Partial<EditorState>) => void,
+    text: string,
+    from: string,
+    to: string,
+) {
+    const { projectId, chatMessages, composition, vfs } = get();
+    if (!projectId || !composition) return;
+
+    const epoch = ++chatEpoch;
+    set({
+        chatBusy: true,
+        chatError: null,
+        chatProgress: 'Updating the name across the site…',
+        chatMessages: [...chatMessages, { role: 'user', text }],
+    });
+
+    autosave.cancel();
+    await get().saveProject();
+    if (epoch !== chatEpoch) return;
+
+    const { sha, error: commitError } = await createCommit(
+        projectId,
+        'Saved before renaming the site',
+    );
+    if (epoch !== chatEpoch) return;
+    if (sha) set({ lastCommitSha: sha });
+    if (!sha) {
+        set({
+            chatBusy: false,
+            chatProgress: null,
+            chatError: commitError ?? 'Could not save a version first. Try again.',
+        });
+        return;
+    }
+
+    const { next, hits } = renameComposition(composition, from, to);
+    const explanation = renameExplanation(from, to, hits);
+
+    if (hits <= 0) {
+        set({
+            chatBusy: false,
+            chatProgress: null,
+            chatError: explanation,
+            chatMessages: [...get().chatMessages, { role: 'assistant', text: explanation }],
+        });
+        return;
+    }
+
+    if (vfs.read('composition.json') === null) {
+        vfs.write('composition.json', JSON.stringify(composition, null, 2));
+    }
+
+    get().proposeChange({
+        path: 'composition.json',
+        after: JSON.stringify(next, null, 2),
+        explanation,
+    });
+
+    set({
+        chatBusy: false,
+        chatProgress: null,
+        chatMessages: [...get().chatMessages, { role: 'assistant', text: explanation }],
+    });
+}
 
 async function requestCopyRewrite(
     get: () => EditorState,

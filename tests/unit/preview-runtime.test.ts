@@ -99,8 +99,9 @@ describe('preview bootstrap', () => {
         expect(PREVIEW_BOOTSTRAP_JS).toContain("addEventListener('click'");
         expect(PREVIEW_BOOTSTRAP_JS).toContain('pagecraft-preview-find');
         expect(PREVIEW_BOOTSTRAP_JS).toContain('HTMLFormElement.prototype.submit');
-        expect(PREVIEW_BOOTSTRAP_JS).toContain('__pagecraft');
-        expect(PREVIEW_BOOTSTRAP_JS).not.toContain('allow-same-origin');
+        expect(PREVIEW_BOOTSTRAP_JS).toContain('kind: \'navigate\'');
+        expect(PREVIEW_BOOTSTRAP_JS).toContain('Thanks — we got your message.');
+        expect(PREVIEW_BOOTSTRAP_JS).toContain('.form-status');
     });
 
     it('keeps outbound form posts blocked even after allow-forms is granted', () => {
@@ -119,5 +120,7 @@ describe('PreviewPane sandbox', () => {
         expect(source).not.toContain('allow-same-origin');
         expect(source).toContain("viewport === 'phone'");
         expect(source).toContain("viewport === 'full'");
+        expect(source).toContain("kind === 'navigate'");
+        expect(source).toContain('htmlPagesOf');
     });
 });

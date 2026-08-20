@@ -26,7 +26,7 @@ export const githubPagesAdapter: DeployProvider = {
 
         await gh('POST', `/orgs/${org()}/repos`, {
             name: subdomain,
-            description: `PageCraft site ${projectId}`,
+            description: `PageCrafts site ${projectId}`,
             auto_init: true,
             private: false,
         });

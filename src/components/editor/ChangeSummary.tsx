@@ -29,7 +29,7 @@ export default function ChangeSummary() {
                 <button
                     type="button"
                     onClick={acceptChange}
-                    className="h-11 cursor-pointer rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="h-11 cursor-pointer rounded-full border border-gold bg-gold px-4 text-sm font-semibold text-gold-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                 >
                     Keep this change
                 </button>

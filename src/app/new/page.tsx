@@ -36,7 +36,7 @@ export default async function NewProjectPage({
         </h1>
         <p className="max-w-xl text-sm text-muted-foreground">
           {design
-            ? `Name, place, and what they do — we will put those facts on ${design.name}.`
+            ? `Name, place, and what they do — we put those facts on ${design.name} and add About, Contact and Settings.`
             : "A one-liner is not enough. Name, place, and what they do — then AI writes every page from those facts."}
         </p>
         {design && design.tier !== "free" ? (

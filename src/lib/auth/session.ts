@@ -29,7 +29,11 @@ export async function requireUser() {
     throw new ApiError('unauthorized', 'Please sign in.');
   }
 
-  return { supabase, userId: data.user.id };
+  return {
+    supabase,
+    userId: data.user.id,
+    email: (data.user.email ?? "").trim().toLowerCase(),
+  };
 }
 import "server-only";
 import type { User } from "@supabase/supabase-js";

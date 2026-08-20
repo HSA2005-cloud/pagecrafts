@@ -90,7 +90,7 @@ function Home({
                     <WelcomeSlide name={user.name} templates={templates} />
                     <ValueProps />
                     <BuildSlide templates={templates} />
-                    <SitesSlide signedIn sites={sites} />
+                    <SitesSlide signedIn sites={sites} email={user.email} />
                     <SettingsSlide account={account} />
                 </main>
             </div>

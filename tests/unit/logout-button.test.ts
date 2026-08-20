@@ -15,6 +15,7 @@ describe("log out", () => {
     expect(button).toContain('method: "POST"');
     expect(button).toContain('window.location.href = "/"');
     expect(button).toContain("Log out");
+    expect(button).toContain("cursor-pointer");
     expect(header).toContain("<LogoutButton");
     expect(header).toContain('href="/settings"');
     expect(settings).toContain('redirect("/?slide=settings")');

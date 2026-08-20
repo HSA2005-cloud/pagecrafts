@@ -66,10 +66,10 @@ function Chip({
                 // Meera is on a phone, and forty-five of these sat under the finger size
                 // people actually have (R2 D15 mobile pass). The text stays the same size;
                 // only the target grows, so nothing about the layout changes on desktop.
-                "inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-0 sm:px-3",
+                "inline-flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-0 sm:px-3",
                 active
-                    ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
-                    : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                    ? "border-gold bg-gold text-gold-foreground hover:bg-[color-mix(in_srgb,var(--gold)_88%,#fff)]"
+                    : "border-border bg-card text-muted-foreground hover:border-gold/40 hover:text-foreground",
             )}
         >
             {label}

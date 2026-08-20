@@ -22,7 +22,7 @@ export function FlowSteps({ current }: { current: 1 | 2 | 3 }) {
                                 aria-hidden
                                 className={cn(
                                     "hidden h-px w-10 sm:block xl:w-14",
-                                    litConnector ? "bg-primary" : "bg-border",
+                                    litConnector ? "bg-gold" : "bg-border",
                                 )}
                             />
                         )}
@@ -32,7 +32,7 @@ export function FlowSteps({ current }: { current: 1 | 2 | 3 }) {
                                 className={cn(
                                     "flex size-6 items-center justify-center rounded-full text-xs font-semibold",
                                     reached
-                                        ? "brand-gradient text-primary-foreground"
+                                        ? "bg-gold text-gold-foreground"
                                         : "border border-border text-muted-foreground",
                                 )}
                             >

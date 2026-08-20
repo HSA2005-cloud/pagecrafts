@@ -13,7 +13,7 @@ import type { Commit, CommitAuthor } from '@/lib/contracts';
 const AUTHOR_LABEL: Record<CommitAuthor, string> = {
     user: 'You',
     ai_edit: 'An AI edit',
-    system: 'PageCraft',
+    system: 'PageCrafts',
 };
 
 function when(iso: string): string {
@@ -89,7 +89,7 @@ function Row({ commit, isCurrent }: { commit: Commit; isCurrent: boolean }) {
                                 setConfirming(false);
                                 void restoreTo(commit.sha);
                             }}
-                            className="rounded-md bg-primary px-2 py-0.5 text-xs text-primary-foreground"
+                            className="cursor-pointer rounded-md border border-gold bg-gold px-2 py-0.5 text-xs text-gold-foreground"
                         >
                             Go back to here
                         </button>

@@ -14,6 +14,7 @@ import SectionsPanel from './SectionsPanel';
 import VersionHistory from './VersionHistory';
 import { GeneratingOverlay } from './GeneratingOverlay';
 import ChatPanel from './ChatPanel';
+import EditorSplit from './EditorSplit';
 
 interface JobProgress {
     status: JobStatus;
@@ -93,12 +94,14 @@ export default function EditorShell({
 
             setGeneration(data);
 
-            if (data.status === 'done' || data.status === 'failed') {
+            if (data.status === "done" || data.status === "failed") {
                 await loadProject(projectId);
                 if (cancelled) return;
-                if (data.status === 'done') {
-                    setGeneration(null);
-                    router.replace(`/editor/${encodeURIComponent(projectId)}`);
+                if (data.status === "done") {
+                    router.replace(
+                        `/choose/${encodeURIComponent(projectId)}?job=${encodeURIComponent(jobId)}`,
+                    );
+                    return;
                 }
                 return;
             }
@@ -202,14 +205,10 @@ export default function EditorShell({
                             ) : null}
                         </>
                     ) : (
-                        <>
-                            <section className="relative flex min-h-0 min-w-0 flex-1 flex-col lg:flex-[3]">
-                                {loading || generating ? <PaneSkeleton /> : <ChatPanel autoFocus={focusAsk} />}
-                            </section>
-                            <section className="relative min-h-0 min-w-0 flex-1 border-t border-border/60 lg:flex-[2] lg:border-l lg:border-t-0">
-                                {loading || generating ? <PaneSkeleton /> : <PreviewPane />}
-                            </section>
-                        </>
+                        <EditorSplit
+                            left={loading || generating ? <PaneSkeleton /> : <ChatPanel autoFocus={focusAsk} />}
+                            right={loading || generating ? <PaneSkeleton /> : <PreviewPane />}
+                        />
                     )}
                     {historyOpen && (
                         <aside className="w-72 shrink-0 overflow-hidden border-l border-border/60">

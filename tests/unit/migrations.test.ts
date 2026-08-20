@@ -72,4 +72,53 @@ describe("migration files", () => {
             expect(sql.length, `${file} is empty`).toBeGreaterThan(0);
         }
     });
+
+    // The inverse of the orphan check above, and the one that actually protects an
+    // incident. Closed at D20: vertical_profiles and ai_edit_proposals had no undo, which
+    // the previous test could not see -- it only looked for rollbacks pointing at nothing,
+    // never for migrations pointing at nothing.
+    //
+    // The cost of that asymmetry is paid at the worst possible moment: a bad deploy at 2am
+    // reversed by whoever is awake, writing DROP statements from memory against production.
+    it("every migration has a rollback beside it", () => {
+        const rollbacks = new Set(
+            readdirSync(ROLLBACKS).filter((f) => f.endsWith(".sql")).map(versionOf),
+        );
+
+        const undoable = files.filter((f) => !rollbacks.has(versionOf(f)));
+
+        expect(
+            undoable,
+            "write supabase/rollback/<same-filename>.sql -- see docs/database-workflow.md",
+        ).toEqual([]);
+    });
+
+    // 20260813120001 and 20260813130000 are byte-identical: the same migration committed
+    // twice on the same day under two versions. The collision test could not catch it --
+    // the versions differ -- and nothing ever failed, because applying it a second time is
+    // a no-op. The next accidental duplicate may not be idempotent, and then `db reset`
+    // fails on a fresh machine and passes on the one it was written on.
+    //
+    // The pair is allowed rather than deleted: both have been applied to the live database,
+    // and removing a file whose version sits in supabase_migrations would put the repository
+    // and the database out of step -- on freeze day, for a file that does nothing.
+    const KNOWN_IDENTICAL = [
+        "20260813120001_template_thumbnail_optional.sql == 20260813130000_template_thumbnail_optional.sql",
+    ];
+
+    it("no two migrations have identical contents", () => {
+        const byContent = new Map<string, string[]>();
+
+        for (const file of files) {
+            const sql = readFileSync(join(MIGRATIONS, file), "utf8").trim();
+            byContent.set(sql, [...(byContent.get(sql) ?? []), file]);
+        }
+
+        const duplicates = [...byContent.values()]
+            .filter((group) => group.length > 1)
+            .map((group) => group.join(" == "))
+            .filter((pair) => !KNOWN_IDENTICAL.includes(pair));
+
+        expect(duplicates, "the same migration committed twice").toEqual([]);
+    });
 });

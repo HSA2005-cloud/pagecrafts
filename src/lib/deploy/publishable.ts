@@ -145,9 +145,8 @@ export interface PublishInputs {
 /**
  * The working tree, prepared for going live.
  *
- * Only `index.html` is touched — every other file goes across byte for byte, because the
- * stylesheet and any scripts are the owner's and publishing is not the place to rewrite
- * them.
+ * HTML pages get the owner's title and form destination. Stylesheets and scripts go
+ * across byte for byte — publishing is not the place to rewrite them.
  */
 export function publishableFiles({
     files,
@@ -155,12 +154,20 @@ export function publishableFiles({
     formEndpoint,
     assetUrls = {},
 }: PublishInputs): FileMap {
-    const html = files["index.html"];
-    if (!html) return files;
+    const tags = metaTags(siteMeta, assetUrls);
+    let changed = false;
+    const next: FileMap = { ...files };
 
-    const next = wireForms(injectHead(html, metaTags(siteMeta, assetUrls)), formEndpoint);
+    for (const [path, html] of Object.entries(files)) {
+        if (!/\.html?$/i.test(path)) continue;
+        const wired = wireForms(injectHead(html, tags), formEndpoint);
+        if (wired !== html) {
+            next[path] = wired;
+            changed = true;
+        }
+    }
 
-    return next === html ? files : { ...files, "index.html": next };
+    return changed ? next : files;
 }
 
 /**

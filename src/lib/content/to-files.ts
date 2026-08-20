@@ -70,7 +70,7 @@ function valueForSlot(
 }
 
 /**
- * `index.html` with every editable slot showing what content_json says.
+ * Every HTML file with editable slots showing what content_json says.
  *
  * A slot with nothing to say keeps the markup it already had. That matters more than it
  * sounds: content_json is only ever a partial picture — images live in it as asset ids,
@@ -82,19 +82,30 @@ export function applyContentToFiles(
     content: Record<string, unknown>,
     schema: ContentSchema,
 ): FileMap {
-    const html = files["index.html"];
-    if (!html || schema.sections.length === 0) return files;
+    if (schema.sections.length === 0) return files;
 
-    // The captured groups are: opening tag through to `>`, the slot name, the existing
-    // inner markup. Only the third is replaced, so attributes, classes and the element
-    // itself survive untouched — the panel edits words, never structure (C-07).
-    const next = html.replace(
-        /(<([a-z0-9]+)\b[^>]*?\sdata-slot="([^"]+)"[^>]*>)([\s\S]*?)(<\/\2>)/gi,
-        (whole, open: string, _tag: string, slot: string, inner: string, close: string) => {
-            const value = valueForSlot(slot, content, schema);
-            return value === undefined ? whole : `${open}${escapeHtml(value)}${close}`;
-        },
-    );
+    let changed = false;
+    const next: FileMap = { ...files };
 
-    return next === html ? files : { ...files, "index.html": next };
+    for (const [path, html] of Object.entries(files)) {
+        if (!/\.html?$/i.test(path)) continue;
+
+        // The captured groups are: opening tag through to `>`, the slot name, the existing
+        // inner markup. Only the third is replaced, so attributes, classes and the element
+        // itself survive untouched — the panel edits words, never structure (C-07).
+        const rewritten = html.replace(
+            /(<([a-z0-9]+)\b[^>]*?\sdata-slot="([^"]+)"[^>]*>)([\s\S]*?)(<\/\2>)/gi,
+            (whole, open: string, _tag: string, slot: string, inner: string, close: string) => {
+                const value = valueForSlot(slot, content, schema);
+                return value === undefined ? whole : `${open}${escapeHtml(value)}${close}`;
+            },
+        );
+
+        if (rewritten !== html) {
+            next[path] = rewritten;
+            changed = true;
+        }
+    }
+
+    return changed ? next : files;
 }

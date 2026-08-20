@@ -62,13 +62,15 @@ const envSchema = z.object({
     // ── Groq (first priority) ────────────────────────────────────────────────
     GROQ_API_KEY: z.string().default(''),
     // Extra orgs, round-robined with GROQ_API_KEY. Comma or whitespace
-    // separated, and/or GROQ_API_KEY_2..6 so six secrets need not share a line.
+    // separated, and/or GROQ_API_KEY_2..8 so eight secrets need not share a line.
     GROQ_API_KEYS: z.string().default(''),
     GROQ_API_KEY_2: z.string().default(''),
     GROQ_API_KEY_3: z.string().default(''),
     GROQ_API_KEY_4: z.string().default(''),
     GROQ_API_KEY_5: z.string().default(''),
     GROQ_API_KEY_6: z.string().default(''),
+    GROQ_API_KEY_7: z.string().default(''),
+    GROQ_API_KEY_8: z.string().default(''),
     // gpt-oss-* support strict json_schema on Groq; the llama-3.x models do not.
     GROQ_MODEL_FAST: z.string().default('openai/gpt-oss-20b'),
     GROQ_MODEL_STRONG: z.string().default('openai/gpt-oss-120b'),
@@ -224,6 +226,8 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
         v.GROQ_API_KEY_4,
         v.GROQ_API_KEY_5,
         v.GROQ_API_KEY_6,
+        v.GROQ_API_KEY_7,
+        v.GROQ_API_KEY_8,
     );
 
     const providers: Record<Provider, ProviderConfig> = {

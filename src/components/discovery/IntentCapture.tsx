@@ -217,6 +217,7 @@ export function IntentCapture({
                     <Button
                         onClick={() => void generate()}
                         disabled={busy !== null}
+                        variant="brand"
                         className="rounded-lg font-semibold sm:ml-auto"
                     >
                         {busy === "generate"

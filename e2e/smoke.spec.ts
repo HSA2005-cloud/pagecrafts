@@ -6,8 +6,8 @@ test.describe('the app is up', () => {
 
         expect(response?.status()).toBe(200);
         await expect(page).toHaveTitle(/pagecraft/i);
-        await expect(page.locator('#email')).toBeVisible();
-        await expect(page.locator('#password')).toBeVisible();
+        await expect(page.getByRole("link", { name: "Sign up" })).toBeVisible();
+        await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
     });
 
     test('sends a signed-out visitor to sign in rather than the library', async ({ page }) => {

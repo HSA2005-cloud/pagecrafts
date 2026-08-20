@@ -116,7 +116,14 @@ describe('persistGeneratedSite', () => {
         }));
 
         const files = db.rows('project_files').filter((f) => f.project_id === id);
-        expect(files.map((f) => f.path).sort()).toEqual(['composition.json', 'index.html']);
+        expect(files.map((f) => f.path).sort()).toEqual([
+            'about.html',
+            'composition.json',
+            'contact.html',
+            'index.html',
+            'services.html',
+            'settings.html',
+        ]);
         expect(String(files.find((f) => f.path === 'index.html')?.content)).toContain('Family dentistry');
 
         const row = db.rows('projects').find((p) => p.id === id)!;

@@ -24,7 +24,11 @@ async function renderOption(
     lookup?: PhotoLookup,
 ): Promise<StyleOption> {
     let composition = applyStyle(base, spec);
-    if (spec.photos) composition = await stampPhotoUrls(composition, lookup);
+    if (spec.photos === 'hero') {
+        composition = await stampPhotoUrls(composition, lookup, ['hero']);
+    } else if (spec.photos) {
+        composition = await stampPhotoUrls(composition, lookup);
+    }
     return {
         id: spec.id,
         label: spec.label,

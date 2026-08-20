@@ -19,6 +19,7 @@ import { putProjectFiles } from "./project-files";
 import { createCommit } from "./commits";
 import { contentFromFiles } from "@/lib/content/from-files";
 import { personaliseContent, personaliseFiles } from "@/lib/content/personalise";
+import { expandTemplateSite } from "@/lib/content/expand-template";
 import { asContentSchema } from "@/lib/content/schema";
 import { PROJECTS_PER_USER } from "@/lib/limits/config";
 import { failureMessage, toFailureReason } from "@/lib/deploy/failure";
@@ -317,16 +318,19 @@ export async function createProject(
       );
     }
 
-    const contentSchema = (template.content_schema ?? { sections: [] }) as ContentSchema;
+    let contentSchema = (template.content_schema ?? { sections: [] }) as ContentSchema;
     let files = (template.files ?? {}) as FileMap;
     let content = contentFromFiles(files, contentSchema);
 
-    // The brief screen after "Use this design" writes the business onto the layout
-    // rather than generating a new site. Photos, CSS and section structure stay.
+    // The brief screen after "Use this design" writes the business onto this layout
+    // and adds About, Contact and Settings in the same chrome — not a generated look.
     if (req.brief) {
       const next = personaliseContent(contentSchema, content, req.brief);
       files = personaliseFiles(files, contentSchema, next, req.brief);
-      content = next;
+      const expanded = expandTemplateSite(files, contentSchema, req.brief);
+      files = expanded.files;
+      contentSchema = expanded.schema;
+      content = contentFromFiles(files, contentSchema);
     }
 
     await putProjectFiles(supabase, projectId, files);
