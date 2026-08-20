@@ -334,7 +334,8 @@ That is why this block runs to 18:00 and template sourcing moves to Day 3.
 In your Supabase project dashboard:
 
 - **Authentication → Providers → Email** — make sure Email is enabled and **"Confirm email" is ON**. This is what makes verification real rather than decorative.
-- **Authentication → URL Configuration** — set Site URL to `http://localhost:3000` and add `http://localhost:3000/api/v1/auth/confirm` to Redirect URLs. Without this, every confirmation and reset link bounces.
+- **Authentication → Emails → SMTP** — point it at Resend, SendGrid, or Amazon SES. The built-in sender is rate-limited and confirmation mail often never arrives. `npm run auth:email` prints the values from `SMTP_PROVIDER` / `SMTP_PASS` / `SMTP_ADMIN_EMAIL`.
+- **Authentication → URL Configuration** — set Site URL to `{APP_URL}` and add `{APP_URL}/api/v1/auth/confirm` to Redirect URLs (include the `?next=/new` and `?next=/reset` variants; the allow-list is exact). Without this, every confirmation and reset link bounces. Locally this list lives in `supabase/config.toml` and is applied on `supabase start`.
 - Copy the project URL and the publishable key into your local `.env.local`.
 
 ### What already exists, and what you are adding

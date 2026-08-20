@@ -32,6 +32,7 @@ export default defineConfig({
         testTimeout: 30_000,
         hookTimeout: 120_000,
         env: {
+            NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
             HOSTING_API_BASE: 'https://api.github.com',
             HOSTING_ACCOUNT_ID: 'pagecraft-sites',
             HOSTING_CREDENTIAL_KEY_ID: 'test-key',

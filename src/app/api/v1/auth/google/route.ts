@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { supabaseRouteClient } from "@/lib/auth/server";
 import { publicEnv } from "@/lib/config/env";
 import { safeNext } from "@/lib/auth/safe-next";
+import { authCallbackUrl } from "@/lib/auth/email-urls";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-            redirectTo: `${publicEnv.appUrl}/api/v1/auth/callback?next=${encodeURIComponent(next)}`,
+            redirectTo: authCallbackUrl(publicEnv.appUrl, next),
             queryParams: { prompt: "select_account" },
         },
     });

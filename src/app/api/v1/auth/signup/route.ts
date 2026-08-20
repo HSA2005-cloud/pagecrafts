@@ -7,6 +7,7 @@ import { toSessionUser } from "@/lib/auth/session";
 import { ok, fail, guard } from "@/lib/errors/respond";
 import { readJson } from "@/lib/kernel/body";
 import { publicEnv } from "@/lib/config/env";
+import { authConfirmUrl } from "@/lib/auth/email-urls";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
       email: credentials.value.email,
       password: credentials.value.password,
       options: {
-        emailRedirectTo: `${publicEnv.appUrl}/api/v1/auth/confirm?next=/new`,
+        emailRedirectTo: authConfirmUrl(publicEnv.appUrl, "/new"),
         ...(name ? { data: { full_name: name } } : {}),
       },
     });

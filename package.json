@@ -43,6 +43,7 @@
     "e2e:install": "playwright install --with-deps chromium",
     "check:bundle": "node --env-file=.env.local scripts/check-client-bundle.mjs",
     "check:config": "node --env-file=.env.local scripts/check-prod-config.mjs",
+    "auth:email": "tsx --env-file-if-exists=.env.local scripts/configure-auth-email.ts",
     "db:verify": "tsx scripts/db-verify.ts",
     "templates:thumbs": "tsx scripts/render-template-thumbnails.ts"
   },
