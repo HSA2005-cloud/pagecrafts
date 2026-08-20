@@ -32,6 +32,7 @@ const COLOR_TOKENS = [
   { name: "destructive", className: "bg-destructive" },
   { name: "border", className: "bg-border" },
   { name: "field", className: "bg-field border border-input" },
+  { name: "gold", className: "bg-gold" },
   { name: "brand gradient", className: "brand-gradient" },
 ] as const;
 
@@ -64,7 +65,7 @@ export default function StyleguidePage() {
     <main className="mx-auto flex max-w-4xl flex-col gap-12 px-6 py-16">
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight">
-          PageCraft design system
+          PageCrafts design system
         </h1>
         <p className="text-muted-foreground">
           Design tokens and base primitives (R2 · Day 1). Every element here is
@@ -156,7 +157,7 @@ export default function StyleguidePage() {
             <Badge variant="secondary">Free</Badge>
           </CardContent>
           <CardFooter>
-            <Button className="w-full">Use this design</Button>
+            <Button variant="brand" className="w-full">Use this design</Button>
           </CardFooter>
         </Card>
       </Section>

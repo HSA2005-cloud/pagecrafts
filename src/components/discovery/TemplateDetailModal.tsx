@@ -101,10 +101,12 @@ export function TemplateDetailModal({
     templateId,
     templateName,
     children,
+    showPrice = true,
 }: {
     templateId: string;
     templateName: string;
     children: React.ReactNode;
+    showPrice?: boolean;
 }) {
     const [state, setState] = useState<State>({ status: "idle" });
 
@@ -142,7 +144,7 @@ export function TemplateDetailModal({
             // failure. Checking the connection is sound advice here and nowhere else.
             setState({
                 status: "error",
-                message: "We could not reach PageCraft. Check your connection and try again.",
+                message: "We could not reach PageCrafts. Check your connection and try again.",
             });
         }
     }, [templateId]);
@@ -154,7 +156,7 @@ export function TemplateDetailModal({
     };
 
     const detail = state.status === "ready" ? state.detail : null;
-    const price = detail ? priceLine(detail.tier, detail.priceInr) : null;
+    const price = showPrice && detail ? priceLine(detail.tier, detail.priceInr) : null;
 
     return (
         <Dialog onOpenChange={onOpenChange}>
@@ -274,7 +276,7 @@ export function TemplateDetailModal({
                                         {price}
                                     </span>
                                     <span className="text-xs text-muted-foreground">
-                                        one-time, for this design
+                                        listed price
                                     </span>
                                 </span>
                             ) : null}
@@ -282,6 +284,7 @@ export function TemplateDetailModal({
                                 forkId={detail.forkId}
                                 name={detail.name}
                                 tier={detail.tier}
+                                showPayNote={showPrice}
                             />
                         </div>
                     </div>

@@ -18,6 +18,9 @@ export function deployConfig(): DeployConfig {
         apiBase: required('HOSTING_API_BASE'),
         accountId: required('HOSTING_ACCOUNT_ID'),
         credentialKeyId: required('HOSTING_CREDENTIAL_KEY_ID'),
-        rootDomain: process.env.PAGECRAFT_ROOT_DOMAIN ?? 'pagecraft.in',
+        // No default. The old fallback was 'pagecraft.in' -- a domain we do not own --
+        // so a missing variable in production would have published every customer site
+        // to an address nobody could reach, silently and with a live-looking URL.
+        rootDomain: required('PAGECRAFT_ROOT_DOMAIN'),
     };
 }

@@ -174,8 +174,10 @@ describe('editor QA (D16–D20)', () => {
         const shell = readFileSync('src/components/editor/EditorShell.tsx', 'utf8');
         expect(shell).not.toContain('ContentPanel');
         expect(shell).toContain('ChatPanel');
-        expect(shell).toContain('flex-[3]');
-        expect(shell).toContain('flex-[2]');
+        expect(shell).toContain('EditorSplit');
+        const split = readFileSync('src/components/editor/EditorSplit.tsx', 'utf8');
+        expect(split).toContain('DEFAULT_LEFT = 30');
+        expect(split).toContain('role="separator"');
         expect(shell).toContain('sectionsOpen && composition');
         expect(shell).toContain("get('ask') === '1'");
         const preview = readFileSync('src/components/editor/PreviewPane.tsx', 'utf8');
@@ -187,6 +189,10 @@ describe('editor QA (D16–D20)', () => {
         expect(composer).toContain('Set up a custom domain');
         expect(composer).toContain('Get started');
         expect(composer).toContain('Custom domains are coming');
+        const topBar = readFileSync('src/components/editor/TopBar.tsx', 'utf8');
+        expect(topBar).toContain('Back to Templates');
+        expect(topBar).toContain('href="/#build"');
+        expect(topBar).toContain('Save');
     });
 
     it('loads Your site from a blob URL instead of srcDoc', () => {

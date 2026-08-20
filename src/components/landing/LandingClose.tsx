@@ -26,7 +26,7 @@ export function LandingClose() {
                 <ArrowRight aria-hidden />
             </Link>
             <p className="mt-6 text-sm text-muted-foreground">
-                PageCraft — building is free. You pay Rs 249 only when you go live.
+                PageCrafts — building is free. You pay Rs 249 only when you go live.
             </p>
         </div>
     );

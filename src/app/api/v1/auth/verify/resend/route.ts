@@ -9,6 +9,17 @@ import { readJson } from "@/lib/kernel/body";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function alreadySignedUp(code: string | undefined, message: string): boolean {
+    const msg = message.toLowerCase();
+    return (
+        code === "email_exists" ||
+        code === "user_already_exists" ||
+        msg.includes("already been registered") ||
+        msg.includes("already registered") ||
+        msg.includes("already confirmed")
+    );
+}
+
 export async function POST(request: NextRequest) {
     return guard(async () => {
         const json = await readJson(request);
@@ -19,11 +30,22 @@ export async function POST(request: NextRequest) {
         }
 
         const supabase = await supabaseRouteClient();
-        await supabase.auth.resend({
+        const { error } = await supabase.auth.resend({
             type: "signup",
             email: parsed.data.email,
             options: { emailRedirectTo: `${publicEnv.appUrl}/api/v1/auth/confirm?next=/new` },
         });
+
+        if (error) {
+            if (error.status === 429 || error.code === "over_email_send_rate_limit") {
+                return fail("rate_limited", "Too many emails. Wait a few minutes and try again.");
+            }
+            if (alreadySignedUp(error.code, error.message)) {
+                return ok({ status: "signin" as const }, 200);
+            }
+            console.error("[auth/verify/resend]", error.code ?? error.status, error.message);
+            return fail("internal", "We could not send that email just now. Try again in a moment.");
+        }
 
         return ok({ status: "accepted" as const }, 202);
     });

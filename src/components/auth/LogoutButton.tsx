@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 export function LogoutButton({ className }: { className?: string }) {
     const [busy, setBusy] = useState(false);
@@ -19,7 +20,12 @@ export function LogoutButton({ className }: { className?: string }) {
     }
 
     return (
-        <button type="button" onClick={leave} disabled={busy} className={className}>
+        <button
+            type="button"
+            onClick={leave}
+            disabled={busy}
+            className={cn("cursor-pointer disabled:cursor-not-allowed", className)}
+        >
             {busy ? "Signing out…" : "Log out"}
         </button>
     );

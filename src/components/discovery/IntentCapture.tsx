@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 
 import type { Category, CreateProjectResponse } from "@/lib/contracts";
+// Template chosen is a visual reference for generation.
 import { INTENT_CARDS } from "@/lib/discovery/intent-cards";
 import { apiPost } from "@/lib/api/client";
 import {
@@ -217,6 +218,7 @@ export function IntentCapture({
                     <Button
                         onClick={() => void generate()}
                         disabled={busy !== null}
+                        variant="brand"
                         className="rounded-lg font-semibold sm:ml-auto"
                     >
                         {busy === "generate"

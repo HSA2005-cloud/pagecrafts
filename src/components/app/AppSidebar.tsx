@@ -14,6 +14,7 @@ import type { Viewer } from "@/lib/auth/session";
 import { BrandMark } from "@/components/landing/BrandMark";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { SignOutButton } from "@/components/auth/SignOutButton";
 import { cn } from "@/lib/utils";
 
 // The product shell's navigation. Destinations that do not exist yet are rendered as
@@ -103,7 +104,7 @@ export function AppSidebar({
                 href="/"
                 className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-                <BrandMark />
+                <BrandMark size="sidebar" />
             </Link>
 
             <Link
@@ -160,6 +161,9 @@ export function AppSidebar({
                             </span>
                             <span className="block truncate text-xs text-muted-foreground">
                                 {user.email}
+                            </span>
+                            <span className="mt-1 block">
+                                <SignOutButton />
                             </span>
                         </span>
                     </div>

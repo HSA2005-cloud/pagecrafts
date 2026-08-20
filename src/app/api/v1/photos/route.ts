@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // GET /api/v1/photos?q=… — photo search for the asset picker (R2 D12).
 //
 // Signed in, because every call spends a share of an hourly quota that belongs to everyone
-// using PageCraft. Anonymous search would let one script exhaust it for all of them.
+// using PageCrafts. Anonymous search would let one script exhaust it for all of them.
 //
 // Named `photos` rather than `unsplash`: the picker asks for pictures, and which library
 // they come from is this route's business, not the client's. Swapping the provider later

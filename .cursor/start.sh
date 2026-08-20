@@ -7,6 +7,9 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 cd "$here/.."
 
+# Every boot: pull + gh default to AdithyaPatil-1609/pagecrafts (original).
+bash "$here/../scripts/setup-original-repo.sh" || true
+
 bash "$here/docker-up.sh"
 
 # The app doesn't use realtime, edge functions, or analytics; those services are

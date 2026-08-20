@@ -166,13 +166,26 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
         const picked = variants[0];
         const files = picked?.files ?? compositionToFiles(composition);
         const endedAt = Date.now();
-        await emit('done');
-        await advance('done', {
+        const current = (await store.get(job.id)) ?? job;
+        const settled: Job = {
+            ...current,
+            status: 'done',
             composition: picked?.composition ?? composition,
             files,
             variants,
             endedAt,
             ledger: [...ledger.all()],
+        };
+        // Persist the default look before marking the job done, so the editor
+        // can open it without a Free / Pro / Premium picker in between.
+        await persistSettled(settled);
+        await emit('done');
+        await advance('done', {
+            composition: settled.composition,
+            files,
+            variants,
+            endedAt,
+            ledger: settled.ledger,
         });
         const done = (await store.get(job.id)) ?? job;
         deps.onSettled?.(done);

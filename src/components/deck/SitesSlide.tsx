@@ -1,14 +1,16 @@
-import { SiteCard } from "@/components/dashboard/SiteCard";
 import { SitesEmpty, SitesError } from "@/components/dashboard/SitesEmpty";
+import { SitesGrid } from "@/components/dashboard/SitesGrid";
 import { SignInPrompt } from "@/components/deck/SignInPrompt";
 import type { ProjectSummary } from "@/lib/contracts";
 
 export function SitesSlide({
     signedIn,
     sites,
+    email,
 }: {
     signedIn: boolean;
     sites: ProjectSummary[] | null;
+    email?: string;
 }) {
     return (
         <section id="sites" className="page-slide page-slide-tall" aria-labelledby="sites-heading">
@@ -45,11 +47,7 @@ export function SitesSlide({
                     ) : sites.length === 0 ? (
                         <SitesEmpty />
                     ) : (
-                        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {sites.map((site, i) => (
-                                <SiteCard key={site.id} site={site} index={i + 1} />
-                            ))}
-                        </ul>
+                        <SitesGrid sites={sites} email={email ?? ""} />
                     )}
                 </div>
             </div>

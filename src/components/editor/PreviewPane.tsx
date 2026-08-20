@@ -8,6 +8,7 @@ import { friendlyPreviewIssue } from '@/lib/editor/preview-copy';
 import { previewDocumentUrl } from '@/lib/editor/preview-frame';
 import { filesForPreview } from '@/lib/editor/preview-files';
 import { sectionLabel } from '@/lib/editor/section-registry';
+import { htmlPagesOf } from '@/lib/ai/generate/pages';
 import { cn } from '@/lib/utils';
 
 const DEBOUNCE_MS = 120;
@@ -26,8 +27,9 @@ export default function PreviewPane() {
     const frame = useRef<HTMLIFrameElement>(null);
     const [viewport, setViewport] = useState<Viewport>('full');
     const [reloadTick, setReloadTick] = useState(0);
+    const [entry, setEntry] = useState('index.html');
     const [preview, setPreview] = useState(() => {
-        const r = assemblePreview(vfs.toMap());
+        const r = assemblePreview(vfs.toMap(), 'index.html');
         return { doc: withPreviewCsp(injectErrorHook(r.html)), warnings: r.warnings };
     });
     const [runtimeError, setRuntimeError] = useState<string | null>(null);
@@ -36,7 +38,11 @@ export default function PreviewPane() {
 
     useEffect(() => {
         const t = setTimeout(() => {
-            const r = assemblePreview(filesForPreview(vfs.toMap(), pendingChange));
+            const map = filesForPreview(vfs.toMap(), pendingChange);
+            const pages = htmlPagesOf(map);
+            const current = pages.includes(entry) ? entry : (pages[0] ?? 'index.html');
+            if (current !== entry) setEntry(current);
+            const r = assemblePreview(map, current);
             const next = withPreviewCsp(injectErrorHook(r.html));
             if (next === last.current) return;
             last.current = next;
@@ -45,7 +51,7 @@ export default function PreviewPane() {
             setDismissed(false);
         }, DEBOUNCE_MS);
         return () => clearTimeout(t);
-    }, [vfs, dirtyPaths, tree, pendingChange, reloadTick]);
+    }, [vfs, dirtyPaths, tree, pendingChange, reloadTick, entry]);
 
     const frameUrl = useMemo(() => previewDocumentUrl(preview.doc), [preview.doc]);
 
@@ -58,9 +64,14 @@ export default function PreviewPane() {
     useEffect(() => {
         function onMessage(e: MessageEvent) {
             if (e.source !== frame.current?.contentWindow) return;
-            const data = e.data as { __pagecraft?: boolean; message?: string };
+            const data = e.data as { __pagecraft?: boolean; message?: string; kind?: string; path?: string };
             if (!data?.__pagecraft) return;
-            setRuntimeError(data.message ?? 'Unknown error');
+            if (data.kind === 'navigate' && typeof data.path === 'string' && data.path.trim()) {
+                last.current = '';
+                setEntry(data.path.trim());
+                return;
+            }
+            if (data.message) setRuntimeError(data.message);
         }
         window.addEventListener('message', onMessage);
         return () => window.removeEventListener('message', onMessage);
@@ -69,6 +80,7 @@ export default function PreviewPane() {
     const issues = [...preview.warnings, ...(runtimeError ? [runtimeError] : [])]
         .map(friendlyPreviewIssue);
     const uniqueIssues = [...new Set(issues)];
+    const htmlPages = htmlPagesOf(vfs.toMap());
     const showNotice = uniqueIssues.length > 0 && !dismissed;
     const empty = !preview.doc.trim();
     const sections = composition?.sections ?? [];
@@ -123,6 +135,25 @@ export default function PreviewPane() {
                         <RefreshCw className="size-4" strokeWidth={1.75} />
                     </button>
                 </div>
+                {htmlPages.length > 1 ? (
+                    <label className="min-w-0">
+                        <span className="sr-only">Page</span>
+                        <select
+                            value={htmlPages.includes(entry) ? entry : htmlPages[0]}
+                            onChange={(e) => {
+                                last.current = '';
+                                setEntry(e.target.value);
+                            }}
+                            className="h-11 max-w-40 cursor-pointer truncate rounded-full border border-border bg-background px-3 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            {htmlPages.map((path) => (
+                                <option key={path} value={path}>
+                                    {path.replace(/\.html?$/i, '') || 'home'}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                ) : null}
                 {sections.length > 0 ? (
                     <label className="ml-auto min-w-0">
                         <span className="sr-only">Page section</span>

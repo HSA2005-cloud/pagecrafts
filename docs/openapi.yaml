@@ -184,9 +184,15 @@ paths:
       operationId: deleteProject
       security:
         - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteProjectRequest'
       responses:
         '200':
-          description: Project removed (our row only).
+          description: Project removed (our row only), after the same password check as sign-in.
           content:
             application/json:
               schema:
@@ -1160,6 +1166,17 @@ components:
         formEndpoint:
           type: [string, 'null']
           format: uri
+    DeleteProjectRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 10
+          maxLength: 128
     ProjectListResult:
       type: object
       required: [ok, data]

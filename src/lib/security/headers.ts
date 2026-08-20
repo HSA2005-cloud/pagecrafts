@@ -41,12 +41,12 @@ export function contentSecurityPolicy(isDev = process.env.NODE_ENV !== "producti
 
     const directives = [
         "default-src 'self'",
-        `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+        `script-src 'self' 'unsafe-inline' https://checkout.razorpay.com${isDev ? " 'unsafe-eval'" : ""}`,
         "style-src 'self' 'unsafe-inline'",
         origins("img-src 'self' data: blob: https://images.unsplash.com", SUPABASE_ORIGIN),
         "font-src 'self' data:",
-        `connect-src ${connect}`,
-        "frame-src 'self' blob:",
+        `connect-src ${connect} https://lumberjack.razorpay.com https://api.razorpay.com`,
+        "frame-src 'self' blob: https://api.razorpay.com https://checkout.razorpay.com",
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",

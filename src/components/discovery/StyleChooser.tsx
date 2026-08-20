@@ -191,7 +191,18 @@ export function StyleChooser({
         setRegenerating(false);
     }
 
-    const live = Boolean(progress && progress.status !== "done");
+    const live = Boolean(progress && progress.status !== "done" && progress.status !== "failed");
+    const [holdingLive, setHoldingLive] = useState(live);
+    if (live && !holdingLive) {
+        setHoldingLive(true);
+    }
+
+    useEffect(() => {
+        if (live || !holdingLive) return;
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const timer = window.setTimeout(() => setHoldingLive(false), reduce ? 0 : 880);
+        return () => window.clearTimeout(timer);
+    }, [live, holdingLive]);
     const lookSets = attempts.length
         ? attempts
         : progress?.status === "done" && progress.variants?.length
@@ -199,31 +210,44 @@ export function StyleChooser({
             : [];
     const remaining = quota?.remaining ?? 0;
     const retryAllowed = canGenerateAgain(quota) && Boolean(prompt) && !live && !regenerating;
-
-    if (live && progress) {
-        return (
-            <GeneratingOverlay
-                className="min-h-0 flex-1"
-                status={progress.status}
-                sectionsDone={progress.sections_done}
-                sectionsTotal={progress.sections_total}
-                filesReady={Boolean(progress.files_ready)}
-                plannedSections={progress.planned_sections ?? []}
-                previewHtml={progress.preview_html}
-                looks={(progress.variants ?? []).map((look) => ({
-                    id: look.id,
-                    label: look.label,
-                    html: look.html,
-                }))}
-                prompt={progress.prompt ?? prompt}
-                error={error ?? progress.error}
-            />
-        );
-    }
+    const overlay = holdingLive && progress;
 
     return (
-        <main className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pb-12 pt-4">
-            <header data-reveal className="flex flex-col items-center gap-3 text-center">
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            {overlay ? (
+                <div
+                    className={cn(
+                        "absolute inset-0 z-10 flex min-h-0 flex-col",
+                        !live && "stage-glide-out",
+                    )}
+                >
+                    <GeneratingOverlay
+                        className="min-h-0 flex-1"
+                        status={progress.status}
+                        sectionsDone={progress.sections_done}
+                        sectionsTotal={progress.sections_total}
+                        filesReady={Boolean(progress.files_ready)}
+                        plannedSections={progress.planned_sections ?? []}
+                        previewHtml={progress.preview_html}
+                        looks={(progress.variants ?? []).map((look) => ({
+                            id: look.id,
+                            label: look.label,
+                            html: look.html,
+                        }))}
+                        prompt={progress.prompt ?? prompt}
+                        error={error ?? progress.error}
+                    />
+                </div>
+            ) : null}
+
+            {!live ? (
+            <main
+                className={cn(
+                    "relative mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 pb-12 pt-4",
+                    overlay && "stage-glide-in",
+                )}
+            >
+            <header className="flex flex-col items-center gap-3 text-center">
                 <p className="glass-pill w-fit font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-foreground">
                     <span className="size-1.5 shrink-0 rounded-full bg-signal" aria-hidden />
                     Three looks, one brief
@@ -331,6 +355,8 @@ export function StyleChooser({
                     ) : null}
                 </footer>
             )}
-        </main>
+            </main>
+            ) : null}
+        </div>
     );
 }

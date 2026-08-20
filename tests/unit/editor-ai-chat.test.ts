@@ -132,6 +132,51 @@ describe('AI chat (D11–D15)', () => {
         expect(useEditorStore.getState().chatError).toMatch(/locked/i);
         expect(useEditorStore.getState().pendingChange).toBeNull();
     });
+
+    it('renames the business across the site without calling the edits API', async () => {
+        const composition = sample();
+        composition.meta.title = 'Ravi Clothing';
+        composition.meta.description = 'Ravi Clothing in Bangalore';
+        composition.sections[0].props = {
+            heading: 'Ravi Clothing',
+            sub: 'Nice clothes from Ravi Clothing',
+        };
+        composition.sections.push({
+            id: 's2',
+            type: 'footer',
+            variant: 'simple',
+            brief: '',
+            visible: true,
+            locked: false,
+            source: 'ai',
+            props: { tagline: 'Ravi Clothing – Bangalore' },
+        });
+        useEditorStore.setState({ composition });
+        useEditorStore.getState().vfs.write(
+            'composition.json',
+            JSON.stringify(composition, null, 2),
+        );
+
+        const fetchMock = fakeServer();
+        vi.stubGlobal('fetch', fetchMock);
+
+        await useEditorStore.getState().requestAiEdit(
+            'change ravi clothing to Pragna clothing',
+        );
+
+        const called = fetchMock.mock.calls.map(([url]) => String(url));
+        expect(called.some((url) => url.includes('/edits'))).toBe(false);
+        expect(called.some((url) => url.includes('/commits'))).toBe(true);
+
+        const pending = useEditorStore.getState().pendingChange;
+        expect(pending?.after).toContain('Pragna clothing');
+        expect(pending?.after).not.toMatch(/Ravi Clothing/i);
+        expect(pending?.explanation).toMatch(/Pragna clothing/i);
+
+        useEditorStore.getState().acceptChange();
+        expect(useEditorStore.getState().composition?.meta.title).toBe('Pragna clothing');
+        expect(useEditorStore.getState().vfs.read('index.html')).toContain('Pragna clothing');
+    });
 });
 
 function generatedSite(): Composition {

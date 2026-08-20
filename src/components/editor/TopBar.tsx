@@ -1,5 +1,8 @@
 'use client';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { useEditorStore } from '@/lib/editor-store';
+import PublishCheckoutButton from './PublishCheckoutButton';
 
 function statusLine(saving: boolean, saveError: string | null, unsaved: number, savedAt: string | null) {
     if (saving) return { text: 'Saving…', tone: 'muted' as const };
@@ -90,14 +93,22 @@ export default function TopBar({
                 >
                     {advanced ? 'Exit Advanced' : 'Advanced'}
                 </button>
+                <Link
+                    href="/#build"
+                    className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                    <ArrowLeft className="size-4 shrink-0" aria-hidden />
+                    Back to Templates
+                </Link>
                 <button
                     type="button"
                     disabled={dirtyPaths.length === 0 || saving}
                     onClick={() => saveProject({ commit: true })}
-                    className="h-11 cursor-pointer rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                    className="h-11 cursor-pointer rounded-full border border-gold bg-gold px-4 text-sm font-semibold text-gold-foreground disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     {saving ? 'Saving…' : 'Save'}
                 </button>
+                <PublishCheckoutButton projectId={projectId} />
             </div>
         </header>
     );

@@ -1,12 +1,17 @@
 import type { Composition, FileMap, SectionInstance, SectionKey } from '@/lib/contracts';
 import { compositionShell } from '@/lib/render/page-shell';
-// The shared nav's CSS (#168). Used below and lost in the #170 merge, which left the
-// reference behind without the import.
-import { SITE_NAV_CSS } from '@/lib/render/site-chrome';
-import { contractFor } from '../sections/contracts';
 import { sectionContentKey } from './schema';
 import type { StyleId } from './styles';
 import { motionMotifMarkup, motionStageMarkup, motionTickerMarkup } from './motion-motif';
+import {
+    pageHref,
+    planSitePages,
+    settingsPageHtml,
+    syntheticAboutHtml,
+    syntheticContactHtml,
+    workingForm,
+    type SitePage,
+} from './pages';
 
 /**
  * D15 — turn a composition into a file tree the rest of the product already
@@ -95,12 +100,11 @@ function renderSection(
     const anchor = sectionAnchor(section, visible);
     const open = `<section id="${escapeHtml(anchor)}" data-section-id="${escapeHtml(section.id)}" data-type="${section.type}" data-variant="${escapeHtml(section.variant)}" data-animate style="--i:${index}">`;
     const motif = section.type === 'hero' ? motifHtml : '';
-    return `${open}${motif}${renderInner(section.type, key, p, heading, visible)}</section>`;
+    return `${open}${motif}${renderInner(section.type, key, p, heading)}</section>`;
 }
 
-function contactHref(visible: readonly SectionInstance[]): string {
-    const contact = visible.find((s) => s.type === 'contact');
-    return contact ? `#${sectionAnchor(contact, visible)}` : '#top';
+function contactHref(): string {
+    return 'contact.html';
 }
 
 function renderInner(
@@ -108,7 +112,6 @@ function renderInner(
     key: string,
     p: Record<string, unknown>,
     heading: string,
-    visible: readonly SectionInstance[],
 ): string {
     const h = (tag: 'h1' | 'h2', text: string) =>
         text ? slot(tag, `${key}.heading`, escapeHtml(text)) : '';
@@ -121,7 +124,7 @@ function renderInner(
                 h('h1', asString(p.heading)),
                 asString(p.sub) ? slot('p', `${key}.sub`, escapeHtml(asString(p.sub)), ' class="lede"') : '',
                 asString(p.ctaLabel)
-                    ? slot('a', `${key}.ctaLabel`, escapeHtml(asString(p.ctaLabel)), ` class="cta" href="${contactHref(visible)}"`)
+                    ? slot('a', `${key}.ctaLabel`, escapeHtml(asString(p.ctaLabel)), ` class="cta" href="${contactHref()}"`)
                     : '',
                 '</div>',
                 imageSlot(`${key}.image`, p.image, asString(p.heading) || 'Hero'),
@@ -179,12 +182,13 @@ function renderInner(
                     : '',
                 asString(p.hours) ? slot('p', `${key}.hours`, escapeHtml(asString(p.hours))) : '',
                 '</address>',
-                `<form class="form" action="" method="post">
-        <input type="text" name="name" placeholder="Your name" aria-label="Name" autocomplete="name" />
+                workingForm(
+                    asString(p.email) ? `mailto:${asString(p.email)}` : '#',
+                    `<input type="text" name="name" placeholder="Your name" aria-label="Name" autocomplete="name" required />
         <input type="email" name="email" placeholder="you@example.com" aria-label="Email" autocomplete="email" required />
-        <textarea name="message" rows="4" placeholder="How can we help?" aria-label="Message"></textarea>
-        <button type="submit">${escapeHtml(send)}</button>
-      </form>`,
+        <textarea name="message" rows="4" placeholder="How can we help?" aria-label="Message" required></textarea>`,
+                    send,
+                ),
                 '</div>',
             ].join('');
         }
@@ -206,25 +210,17 @@ function renderInner(
 // in a commit called "assert site-header on generated pages", which is a clearer statement
 // of intent than the tests were. Their renderer, their call — this follows it, and all
 // three tests agree on it now.
-function navLabel(section: SectionInstance): string {
-    const heading = asString(section.props.heading).replace(/\s+/g, ' ').trim();
-    if (heading && heading.length <= 28 && !/^(add |your )/i.test(heading)) {
-        return heading;
-    }
-    return contractFor(section.type).label;
-}
-
-function siteNav(visible: readonly SectionInstance[], title: string): string {
-    const links = visible
-        .filter((s) => s.type !== 'hero' && s.type !== 'footer')
-        .map((s) => {
-            const href = `#${sectionAnchor(s, visible)}`;
-            return `<a href="${href}">${escapeHtml(navLabel(s))}</a>`;
+function siteNav(pages: readonly SitePage[], current: string, title: string): string {
+    const links = pages
+        .map((page) => {
+            const href = pageHref(page.path, current);
+            const currentAttr = page.path === current ? ' aria-current="page"' : '';
+            return `<a href="${escapeHtml(href)}"${currentAttr}>${escapeHtml(page.label)}</a>`;
         })
         .join('');
 
     return `<header class="site-header">
-  <a class="wordmark" href="#top">${escapeHtml(title)}</a>
+  <a class="wordmark" href="${escapeHtml(pageHref('index.html', current))}">${escapeHtml(title)}</a>
   <nav aria-label="Site">${links}</nav>
 </header>`;
 }
@@ -294,12 +290,28 @@ address { font-style: normal; }
   background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 600; cursor: pointer;
 }
 [data-type="footer"] { color: var(--muted); font-size: 0.9rem; padding-block: 2rem; }
+.settings-list { display: grid; gap: 0.35rem 1rem; margin: 1.25rem 0 2rem; }
+.settings-list dt { color: var(--muted); font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.settings-list dd { margin: 0 0 0.75rem; }
+.form-status { margin: 0; color: var(--muted); }
 
-[data-style="casual"] [data-type="hero"] { grid-template-columns: 1fr; }
-[data-style="casual"] [data-type="hero"] .img-slot { display: none; }
-[data-style="casual"] [data-type="hero"] { text-align: center; }
-[data-style="casual"] [data-type="hero"] .lede { margin-inline: auto; }
-[data-style="casual"] [data-type="about"] .img-slot { display: none; }
+/* Casual keeps one hero photograph (split beside the copy) and hides the rest —
+   Photo-rich is the look that paints pictures through about/gallery. */
+[data-style="casual"] [data-type="hero"] {
+  gap: 2rem;
+  padding: 1.25rem;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--rule));
+  border-radius: var(--radius-lg, 1rem);
+}
+[data-style="casual"] [data-type="hero"] .img-slot {
+  min-height: 14rem;
+  border: 0;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+[data-style="casual"] [data-type="about"] .img-slot,
+[data-style="casual"] [data-type="services"] .img-slot,
+[data-style="casual"] [data-type="gallery"] .img-slot { display: none; }
 
 [data-variant="image-bg"] {
   display: grid !important;
@@ -728,32 +740,53 @@ body:has([data-style="motion"]) {
 }
 `;
 
+function pageInner(
+    page: SitePage,
+    composition: Composition,
+    visible: readonly SectionInstance[],
+    motif: string,
+): string {
+    if (page.kind === 'settings') return settingsPageHtml(composition);
+    if (page.kind === 'about' && page.sections.length === 0) return syntheticAboutHtml(composition);
+    if (page.kind === 'contact' && page.sections.length === 0) return syntheticContactHtml(composition);
+    return page.sections
+        .map((section, index) => renderSection(section, index, visible, motif))
+        .join('\n');
+}
+
 /** A generated site as the file tree persistence already stores. */
 export function compositionToFiles(composition: Composition, style?: StyleId): FileMap {
     const visible = composition.sections.filter((s) => s.visible);
+    const pages = planSitePages(composition);
     const title = composition.meta.title || 'Home';
     const styleAttr = style ? ` data-style="${escapeHtml(style)}"` : '';
     const motif = style === 'motion'
         ? `${motionStageMarkup()}${motionMotifMarkup(composition.vertical, `${composition.meta.title} ${composition.meta.description}`)}${motionTickerMarkup(composition.meta.title)}`
         : '';
     const css = style === 'motion' ? `${PAGE_CSS}${MOTION_CSS}` : PAGE_CSS;
-    const body = [
-        `<style>${css}</style>`,
-        `<div class="site"${styleAttr}>`,
-        siteNav(visible, title),
-        `<main id="top">`,
-        visible.map((section, index) => renderSection(section, index, visible, motif)).join('\n'),
-        `</main>`,
-        `</div>`,
-    ].join('\n');
+    const footers = visible.filter((s) => s.type === 'footer');
+    const files: FileMap = {};
 
-    return {
-        'index.html': compositionShell({
+    for (const page of pages) {
+        const body = [
+            `<style>${css}</style>`,
+            `<div class="site"${styleAttr}>`,
+            siteNav(pages, page.path, title),
+            `<main id="top">`,
+            pageInner(page, composition, visible, motif),
+            footers.map((section, index) => renderSection(section, index, visible, '')).join('\n'),
+            `</main>`,
+            `</div>`,
+        ].join('\n');
+
+        files[page.path] = compositionShell({
             title: composition.meta.title,
             description: composition.meta.description,
             lang: composition.meta.lang,
             artDirection: composition.artDirection,
             body,
-        }),
-    };
+        });
+    }
+
+    return files;
 }

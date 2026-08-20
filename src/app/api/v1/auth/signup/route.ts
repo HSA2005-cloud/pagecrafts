@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      if (error.status === 429) {
+      if (error.status === 429 || error.code === "over_request_rate_limit") {
         return fail("rate_limited", "Too many attempts. Try again shortly.");
       }
       if (error.code === "weak_password") {

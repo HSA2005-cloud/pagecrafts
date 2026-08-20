@@ -13,10 +13,12 @@ export function UseDesignButton({
     forkId,
     name,
     tier,
+    showPayNote = true,
 }: {
     forkId: string;
     name: string;
     tier: TemplateTier;
+    showPayNote?: boolean;
 }) {
     const href = `/new?template=${encodeURIComponent(forkId)}`;
 
@@ -29,7 +31,7 @@ export function UseDesignButton({
             >
                 Use this design
             </Link>
-            {tier !== "free" ? (
+            {showPayNote && tier !== "free" ? (
                 <span className="text-xs text-muted-foreground">
                     You will be asked to pay for this design once, before it is set up.
                 </span>

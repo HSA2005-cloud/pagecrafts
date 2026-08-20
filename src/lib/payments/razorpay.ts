@@ -125,6 +125,35 @@ export function verifyWebhook(rawBody: string, signature: string | null): boolea
     return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * Standard checkout signature check.
+ *
+ * After the Razorpay modal reports success, the browser sends three tokens
+ * (order_id, payment_id, signature) to /api/v1/payments/razorpay/verify. The
+ * signature is HMAC-SHA256("order_id|payment_id", KEY_SECRET) — note KEY_SECRET,
+ * not WEBHOOK_SECRET, because this proves the payment round-trip was genuine, not
+ * that a webhook body was.
+ *
+ * This check is a courtesy: it lets the UI show "Payment confirmed" immediately.
+ * The entitlement is still granted only by the webhook, where the real trust lies.
+ */
+export function verifyPaymentSignature(
+    orderId: string,
+    paymentId: string,
+    signature: string,
+): boolean {
+    const { keySecret } = credentials();
+
+    const expected = createHmac("sha256", keySecret)
+        .update(`${orderId}|${paymentId}`)
+        .digest("hex");
+
+    const a = Buffer.from(expected, "utf8");
+    const b = Buffer.from(signature, "utf8");
+
+    return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export interface CapturedPayment {
     paymentId: string;
     orderId: string;

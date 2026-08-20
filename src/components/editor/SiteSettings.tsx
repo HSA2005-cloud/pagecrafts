@@ -209,7 +209,7 @@ export default function SiteSettings() {
                     type="button"
                     onClick={() => void save()}
                     disabled={saving || !dirty || issue !== null}
-                    className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-40"
+                    className="cursor-pointer rounded-md border border-gold bg-gold px-3 py-1.5 text-sm text-gold-foreground disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     {saving ? 'Saving…' : 'Save settings'}
                 </button>

@@ -14,7 +14,7 @@ export function Hero() {
             </h1>
 
             <p className="mt-7 max-w-xl text-lg leading-8 text-muted-foreground">
-                Describe the website living in your head. PageCraft turns those words into a
+                Describe the website living in your head. PageCrafts turns those words into a
                 real site — while it comes together in front of you.
             </p>
 

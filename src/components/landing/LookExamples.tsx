@@ -30,24 +30,32 @@ function Chrome({ children }: { children: React.ReactNode }) {
 function CasualExample() {
     return (
         <Chrome>
-            <div className="look-paper flex min-h-52 flex-col px-4 py-4">
-                <p className="look-paper-quiet text-center text-[8px] font-semibold uppercase tracking-[0.28em]">
-                    Home · About · Order
-                </p>
-                <p className="mt-5 text-center font-display text-[1.35rem] font-bold leading-tight tracking-tight">
-                    {SHOP.name}
-                </p>
-                <p className="look-paper-muted mx-auto mt-2 max-w-[13rem] text-center text-[10px] leading-4">
-                    {SHOP.line}
-                </p>
-                <span className="look-paper-cta mx-auto mt-4 rounded-full px-3 py-1.5 text-[9px] font-semibold">
-                    {SHOP.cta}
-                </span>
-                <ul className="look-paper-muted mt-5 space-y-1.5 border-t border-current/15 pt-3 text-[9px] leading-4">
-                    <li>Kaju katli · every Friday</li>
-                    <li>Jalebi · made to order</li>
-                    <li>Boxes from Rs 249</li>
-                </ul>
+            <div className="look-paper grid min-h-52 grid-cols-[1.05fr_0.95fr] gap-2 p-3">
+                <div className="flex flex-col justify-center px-1 py-2">
+                    <p className="look-paper-quiet text-[8px] font-semibold uppercase tracking-[0.28em]">
+                        {SHOP.place}
+                    </p>
+                    <p className="mt-2 font-display text-[1.2rem] font-bold leading-tight tracking-tight">
+                        {SHOP.name}
+                    </p>
+                    <p className="look-paper-muted mt-2 text-[10px] leading-4">{SHOP.line}</p>
+                    <span className="look-paper-cta mt-3 w-fit rounded-full px-3 py-1.5 text-[9px] font-semibold">
+                        {SHOP.cta}
+                    </span>
+                </div>
+                <div
+                    className="overflow-hidden rounded-xl"
+                    style={{
+                        background:
+                            "linear-gradient(145deg, color-mix(in srgb, var(--brand) 55%, #f59e0b), color-mix(in srgb, var(--brand) 25%, #fdba74))",
+                    }}
+                >
+                    <div className="flex h-full min-h-[9.5rem] items-end bg-[url('https://images.unsplash.com/photo-1551024506-0bccd828d307?w=600&q=60&auto=format&fit=crop')] bg-cover bg-center">
+                        <span className="w-full bg-gradient-to-t from-black/55 to-transparent px-2 pb-2 pt-6 text-[8px] font-medium text-white/90">
+                            Fresh this morning
+                        </span>
+                    </div>
+                </div>
             </div>
         </Chrome>
     );
@@ -111,7 +119,7 @@ function AnimatedExample() {
 }
 
 const LOOKS = [
-    { label: "Casual", line: "Words first. Quiet, free.", Preview: CasualExample },
+    { label: "Casual", line: "Colourful and simple — one photo, still free.", Preview: CasualExample },
     { label: "Photo-rich", line: "A cinematic hero and a gallery of stills.", Preview: PhotoExample },
     { label: "Animated", line: "A kinetic canvas drawn from this business.", Preview: AnimatedExample },
 ];

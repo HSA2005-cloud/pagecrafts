@@ -1,7 +1,6 @@
 import type { CSSProperties } from "react";
 import { Hero } from "@/components/landing/Hero";
 import { HeroArtwork } from "@/components/landing/HeroArtwork";
-import { LandingFinishes } from "@/components/landing/LandingFinishes";
 import { LandingMoves } from "@/components/landing/LandingMoves";
 import { LandingShowcase } from "@/components/landing/LandingShowcase";
 import { LandingTalk } from "@/components/landing/LandingTalk";
@@ -18,7 +17,6 @@ export const LANDING_SLIDES = [
     { id: "moves", label: "Moves" },
     { id: "canvas", label: "Canvas" },
     { id: "showcase", label: "Showcase" },
-    { id: "looks", label: "Looks" },
 ] as const;
 
 export function LandingDeck() {
@@ -48,7 +46,6 @@ export function LandingDeck() {
                     <LandingMoves />
                     <LandingTalk />
                     <LandingShowcase templates={showcase} />
-                    <LandingFinishes />
                 </main>
             </div>
         </div>
