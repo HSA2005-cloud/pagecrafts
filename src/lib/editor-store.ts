@@ -22,6 +22,12 @@ import { writeCompositionFiles, writeRenderedSite } from '@/lib/editor/sync-site
 import { sanitise } from '@/lib/ai/sanitise';
 import { sectionVariants } from '@/lib/editor/section-registry';
 import { isSiteGenerationRequest } from '@/lib/editor/site-intent';
+import { styleUpgradeFirewall } from '@/lib/editor/style-firewall';
+import {
+    parseRenameIntent,
+    renameComposition,
+    renameExplanation,
+} from '@/lib/editor/rename-site';
 import { generateSiteProposal, generationExplanation } from '@/lib/editor/generate-site';
 import { MAX_CLASSIFY_CHARS } from '@/lib/contracts';
 import { debounceTrigger } from '@/lib/debounce';
@@ -36,6 +42,7 @@ import {
     type ListItem,
 } from '@/lib/content/slots';
 import { applySettingsToHtml } from '@/lib/content/site-meta';
+import { wireOrderPayments } from '@/lib/sites/pay-page';
 import {
     changeVariant, reorderSection, restyle, toggleLocked, toggleVisible,
 } from '@/lib/editor/section-action';
@@ -480,6 +487,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             return;
         }
 
+        const entry = entryPath(vfs);
+        const entryHtml = entry ? vfs.read(entry) : null;
+        const blocked = styleUpgradeFirewall({
+            instruction: text,
+            html: entryHtml,
+            composition,
+        });
+        if (blocked) {
+            set({ chatError: blocked });
+            return;
+        }
+
         const sectionCount = composition?.sections.length ?? 0;
         const { contentSchema } = get();
         const htmlSite = Boolean(contentSchema?.sections.length) && sectionCount === 0;
@@ -506,6 +525,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         }
         if (!composition || composition.sections.length === 0) {
             set({ chatError: 'Describe the website you want, or pick a section to change.' });
+            return;
+        }
+
+        // "Change Ravi Clothing to Pragna Clothing" is a whole-site rename, not a
+        // single-section AI tweak. Doing it here avoids the LLM and updates the
+        // title, footer, and every other place the old name appears.
+        const rename = parseRenameIntent(text, composition.meta.title);
+        if (rename) {
+            await requestSiteRename(get, set, text, rename.from, rename.to);
             return;
         }
 
@@ -688,6 +716,74 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     },
 }));
 
+/** Deterministic whole-site rename — no LLM, so it cannot return the generic internal error. */
+async function requestSiteRename(
+    get: () => EditorState,
+    set: (partial: Partial<EditorState>) => void,
+    text: string,
+    from: string,
+    to: string,
+) {
+    const { projectId, chatMessages, composition, vfs } = get();
+    if (!projectId || !composition) return;
+
+    const epoch = ++chatEpoch;
+    set({
+        chatBusy: true,
+        chatError: null,
+        chatProgress: 'Updating the name across the site…',
+        chatMessages: [...chatMessages, { role: 'user', text }],
+    });
+
+    autosave.cancel();
+    await get().saveProject();
+    if (epoch !== chatEpoch) return;
+
+    const { sha, error: commitError } = await createCommit(
+        projectId,
+        'Saved before renaming the site',
+    );
+    if (epoch !== chatEpoch) return;
+    if (sha) set({ lastCommitSha: sha });
+    if (!sha) {
+        set({
+            chatBusy: false,
+            chatProgress: null,
+            chatError: commitError ?? 'Could not save a version first. Try again.',
+        });
+        return;
+    }
+
+    const { next, hits } = renameComposition(composition, from, to);
+    const explanation = renameExplanation(from, to, hits);
+
+    if (hits <= 0) {
+        set({
+            chatBusy: false,
+            chatProgress: null,
+            chatError: explanation,
+            chatMessages: [...get().chatMessages, { role: 'assistant', text: explanation }],
+        });
+        return;
+    }
+
+    if (vfs.read('composition.json') === null) {
+        vfs.write('composition.json', JSON.stringify(composition, null, 2));
+    }
+
+    get().proposeChange({
+        path: 'composition.json',
+        after: JSON.stringify(next, null, 2),
+        explanation,
+    });
+
+    set({
+        chatBusy: false,
+        chatProgress: null,
+        chatMessages: [...get().chatMessages, { role: 'assistant', text: explanation }],
+    });
+}
+
 async function requestCopyRewrite(
     get: () => EditorState,
     set: (partial: Partial<EditorState>) => void,
@@ -866,22 +962,38 @@ function writeContent(
 
 /** Site settings into the page, the same way a content edit lands (S-2, S-3, S-4). */
 function applySettings(get: () => EditorState, meta: SiteMeta, formEndpoint: string | null) {
-    const { vfs } = get();
+    const { vfs, projectName } = get();
+    const map = vfs.toMap();
+    const withPay = meta.upiId
+        ? wireOrderPayments(map, {
+            businessName: meta.title?.trim() || projectName || 'This shop',
+            upiId: meta.upiId,
+        })
+        : map;
+
+    let touched = false;
+    for (const [path, content] of Object.entries(withPay)) {
+        if (vfs.read(path) === content) continue;
+        vfs.write(path, content);
+        touched = true;
+    }
+
     const entry = entryPath(vfs);
     const html = entry ? vfs.read(entry) : null;
-    if (!entry || html === null) return;
-
-    const next = applySettingsToHtml(html, {
-        meta,
-        faviconUrl: meta.faviconUrl ?? null,
-        ogImageUrl: meta.ogImageUrl ?? null,
-        formEndpoint,
-    });
-
-    if (next !== html) {
-        vfs.write(entry, next);
-        autosave.trigger();
+    if (entry && html !== null) {
+        const next = applySettingsToHtml(html, {
+            meta,
+            faviconUrl: meta.faviconUrl ?? null,
+            ogImageUrl: meta.ogImageUrl ?? null,
+            formEndpoint,
+        });
+        if (next !== html) {
+            vfs.write(entry, next);
+            touched = true;
+        }
     }
+
+    if (touched) autosave.trigger();
 }
 
 // Ops waiting for their trip to the server, one per slot: typing a headline twice before the

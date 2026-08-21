@@ -6,6 +6,7 @@ import { IntentCapture } from "@/components/discovery/IntentCapture";
 import { PagecraftFeatures } from "@/components/discovery/PagecraftFeatures";
 import { TEMPLATES } from "@/lib/templates";
 import { templateUuid } from "@/lib/templates/template-id";
+import { requiredPlanForTemplate } from "@/lib/payments/pricing";
 
 function designFor(templateId: string | undefined) {
   if (!templateId) return null;
@@ -36,12 +37,13 @@ export default async function NewProjectPage({
         </h1>
         <p className="max-w-xl text-sm text-muted-foreground">
           {design
-            ? `Name, place, and what they do — we will put those facts on ${design.name}.`
+            ? `Name, place, and what they do — we put those facts on ${design.name} and add About, Contact and Settings.`
             : "A one-liner is not enough. Name, place, and what they do — then AI writes every page from those facts."}
         </p>
         {design && design.tier !== "free" ? (
           <p className="text-xs text-muted-foreground">
-            This design is paid. You will be asked to pay once before it is set up.
+            This design is paid. Razorpay opens before it is set up if you have not
+            bought it yet.
           </p>
         ) : null}
       </header>
@@ -51,6 +53,7 @@ export default async function NewProjectPage({
         initialCategory={toCategory(category) ?? null}
         library={!design}
         sourceTemplateId={design ? templateUuid(design.id) : template ?? null}
+        paidPlan={design ? requiredPlanForTemplate(design.tier) : null}
       />
 
       {design ? null : <PagecraftFeatures />}

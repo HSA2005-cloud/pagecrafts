@@ -19,12 +19,15 @@ import { putProjectFiles } from "./project-files";
 import { createCommit } from "./commits";
 import { contentFromFiles } from "@/lib/content/from-files";
 import { personaliseContent, personaliseFiles } from "@/lib/content/personalise";
+import { expandTemplateSite } from "@/lib/content/expand-template";
 import { asContentSchema } from "@/lib/content/schema";
 import { PROJECTS_PER_USER } from "@/lib/limits/config";
 import { failureMessage, toFailureReason } from "@/lib/deploy/failure";
+import { requiredPlanForTemplate } from "@/lib/payments/pricing";
 // Shared with the publish gate (R3 D9), so fork and publish agree about what a live
-// entitlement is — including that a lapsed one is not.
-import { hasPro } from "./entitlements";
+// entitlement is — including that a lapsed one is not. Opening a paid design uses the
+// template unlock (or a legacy plan grant): the webhook writes it, this only reads it.
+import { hasPro, hasTemplateAccess, PAID_DESIGN_MESSAGE } from "./entitlements";
 import { TEMPLATES } from "@/lib/templates";
 import { writeLibraryRows } from "@/lib/templates/row";
 import { templateUuid } from "@/lib/templates/template-id";
@@ -224,23 +227,26 @@ async function assertUnderQuota(
 async function ensureLibraryTemplate(
   supabase: SupabaseClient,
   sourceTemplateId: string,
-): Promise<boolean> {
+): Promise<TemplateTier | null> {
   const { data: existing } = await supabase
     .from("templates")
-    .select("id")
+    .select("id, tier")
     .eq("id", sourceTemplateId)
     .maybeSingle();
-  if (existing) return true;
+  if (existing) {
+    const tier = (existing as { tier?: TemplateTier }).tier;
+    return tier ?? "free";
+  }
 
   const design = TEMPLATES.find((template) => templateUuid(template.id) === sourceTemplateId);
-  if (!design) return false;
+  if (!design) return null;
 
   const writer = supabaseAdminOrNull() ?? supabase;
   const { error } = await writeLibraryRows(writer, [design]);
   if (error) {
     throw new ApiError("internal", "Could not load that design.", error.message);
   }
-  return true;
+  return design.tier;
 }
 
 // Fork a template (R3 D8).
@@ -264,9 +270,13 @@ export async function createProject(
   await assertUnderQuota(supabase, userId, pro);
 
   if (req.sourceTemplateId) {
-    const inLibrary = await ensureLibraryTemplate(supabase, req.sourceTemplateId);
-    if (!inLibrary) {
+    const tier = await ensureLibraryTemplate(supabase, req.sourceTemplateId);
+    if (tier === null) {
       throw new ApiError("not_found", "That design does not exist.");
+    }
+    const need = requiredPlanForTemplate(tier);
+    if (need && !(await hasTemplateAccess(supabase, userId, req.sourceTemplateId, tier))) {
+      throw new ApiError("payment_required", PAID_DESIGN_MESSAGE, `userId=${userId}`);
     }
   }
 
@@ -304,31 +314,20 @@ export async function createProject(
     }
     if (!template) throw new ApiError("not_found", "That design does not exist.");
 
-    // Doc 22 P2/P3: a premium or signature design is paid for once, before the fork runs.
-    // The price is read from the row and never from the request — a paywall the caller is
-    // trusted to declare is not a paywall. Thrown inside the try, so the catch below removes
-    // the empty project rather than leaving a site nobody paid for sitting in a dashboard.
-    const tier = (template.tier ?? "free") as TemplateTier;
-    if (tier !== "free" && !pro) {
-      throw new ApiError(
-        "payment_required",
-        "This design needs to be paid for before you can use it.",
-        `tier=${tier}`,
-      );
-    }
-
-    const contentSchema = (template.content_schema ?? { sections: [] }) as ContentSchema;
+    let contentSchema = (template.content_schema ?? { sections: [] }) as ContentSchema;
     let files = (template.files ?? {}) as FileMap;
     let content = contentFromFiles(files, contentSchema);
 
-    // The brief screen after "Use this design" writes the business onto the layout
-    // rather than generating a new site. Photos, CSS and section structure stay.
+    // The brief screen after "Use this design" writes the business onto this layout
+    // and adds About, Contact and Settings in the same chrome — not a generated look.
     if (req.brief) {
       const next = personaliseContent(contentSchema, content, req.brief);
       files = personaliseFiles(files, contentSchema, next, req.brief);
-      content = next;
+      const expanded = expandTemplateSite(files, contentSchema, req.brief);
+      files = expanded.files;
+      contentSchema = expanded.schema;
+      content = contentFromFiles(files, contentSchema);
     }
-
     await putProjectFiles(supabase, projectId, files);
 
     // The schema is copied for the same reason the files are (R3 D7). Read live through
@@ -389,8 +388,13 @@ export async function patchProject(
 ): Promise<ProjectDetail> {
   const patch: Record<string, unknown> = {};
   if (req.name !== undefined) patch.name = req.name;
-  if (req.siteMeta !== undefined) patch.site_meta = req.siteMeta;
   if (req.formEndpoint !== undefined) patch.form_endpoint = req.formEndpoint;
+  if (req.siteMeta !== undefined) {
+    const current = await getProject(supabase, projectId);
+    const next = { ...current.siteMeta, ...req.siteMeta };
+    if (!next.upiId) delete next.upiId;
+    patch.site_meta = next;
+  }
 
   if (Object.keys(patch).length === 0) {
     return getProject(supabase, projectId);

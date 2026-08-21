@@ -13,10 +13,12 @@ export function UseDesignButton({
     forkId,
     name,
     tier,
+    showPayNote = true,
 }: {
     forkId: string;
     name: string;
     tier: TemplateTier;
+    showPayNote?: boolean;
 }) {
     const href = `/new?template=${encodeURIComponent(forkId)}`;
 
@@ -25,13 +27,15 @@ export function UseDesignButton({
             <Link
                 href={href}
                 aria-label={`Use ${name}`}
-                className={buttonVariants({ variant: "brand", size: "lg" })}
+                className={buttonVariants({ variant: "brand", size: "lg" }) + " cursor-pointer"}
             >
                 Use this design
             </Link>
-            {tier !== "free" ? (
+            {showPayNote && tier !== "free" ? (
                 <span className="text-xs text-muted-foreground">
-                    You will be asked to pay for this design once, before it is set up.
+                    {tier === "signature"
+                        ? "Needs Premium on User Plans."
+                        : "Needs Pro on User Plans."}
                 </span>
             ) : null}
         </div>

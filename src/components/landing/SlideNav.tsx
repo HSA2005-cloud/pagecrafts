@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 const APP_SLIDES = [
     { id: "welcome", label: "Welcome" },
     { id: "how-it-works", label: "How it works" },
+    { id: "pricing", label: "Pricing" },
+    { id: "compare", label: "Compare" },
     { id: "build", label: "Build" },
     { id: "sites", label: "Your sites" },
     { id: "settings", label: "Settings" },
@@ -27,6 +29,8 @@ export function SlideNav({
 
     useEffect(() => {
         const present = catalog.filter((slide) => document.getElementById(slide.id));
+        // The catalog is filtered against the document, which only exists after mount.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIds(present.map((slide) => slide.id));
         if (present[0] && !present.some((slide) => slide.id === active)) {
             setActive(present[0].id);
@@ -53,7 +57,17 @@ export function SlideNav({
     }, [introOnly, slides]);
 
     function go(id: string) {
-        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        const el = document.getElementById(id);
+        if (!el) return;
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        // Temporarily ease snap so smooth scrollIntoView is not fighting the deck.
+        const html = document.documentElement;
+        const hadSnap = html.classList.contains("deck-snap");
+        if (hadSnap) html.classList.remove("deck-snap");
+        el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+        if (hadSnap) {
+            window.setTimeout(() => html.classList.add("deck-snap"), reduce ? 0 : 700);
+        }
     }
 
     const current = catalog.find((slide) => slide.id === active) ?? catalog[0];

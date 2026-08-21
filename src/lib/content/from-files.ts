@@ -116,7 +116,14 @@ export function keepImages(
 }
 
 export function contentFromFiles(files: FileMap, schema: ContentSchema): Record<string, unknown> {
-    const html = files["index.html"] ?? "";
+    const htmlPages = Object.entries(files)
+        .filter(([path]) => /\.html?$/i.test(path))
+        .sort(([a], [b]) => {
+            if (a === "index.html") return -1;
+            if (b === "index.html") return 1;
+            return a.localeCompare(b);
+        });
+    const html = htmlPages.map(([, source]) => source).join("\n");
     const content: Record<string, unknown> = {};
     // section -> field -> index -> item, collected separately because list items arrive one
     // slot at a time and in whatever order the markup happens to put them.

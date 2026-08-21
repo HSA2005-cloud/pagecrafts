@@ -3,10 +3,18 @@
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
-const SLIDES = new Set(["welcome", "how-it-works", "build", "sites", "settings"]);
+const SLIDES = new Set([
+    "welcome",
+    "how-it-works",
+    "pricing",
+    "compare",
+    "build",
+    "sites",
+    "settings",
+]);
 const ALIAS: Record<string, string> = {
     top: "welcome",
-    looks: "welcome",
+    looks: "compare",
     templates: "build",
     assistant: "build",
     "sign-in": "welcome",
@@ -25,10 +33,18 @@ export function SlideTo() {
 
         const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         const go = () => {
-            document.getElementById(id)?.scrollIntoView({
+            const el = document.getElementById(id);
+            if (!el) return;
+            const html = document.documentElement;
+            const hadSnap = html.classList.contains("deck-snap");
+            if (hadSnap) html.classList.remove("deck-snap");
+            el.scrollIntoView({
                 behavior: reduce ? "auto" : "smooth",
                 block: "start",
             });
+            if (hadSnap) {
+                window.setTimeout(() => html.classList.add("deck-snap"), reduce ? 0 : 700);
+            }
         };
 
         const timer = window.setTimeout(go, 40);

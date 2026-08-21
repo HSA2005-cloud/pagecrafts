@@ -1,0 +1,2 @@
+-- Postgres cannot drop a value from an enum without recreating the type.
+-- Template and style rows are removed by 20260821093001's rollback.

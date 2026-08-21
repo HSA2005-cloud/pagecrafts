@@ -128,4 +128,4 @@ export interface AiResult<T> {
 
 export const SCHEMA_VERSION = 3;
 export const MAX_SECTIONS = 7;
-export const MAX_CLASSIFY_CHARS = 500;
+export const MAX_CLASSIFY_CHARS = 2_000;

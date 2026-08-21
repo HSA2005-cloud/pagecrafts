@@ -109,7 +109,8 @@ describe("GET /templates", () => {
     });
 
     it("answers an impossible filter with an empty list, not an error", async () => {
-        const { status, body } = await get("/api/v1/templates?category=store&tier=signature&colour=dark");
+        // Free tiles are light-only now, so free + dark is empty.
+        const { status, body } = await get("/api/v1/templates?tier=free&colour=dark");
 
         expect(status).toBe(200);
         expect(validate(responseSchema(path, "get", 200), body)).toEqual([]);

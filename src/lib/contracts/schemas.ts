@@ -30,6 +30,17 @@ export const patchProjectSchema = z.object({
       faviconUrl: z.string().url().optional(),
       ogImageAssetId: z.string().optional(),
       ogImageUrl: z.string().url().optional(),
+      upiId: z
+        .string()
+        .trim()
+        .max(80)
+        .refine(
+          (value) =>
+            value === "" ||
+            /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,63}$/.test(value),
+          "That does not look like a UPI ID.",
+        )
+        .optional(),
     })
     .optional(),
   formEndpoint: z
@@ -102,5 +113,28 @@ export const billingProfileSchema = z.object({
   billingLine: z.string().trim().max(120),
   billingCity: z.string().trim().max(80),
   gstin: z.string().trim().max(15),
+});
+
+export const notifyPrefsSchema = z.object({
+  email: z.boolean(),
+  published: z.boolean(),
+  updated: z.boolean(),
+  payments: z.boolean(),
+  product: z.boolean(),
+});
+
+export const notifyPrefsRequestSchema = z.object({
+  notifyPrefs: notifyPrefsSchema,
+});
+
+export const paymentVerifySchema = z.object({
+  razorpay_order_id: z.string().min(1),
+  razorpay_payment_id: z.string().min(1),
+  razorpay_signature: z.string().min(1),
+});
+
+/** POST /account/billing/checkout — which account unlock to start paying for. */
+export const planCheckoutSchema = z.object({
+  plan: z.enum(["pro", "premium"]),
 });
 

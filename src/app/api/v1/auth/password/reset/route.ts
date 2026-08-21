@@ -2,7 +2,7 @@ import "server-only";
 import type { NextRequest } from "next/server";
 import { supabaseRouteClient } from "@/lib/auth/server";
 import { passwordResetRequestSchema } from "@/lib/contracts/auth";
-import { publicEnv } from "@/lib/config/env";
+import { authConfirmUrl } from "@/lib/auth/confirm-url";
 import { ok, fail, guard } from "@/lib/errors/respond";
 import { readJson } from "@/lib/kernel/body";
 
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
         const supabase = await supabaseRouteClient();
         await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-            redirectTo: `${publicEnv.appUrl}/api/v1/auth/confirm?next=/reset`,
+            redirectTo: `${authConfirmUrl()}?next=${encodeURIComponent("/reset")}`,
         });
 
         // SEC-05: the same answer whether or not this address has an account.

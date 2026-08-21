@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { capturedPayment, verifyWebhook } from "@/lib/payments/razorpay";
-import { grantPublish } from "@/lib/payments/checkout";
+import { grantAdvanced, grantGenerationPassPurchase, grantPremium, grantPro, grantPublish, grantStyle, grantTemplate } from "@/lib/payments/checkout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,13 +43,124 @@ export async function POST(req: NextRequest) {
   // acknowledged and ignored — returning an error would make it retry an event forever.
   if (!payment) return NextResponse.json({ ok: true, ignored: true });
 
-  const { projectId, userId, kind } = payment.notes;
+  const { projectId, userId, kind, templateId, styleId } = payment.notes;
 
   // The notes were written by us when the order was created. If they are not here, this
   // payment was not for something we know how to unlock — worth saying loudly, because it
   // means money moved and nothing happened.
-  if (kind !== "publish" || !projectId || !userId) {
+  if (
+    !userId ||
+    (kind !== "publish" &&
+      kind !== "pro" &&
+      kind !== "premium" &&
+      kind !== "template" &&
+      kind !== "style" &&
+      kind !== "advanced" &&
+      kind !== "generation_pass")
+  ) {
     console.error("[payments] captured payment carries no usable notes", {
+      paymentId: payment.paymentId,
+      orderId: payment.orderId,
+    });
+    return NextResponse.json({ ok: true, ignored: true });
+  }
+
+  if (kind === "advanced") {
+    try {
+      await grantAdvanced(userId);
+    } catch (error) {
+      console.error("[payments] could not grant Advanced after payment", {
+        paymentId: payment.paymentId,
+        userId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json({ ok: false }, { status: 500 });
+    }
+    console.info("[payments] Advanced unlocked", { userId, paymentId: payment.paymentId });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (kind === "generation_pass") {
+    try {
+      await grantGenerationPassPurchase(userId);
+    } catch (error) {
+      console.error("[payments] could not grant generation pass after payment", {
+        paymentId: payment.paymentId,
+        userId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json({ ok: false }, { status: 500 });
+    }
+    console.info("[payments] generation pass granted", { userId, paymentId: payment.paymentId });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (kind === "template") {
+    if (!templateId) {
+      console.error("[payments] captured template payment carries no design", {
+        paymentId: payment.paymentId,
+        orderId: payment.orderId,
+      });
+      return NextResponse.json({ ok: true, ignored: true });
+    }
+    try {
+      await grantTemplate(userId, templateId);
+    } catch (error) {
+      console.error("[payments] could not grant template after payment", {
+        paymentId: payment.paymentId,
+        userId,
+        templateId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json({ ok: false }, { status: 500 });
+    }
+    console.info("[payments] template unlocked", { userId, templateId, paymentId: payment.paymentId });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (kind === "style") {
+    if (!styleId) {
+      console.error("[payments] captured look payment carries no style", {
+        paymentId: payment.paymentId,
+        orderId: payment.orderId,
+      });
+      return NextResponse.json({ ok: true, ignored: true });
+    }
+    try {
+      await grantStyle(userId, styleId);
+    } catch (error) {
+      console.error("[payments] could not grant look after payment", {
+        paymentId: payment.paymentId,
+        userId,
+        styleId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json({ ok: false }, { status: 500 });
+    }
+    console.info("[payments] look unlocked", { userId, styleId, paymentId: payment.paymentId });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (kind === "pro" || kind === "premium") {
+    const label = kind === "premium" ? "Premium" : "Pro";
+    try {
+      if (kind === "premium") await grantPremium(userId);
+      else await grantPro(userId);
+    } catch (error) {
+      console.error(`[payments] could not grant ${label} after payment`, {
+        paymentId: payment.paymentId,
+        userId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json({ ok: false }, { status: 500 });
+    }
+
+    console.info(`[payments] ${label} unlocked`, { userId, paymentId: payment.paymentId });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!projectId) {
+    console.error("[payments] captured publish payment carries no project", {
       paymentId: payment.paymentId,
       orderId: payment.orderId,
     });

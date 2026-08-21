@@ -7,9 +7,11 @@ import {
     generationSteps,
     generationThought,
 } from '@/lib/editor/generation-steps';
+import { explainCreationIssue } from '@/lib/editor/ai-fix';
 import ChangeSummary from './ChangeSummary';
 import ChatComposer from './ChatComposer';
 import { GenerationTimeline } from './GenerationTimeline';
+import { AskAiFixDialog } from './AskAiFixDialog';
 
 export default function ChatPanel({ autoFocus = false }: { autoFocus?: boolean }) {
     const composition = useEditorStore((s) => s.composition);
@@ -25,12 +27,14 @@ export default function ChatPanel({ autoFocus = false }: { autoFocus?: boolean }
     const hasSections = (composition?.sections.length ?? 0) > 0;
 
     const [draft, setDraft] = useState('');
+    const [askOpen, setAskOpen] = useState(false);
     const endRef = useRef<HTMLDivElement>(null);
 
     const lastUserText = [...messages].reverse().find((turn) => turn.role === 'user')?.text ?? null;
     const hasPage = Boolean(contentSchema?.sections.length);
     const suggestions = chatSuggestions({ composition, lastUserText, hasPage });
     const showChoices = !busy && !pendingChange;
+    const fix = error ? explainCreationIssue(error, 'chat') : null;
 
     useEffect(() => {
         endRef.current?.scrollIntoView({ block: 'end' });
@@ -108,10 +112,18 @@ export default function ChatPanel({ autoFocus = false }: { autoFocus?: boolean }
                     </div>
                 ) : null}
 
-                {error ? (
-                    <p role="alert" className="mt-4 text-sm text-destructive">
-                        {error}
-                    </p>
+                {fix ? (
+                    <div className="mt-4 rounded-2xl border border-border/70 bg-card/80 p-4">
+                        <p className="text-sm font-medium text-foreground">{fix.title}</p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">{fix.what}</p>
+                        <button
+                            type="button"
+                            onClick={() => setAskOpen(true)}
+                            className="mt-3 h-11 cursor-pointer rounded-full border border-gold bg-gold px-4 text-sm font-semibold text-gold-foreground hover:opacity-90"
+                        >
+                            Fix with AI
+                        </button>
+                    </div>
                 ) : null}
 
                 {showChoices && suggestions.length > 0 ? (
@@ -155,6 +167,20 @@ export default function ChatPanel({ autoFocus = false }: { autoFocus?: boolean }
                     />
                 </div>
             </div>
+
+            {fix ? (
+                <AskAiFixDialog
+                    open={askOpen}
+                    title={fix.title}
+                    what={fix.what}
+                    busy={busy}
+                    onDismiss={() => setAskOpen(false)}
+                    onConfirm={() => {
+                        setAskOpen(false);
+                        void send(fix.instruction);
+                    }}
+                />
+            ) : null}
         </section>
     );
 }

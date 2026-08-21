@@ -11,6 +11,18 @@ import { rowFor } from '@/lib/ai/cost/ledger';
 import { persistLedger } from '@/lib/ai/cost/persist';
 import { nextJobId } from '@/lib/ai/jobs/store';
 import { SECTION_KEYS, type SectionInstance } from '@/lib/contracts';
+import { getProjectFiles } from '@/lib/data/project-files';
+import { styleUpgradeFirewall } from '@/lib/editor/style-firewall';
+import { parseComposition } from '@/lib/editor/parse-composition';
+
+function pickHtmlEntry(paths: string[]): string | null {
+    const html = paths.filter((p) => /\.html?$/i.test(p));
+    const preferred = ['index.html', 'home.html', 'page.html'];
+    for (const name of preferred) {
+        if (html.includes(name)) return name;
+    }
+    return html[0] ?? null;
+}
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +47,25 @@ export const POST = withRoute<z.infer<typeof schema>, Params>({
     limit: 'ai',
     schema,
     handler: async ({ body, params, userId, supabase, recordUsage }) => {
+        if (typeof supabase.from === 'function') {
+            try {
+                const { files } = await getProjectFiles(supabase, params.id);
+                const entry = pickHtmlEntry(Object.keys(files));
+                const html = entry ? files[entry] ?? null : null;
+                const composition = parseComposition(files['composition.json']);
+                const blocked = styleUpgradeFirewall({
+                    instruction: body.instruction,
+                    html,
+                    composition,
+                });
+                if (blocked) {
+                    throw new ApiError('validation_failed', blocked);
+                }
+            } catch (err) {
+                if (err instanceof ApiError) throw err;
+            }
+        }
+
         let preCommitSha: string | null = null;
         if (typeof supabase.from === 'function') {
             try {

@@ -6,6 +6,7 @@ import { ok, ApiError } from '@/lib/errors/respond';
 import { jobStore } from '@/lib/ai/jobs/store';
 import { STYLE_IDS } from '@/lib/ai/generate/styles';
 import { persistStyleOption } from '@/lib/ai/generate/persist';
+import { hasStyleAccess, PAID_DESIGN_MESSAGE } from '@/lib/data/entitlements';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,6 +34,10 @@ export const POST = withRoute<z.infer<typeof schema>, Params>({
         const option = job.variants?.find((item) => item.id === body.variantId);
         if (!option) {
             throw new ApiError('validation_failed', 'That look is not available.');
+        }
+
+        if (!(await hasStyleAccess(supabase, userId, option.id))) {
+            throw new ApiError('payment_required', PAID_DESIGN_MESSAGE);
         }
 
         await persistStyleOption(supabase, params.id, option);

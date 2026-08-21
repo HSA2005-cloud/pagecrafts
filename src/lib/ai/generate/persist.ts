@@ -1,9 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import type { ContentSchema, FileMap, Template } from '@/lib/contracts';
+import type { ContentSchema, FileMap, SiteMeta, Template } from '@/lib/contracts';
 import { putProjectFiles } from '@/lib/data/project-files';
 import { createCommit } from '@/lib/data/commits';
 import { contentFromFiles } from '@/lib/content/from-files';
+import { asksTableOrdering } from '@/lib/ai/composition/requested-pages';
+import { mergeSiteMeta, wireOrderPayments } from '@/lib/sites/pay-page';
+import { wireTableOrderSite } from '@/lib/sites/table-order-ui';
 import type { Job } from '../jobs/types';
 import type { StyleOption } from './options';
 import { contentFromComposition, schemaFromComposition } from './schema';
@@ -41,6 +44,7 @@ export async function persistGeneratedSite(
             content,
             title,
             description: job.composition.meta.description,
+            prompt: job.prompt,
             commitMessage: 'Generated from your description',
         });
         return;
@@ -70,20 +74,36 @@ async function writeSite(
         content: Record<string, unknown>;
         title?: string;
         description?: string;
+        /** Original generation ask — used to honor specific page/feature requests. */
+        prompt?: string;
         commitMessage: string;
     },
 ): Promise<void> {
-    await putProjectFiles(supabase, projectId, input.files);
+    const existing = await readSiteMeta(supabase, projectId);
+    const siteMeta = mergeSiteMeta(existing, {
+        ...(input.title ? { title: input.title } : {}),
+        ...(input.description ? { description: input.description } : {}),
+    });
+    const businessName = siteMeta.title || input.title || 'This shop';
+    const ask = input.prompt || input.description || '';
+    let files = input.files;
+    if (asksTableOrdering(ask)) {
+        files = wireTableOrderSite(files, { businessName });
+    } else if (siteMeta.upiId) {
+        files = wireOrderPayments(files, {
+            businessName,
+            upiId: siteMeta.upiId,
+        });
+    }
+
+    await putProjectFiles(supabase, projectId, files);
 
     const { error } = await supabase
         .from('projects')
         .update({
             content_schema: input.schema,
             content_json: input.content,
-            site_meta: {
-                ...(input.title ? { title: input.title } : {}),
-                ...(input.description ? { description: input.description } : {}),
-            },
+            site_meta: siteMeta,
             ...(input.title ? { name: input.title } : {}),
         })
         .eq('id', projectId);
@@ -92,7 +112,19 @@ async function writeSite(
         throw new Error(`Could not seed generated content: ${error.message}`);
     }
 
-    await createCommit(supabase, projectId, input.commitMessage, 'system', input.files);
+    await createCommit(supabase, projectId, input.commitMessage, 'system', files);
+}
+
+async function readSiteMeta(
+    supabase: SupabaseClient,
+    projectId: string,
+): Promise<SiteMeta> {
+    const { data } = await supabase
+        .from('projects')
+        .select('site_meta')
+        .eq('id', projectId)
+        .maybeSingle();
+    return (data?.site_meta as SiteMeta | undefined) ?? {};
 }
 
 /** Persist the look the person picked. */

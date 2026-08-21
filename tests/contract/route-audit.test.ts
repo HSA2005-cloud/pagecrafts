@@ -65,12 +65,18 @@ const NO_SCHEMA: Record<string, string> = {
         "multipart/form-data. The body is parsed and checked in the handler — size, mime " +
         "type — because a Zod schema cannot describe a file upload.",
     "/v1/projects/[id]/checkout": "No body at all; the project is the whole request.",
+    "/v1/templates/[id]/checkout": "No body at all; the design id is the whole request.",
+    "/v1/styles/[id]/checkout": "No body at all; the look id is the whole request.",
+    "/v1/account/packages/advanced/checkout": "No body; Advanced AI package checkout.",
+    "/v1/account/packages/generation/checkout": "No body; extra generation pass checkout.",
+    "/v1/account/billing/downgrade":
+        "No body. Switching to Starter is a session-scoped revoke, not a payload.",
     "/v1/projects/[id]/publish": "No body. The idempotency key is a header, checked in the route.",
     "/v1/account":
-        "DELETE, and there is nothing to validate: the session says whose account it is, and " +
-        "a confirmation field in the body would only be a box the client ticks for them. The " +
-        "confirmation is in the interface, where a person is shown what they lose and types " +
-        "the words. PATCH /account/consent, which does carry a body, has its schema.",
+        "DELETE body is email + password, checked with readCredentials / authenticateWithPassword " +
+        "in the handler (same as deleting a site) rather than a withRoute Zod schema — a stolen " +
+        "cookie alone must not wipe the account. The UI still shows what they lose and asks them " +
+        "to type the words. PATCH /account/consent, which does carry a body, has its schema.",
 };
 
 /** Routes allowed to reach past RLS with the service role, and why. */
@@ -79,6 +85,10 @@ const ADMIN_CLIENT = {
     "/v1/projects/[id]/generate":
         "Only to hand the vertical-profile cache a writer. Profiles are shared reference " +
         "data written by no user; the project work stays on the caller's own client.",
+    "/v1/pay/[id]":
+        "Public shop pay page. The visitor is not the owner, so the session client cannot " +
+        "read site_meta.upiId under RLS; the handler returns only the UPI id and business " +
+        "name, never email or other account fields.",
 };
 
 const usesWithRoute = (source: string) => /withRoute[<(]/.test(source);

@@ -1,6 +1,6 @@
 import type { ErrorCode } from '@/lib/contracts';
 
-export const OFFLINE_MESSAGE = 'We could not reach PageCraft. Check your connection and try again.';
+export const OFFLINE_MESSAGE = 'We could not reach PageCrafts. Check your connection and try again.';
 
 export const UNREADABLE_MESSAGE = 'The server sent back something we could not read.';
 
@@ -18,7 +18,7 @@ const FRIENDLY: Record<ErrorCode, string> = {
     generation_failed: 'The site could not be generated.',
     payment_required: 'This needs an upgrade before it can run.',
     hosting_error: 'The hosting service did not respond.',
-    service_unavailable: 'PageCraft is having trouble right now. Your work is safe. Try again in a moment.',
+    service_unavailable: 'PageCrafts is having trouble right now. Your work is safe. Try again in a moment.',
     internal: 'We could not finish that just now. Your work is safe in this tab — try again in a moment.',
 };
 

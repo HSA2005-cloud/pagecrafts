@@ -41,15 +41,17 @@ export function contentSecurityPolicy(isDev = process.env.NODE_ENV !== "producti
 
     const directives = [
         "default-src 'self'",
-        `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+        `script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.razorpay.com${isDev ? " 'unsafe-eval'" : ""}`,
         "style-src 'self' 'unsafe-inline'",
         origins("img-src 'self' data: blob: https://images.unsplash.com", SUPABASE_ORIGIN),
         "font-src 'self' data:",
-        `connect-src ${connect}`,
-        "frame-src 'self' blob:",
+        `connect-src ${connect} https://lumberjack.razorpay.com https://api.razorpay.com https://checkout.razorpay.com`,
+        "frame-src 'self' blob: https://api.razorpay.com https://api.razorpay.in https://checkout.razorpay.com",
         "object-src 'none'",
         "base-uri 'self'",
-        "form-action 'self'",
+        // Card 3DS opens about:blank then POSTs that window to Razorpay or a bank ACS.
+        // Restricting this to 'self' leaves the new tab blank. javascript: and data: stay out.
+        "form-action 'self' https:",
         "frame-ancestors 'none'",
         "upgrade-insecure-requests",
     ];
@@ -69,7 +71,9 @@ export function securityHeaders(
             key: "Permissions-Policy",
             value: "camera=(), microphone=(self), geolocation=(), interest-cohort=()",
         },
-        { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+        // same-origin severs window.opener, so Razorpay's card 3DS popup opens as
+        // about:blank#blocked. allow-popups keeps isolation without killing checkout.
+        { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
         { key: "X-DNS-Prefetch-Control", value: "off" },
     ];
 

@@ -21,9 +21,19 @@ const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
 const ORDERS_URL = "https://api.razorpay.com/v1/orders";
 
 export interface OrderNotes {
-    projectId: string;
     userId: string;
-    kind: "publish";
+    kind: "publish" | "pro" | "premium" | "template" | "style" | "advanced" | "generation_pass";
+    /** Present for a publish order; omitted for item and account unlocks. */
+    projectId?: string;
+    /** Catalogue design being bought. */
+    templateId?: string;
+    /** Generated look being bought (`photos` or `motion`). */
+    styleId?: string;
+}
+
+/** True when this process can create an order. Missing keys fail at checkout, not at boot. */
+export function paymentsConfigured(): boolean {
+    return Boolean(KEY_ID && KEY_SECRET);
 }
 
 export interface RazorpayOrder {
@@ -119,6 +129,35 @@ export function verifyWebhook(rawBody: string, signature: string | null): boolea
     }
 
     const expected = createHmac("sha256", WEBHOOK_SECRET).update(rawBody).digest("hex");
+    const a = Buffer.from(expected, "utf8");
+    const b = Buffer.from(signature, "utf8");
+
+    return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Standard checkout signature check.
+ *
+ * After the Razorpay modal reports success, the browser sends three tokens
+ * (order_id, payment_id, signature) to /api/v1/payments/razorpay/verify. The
+ * signature is HMAC-SHA256("order_id|payment_id", KEY_SECRET) — note KEY_SECRET,
+ * not WEBHOOK_SECRET, because this proves the payment round-trip was genuine, not
+ * that a webhook body was.
+ *
+ * This check is a courtesy: it lets the UI show "Payment confirmed" immediately.
+ * The entitlement is still granted only by the webhook, where the real trust lies.
+ */
+export function verifyPaymentSignature(
+    orderId: string,
+    paymentId: string,
+    signature: string,
+): boolean {
+    const { keySecret } = credentials();
+
+    const expected = createHmac("sha256", keySecret)
+        .update(`${orderId}|${paymentId}`)
+        .digest("hex");
+
     const a = Buffer.from(expected, "utf8");
     const b = Buffer.from(signature, "utf8");
 

@@ -13,16 +13,41 @@ describe("choosing a template", () => {
     expect(button).toContain("/new?template=");
     expect(button).not.toContain("/editor/");
     expect(page).toContain("sourceTemplateId");
+    expect(page).toContain("add About, Contact and Settings");
     expect(capture).toContain("startFromDesign");
     expect(capture).toContain("Put this on the design");
+    expect(capture).toContain("paidPlan");
+    expect(capture).toContain("unlockTemplate");
+    expect(page).toContain("paidPlan");
+    expect(capture).toContain("/generate");
+    expect(capture).toContain("/editor/");
+    expect(capture).toContain("?job=");
+    expect(capture).toContain("visual reference");
+
+    const fromDesign = capture.slice(
+      capture.indexOf("async function startFromDesign"),
+      capture.indexOf("async function startGeneration"),
+    );
+    expect(fromDesign).toContain("`/editor/${encodeURIComponent(created.data.id)}`");
+    expect(fromDesign).not.toContain("/generate");
+    expect(fromDesign).not.toContain("/choose/");
+    expect(fromDesign).not.toContain("visual reference");
+
+    const fromScratch = capture.slice(capture.indexOf("async function startGeneration"));
+    expect(fromScratch).toContain("/generate");
+    expect(fromScratch).toContain("/choose/");
   });
 
   it("keeps the editor as chat on the left and live preview on the right", () => {
     const shell = read("src", "components", "editor", "EditorShell.tsx");
-    const defaultSplit = shell.slice(shell.indexOf("lg:flex-[3]"));
+    const split = read("src", "components", "editor", "EditorSplit.tsx");
+
+    const defaultSplit = shell.slice(shell.indexOf("<EditorSplit"));
 
     expect(defaultSplit.indexOf("<ChatPanel")).toBeGreaterThan(0);
     expect(defaultSplit.indexOf("<PreviewPane")).toBeGreaterThan(defaultSplit.indexOf("<ChatPanel"));
     expect(shell.includes("ContentPanel")).toBe(false);
+    expect(split).toContain("DEFAULT_LEFT = 30");
+    expect(split).toContain("role=\"separator\"");
   });
 });

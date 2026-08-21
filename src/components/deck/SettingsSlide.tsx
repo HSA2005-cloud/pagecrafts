@@ -1,9 +1,18 @@
-import type { AccountResponse } from "@/lib/contracts";
+import type { AccountResponse, BillingSummary } from "@/lib/contracts";
+import { DEFAULT_BILLING } from "@/lib/contracts";
+import { BillingPlans } from "@/components/settings/BillingPlans";
 import { BillingProfile } from "@/components/settings/BillingProfile";
-import { TrainingConsent } from "@/components/settings/TrainingConsent";
+import { NotificationPrefs } from "@/components/settings/NotificationPrefs";
+import { PrivacyAndData } from "@/components/settings/PrivacyAndData";
 import { DeleteAccount } from "@/components/settings/DeleteAccount";
 
-export function SettingsSlide({ account }: { account: AccountResponse | null }) {
+export function SettingsSlide({
+    account,
+    billing,
+}: {
+    account: AccountResponse | null;
+    billing: BillingSummary | null;
+}) {
     return (
         <section
             id="settings"
@@ -19,8 +28,8 @@ export function SettingsSlide({ account }: { account: AccountResponse | null }) 
                         Settings
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        Your account, the details on a receipt, and what PageCraft does with your
-                        work.
+                        Your account, notices, purchases, and what PageCrafts does with your work.
+                        Title, SEO and domains for a site live on that site in the editor.
                     </p>
                 </header>
 
@@ -65,9 +74,11 @@ export function SettingsSlide({ account }: { account: AccountResponse | null }) 
                             </dl>
                         </div>
 
+                        <NotificationPrefs initial={account.notifyPrefs} />
+                        <BillingPlans account={account} initial={billing ?? DEFAULT_BILLING} />
                         <BillingProfile initial={account} />
-                        <TrainingConsent initial={account.trainingOptIn} />
-                        <DeleteAccount />
+                        <PrivacyAndData initial={account} />
+                        <DeleteAccount email={account.email} />
                     </div>
                 )}
             </div>

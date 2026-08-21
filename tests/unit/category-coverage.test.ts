@@ -30,13 +30,30 @@ describe("every shelf a person can pick has something behind it", () => {
         expect(empty).toEqual([]);
     });
 
-    it("ships at least one free design for every card", () => {
-        // The dead end this test exists for: a shelf that can only be left by paying.
-        const paidOnly = CATEGORY_CARDS.filter((c) => {
-            const designs = designsIn(c);
-            return designs.length > 0 && designs.every((t) => t.tier !== "free");
+    it("ships a free (light) design on every shelf that has one, and never a dark Free tile", () => {
+        // Product rule updated: Free = white/casual only. Dark shelves may be Pro-only.
+        // Still require that every *card that includes a light design* exposes it as free.
+        const lightPaid = TEMPLATES.filter((t) => {
+            const bg = t.files["styles.css"]?.match(/--bg:\s*([^;]+)/)?.[1]?.trim() ?? "";
+            const hex = bg.replace("#", "");
+            const r = Number.parseInt(hex.slice(0, 2), 16);
+            const g = Number.parseInt(hex.slice(2, 4), 16);
+            const b = Number.parseInt(hex.slice(4, 6), 16);
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return luminance >= 0.55 && t.tier !== "free";
         });
-        expect(paidOnly).toEqual([]);
+        expect(lightPaid.map((t) => t.id)).toEqual([]);
+
+        const darkFree = TEMPLATES.filter((t) => {
+            const bg = t.files["styles.css"]?.match(/--bg:\s*([^;]+)/)?.[1]?.trim() ?? "";
+            const hex = bg.replace("#", "");
+            const r = Number.parseInt(hex.slice(0, 2), 16);
+            const g = Number.parseInt(hex.slice(2, 4), 16);
+            const b = Number.parseInt(hex.slice(4, 6), 16);
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return luminance < 0.55 && t.tier === "free";
+        });
+        expect(darkFree.map((t) => t.id)).toEqual([]);
     });
 
     it("does not strand a design on a shelf nobody can filter to", () => {
@@ -102,10 +119,24 @@ describe("the shelves folded at D17", () => {
 });
 
 describe("what a person is asked to pay for", () => {
-    it("keeps every paid design on a shelf that also has a free one", () => {
-        for (const paid of TEMPLATES.filter((t) => t.tier !== "free")) {
-            const free = designsIn(paid.category).filter((t) => t.tier === "free");
-            expect(free.length, `${paid.id} is the only design on ${paid.category}`).toBeGreaterThan(0);
+    it("keeps light / casual designs Free and dark designs Pro or Premium", () => {
+        // Product rule: white-background casual tiles are Free; dark tiles are the
+        // paid shelf (Pro = premium, Premium = signature).
+        for (const t of TEMPLATES) {
+            const bg = t.files["styles.css"]?.match(/--bg:\s*([^;]+)/)?.[1]?.trim() ?? "";
+            const hex = bg.replace("#", "");
+            const r = Number.parseInt(hex.slice(0, 2), 16);
+            const g = Number.parseInt(hex.slice(2, 4), 16);
+            const b = Number.parseInt(hex.slice(4, 6), 16);
+            const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            const light = luminance >= 0.55;
+            if (light) {
+                expect(t.tier, `${t.id} is light so it must be free`).toBe("free");
+                expect(t.priceInr, t.id).toBe(0);
+            } else {
+                expect(t.tier, `${t.id} is dark so it must be paid`).not.toBe("free");
+                expect(t.priceInr, t.id).toBeGreaterThan(0);
+            }
         }
     });
 

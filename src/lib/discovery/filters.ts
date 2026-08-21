@@ -40,8 +40,8 @@ export const FEATURE_LABELS: Record<Feature, string> = {
 // "Premium" makes someone guess and a chip reading "Rs 499" does not (Doc 22 P1-P3).
 export const TIER_LABELS: Record<TemplateTier, string> = {
     free: "Free",
-    premium: "Rs 499",
-    signature: "Rs 999",
+    premium: "Pro",
+    signature: "Premium",
 };
 
 /**

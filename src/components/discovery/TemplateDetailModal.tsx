@@ -9,7 +9,9 @@ import { CATEGORY_LABELS } from "@/lib/discovery/categories";
 import { madeOfLine, priceLine, type TemplateDetail } from "@/lib/templates/detail";
 import { Badge } from "@/components/ui/badge";
 import { UseDesignButton } from "./UseDesignButton";
+import { LockedPlanNotice } from "./LockedPlanNotice";
 import { buttonVariants } from "@/components/ui/button";
+import { templateBadge } from "@/lib/payments/pricing";
 import {
     Dialog,
     DialogContent,
@@ -101,10 +103,14 @@ export function TemplateDetailModal({
     templateId,
     templateName,
     children,
+    showPrice = true,
+    locked = false,
 }: {
     templateId: string;
     templateName: string;
     children: React.ReactNode;
+    showPrice?: boolean;
+    locked?: boolean;
 }) {
     const [state, setState] = useState<State>({ status: "idle" });
 
@@ -142,7 +148,7 @@ export function TemplateDetailModal({
             // failure. Checking the connection is sound advice here and nowhere else.
             setState({
                 status: "error",
-                message: "We could not reach PageCraft. Check your connection and try again.",
+                message: "We could not reach PageCrafts. Check your connection and try again.",
             });
         }
     }, [templateId]);
@@ -154,7 +160,8 @@ export function TemplateDetailModal({
     };
 
     const detail = state.status === "ready" ? state.detail : null;
-    const price = detail ? priceLine(detail.tier, detail.priceInr) : null;
+    const price = showPrice && detail && !locked ? priceLine(detail.tier, detail.priceInr) : null;
+    const paidBadge = detail ? templateBadge(detail.tier) : null;
 
     return (
         <Dialog onOpenChange={onOpenChange}>
@@ -268,21 +275,28 @@ export function TemplateDetailModal({
                         {/* The price sits beside the button it applies to, before the choice
                             and never after (UI Spec §7.18). Free designs carry no price. */}
                         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
-                            {price ? (
-                                <span className="mr-auto flex flex-col">
-                                    <span className="text-base font-semibold text-foreground">
-                                        {price}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                        one-time, for this design
-                                    </span>
-                                </span>
-                            ) : null}
-                            <UseDesignButton
-                                forkId={detail.forkId}
-                                name={detail.name}
-                                tier={detail.tier}
-                            />
+                            {locked && paidBadge ? (
+                                <LockedPlanNotice badge={paidBadge} kind="design" />
+                            ) : (
+                                <>
+                                    {price ? (
+                                        <span className="mr-auto flex flex-col">
+                                            <span className="text-base font-semibold text-foreground">
+                                                {price}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                                listed price
+                                            </span>
+                                        </span>
+                                    ) : null}
+                                    <UseDesignButton
+                                        forkId={detail.forkId}
+                                        name={detail.name}
+                                        tier={detail.tier}
+                                        showPayNote={showPrice}
+                                    />
+                                </>
+                            )}
                         </div>
                     </div>
                 ) : null}

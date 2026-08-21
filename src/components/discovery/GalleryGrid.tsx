@@ -4,26 +4,28 @@ import { Sparkles } from "lucide-react";
 import type { Category } from "@/lib/contracts";
 import { CATEGORY_LABELS } from "@/lib/discovery/categories";
 import type { SortKey, TemplateSummary } from "@/lib/templates/query";
+import { templateUuid } from "@/lib/templates/template-id";
+import { templateBadge } from "@/lib/payments/pricing";
 import { TemplateCard } from "@/components/discovery/TemplateCard";
 import { CardIndex } from "@/components/ui/card-index";
 import { SortSelect } from "@/components/discovery/SortSelect";
 import { GalleryEmpty } from "@/components/discovery/GalleryStates";
 
-// Pinned below the grid in every state, including zero results (D-6, AC-F3-4): there is
-// always a way forward from this screen, even when no design matches.
+// Lives as the next cell after the last template (and alone when the grid is empty)
+// so there is always a way forward from this screen (D-6, AC-F3-4).
 function DesignSomethingNewCard({ index }: { index: number }) {
     return (
         <Link
             href="/new"
-            className="card-hover group relative flex flex-col overflow-hidden rounded-xl border border-dashed border-primary/40 bg-card transition-colors hover:border-primary hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="card-hover group relative flex flex-col overflow-hidden rounded-xl border border-gold/70 bg-card shadow-[0_0_0_1px_color-mix(in_srgb,var(--gold)_35%,transparent),0_0_22px_color-mix(in_srgb,var(--gold)_32%,transparent)] transition-[border-color,background-color,box-shadow] hover:border-gold hover:bg-gold/10 hover:shadow-[0_0_0_1px_color-mix(in_srgb,var(--gold)_55%,transparent),0_0_30px_color-mix(in_srgb,var(--gold)_42%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
             <CardIndex n={index} />
             <div className="relative z-[1] flex aspect-16/10 flex-col items-center justify-center gap-1.5 px-6 text-center">
                 <span
                     aria-hidden
-                    className="brand-halo flex size-10 items-center justify-center rounded-full border border-primary/40 bg-accent"
+                    className="brand-halo flex size-10 items-center justify-center rounded-full border border-gold/50 bg-accent"
                 >
-                    <Sparkles className="size-5 text-primary" strokeWidth={1.75} />
+                    <Sparkles className="size-5 text-gold" strokeWidth={1.75} />
                 </span>
                 <span className="mt-1 text-sm font-semibold text-foreground">
                     Design something new
@@ -50,6 +52,8 @@ export function GalleryGrid({
     personalised,
     resetHref,
     ranked = false,
+    unlockedTemplateIds = [],
+    lockable = false,
 }: {
     templates: TemplateSummary[];
     /** How many designs the library holds, for the "showing N of M" line. */
@@ -61,8 +65,26 @@ export function GalleryGrid({
     resetHref: string;
     /** True when a description was classified, so the order carries a real score (D6). */
     ranked?: boolean;
+    unlockedTemplateIds?: string[];
+    lockable?: boolean;
 }) {
+    const owned = new Set(unlockedTemplateIds);
     const filtered = templates.length !== total;
+
+    function card(template: TemplateSummary, index: number) {
+        const forkId = templateUuid(template.id);
+        const unlocked = !templateBadge(template.tier) || owned.has(forkId);
+        return (
+            <TemplateCard
+                key={template.id}
+                template={template}
+                index={index}
+                lockable={lockable}
+                unlocked={unlocked}
+                forkId={forkId}
+            />
+        );
+    }
 
     // The relevance cue, and the only honest one available: which designs actually matched
     // something the person described, and which are simply the rest of the library sitting
@@ -103,9 +125,12 @@ export function GalleryGrid({
 
             {templates.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {(split ? matched : templates).map((template, index) => (
-                        <TemplateCard key={template.id} template={template} index={index + 1} />
-                    ))}
+                    {(split ? matched : templates).map((template, index) =>
+                        card(template, index + 1),
+                    )}
+                    {!split && (
+                        <DesignSomethingNewCard index={templates.length + 1} />
+                    )}
                 </div>
             )}
 
@@ -115,25 +140,19 @@ export function GalleryGrid({
                         Everything else in the library
                     </h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        {rest.map((template, index) => (
-                            <TemplateCard
-                                key={template.id}
-                                template={template}
-                                index={matched.length + index + 1}
-                            />
-                        ))}
+                        {rest.map((template, index) =>
+                            card(template, matched.length + index + 1),
+                        )}
+                        <DesignSomethingNewCard index={templates.length + 1} />
                     </div>
                 </section>
             )}
 
-            <section className="mt-6 flex flex-col gap-4">
-                <h2 className="text-xl font-bold tracking-tight text-foreground">
-                    Want something else?
-                </h2>
+            {templates.length === 0 && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    <DesignSomethingNewCard index={templates.length + 1} />
+                    <DesignSomethingNewCard index={1} />
                 </div>
-            </section>
+            )}
 
         </div>
     );

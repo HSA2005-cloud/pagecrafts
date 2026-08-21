@@ -130,6 +130,20 @@ export class MockGateway {
         if (p.includes('Business type:')) return this.reply(JSON.stringify(PROFILE));
         if (p.includes('Recipe for this business:')) return this.reply(JSON.stringify(PLAN));
         if (p.includes('Fields to fill:')) return this.reply(JSON.stringify(fillFixtureFor(p)));
+        if (p.includes('Description:') && (p.includes('Vertical hint:') || req.job === 'compose')) {
+            return this.reply(JSON.stringify({
+                title: 'Mock Custom Site',
+                description: 'A working mock custom site',
+                files: [
+                    {
+                        path: 'index.html',
+                        content: '<!DOCTYPE html><html><head><title>Mock</title><link rel="stylesheet" href="styles.css"/></head><body><h1>Mock Custom Site</h1><script src="app.js"></script></body></html>',
+                    },
+                    { path: 'styles.css', content: 'body{font-family:sans-serif}' },
+                    { path: 'app.js', content: 'console.log("ok")' },
+                ],
+            }));
+        }
 
         if (p.includes('Rewrite the words on this page')) {
             return this.reply(JSON.stringify({

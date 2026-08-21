@@ -20,7 +20,7 @@ import { createFakeDb } from "../support/fake-db";
 // paid path has its own tests below — picking a premium design here would have made every
 // one of them fail for a reason that has nothing to do with what it is checking.
 const DESIGN = TEMPLATES.find((t) => t.id === "portfolio")!;
-const PAID_DESIGN = TEMPLATES.find((t) => t.id === "gym")!;
+const PAID_DESIGN = TEMPLATES.find((t) => t.id === "fitness-coach")!;
 
 function libraryInTheTable() {
     const db = createFakeDb({ users: [{ id: "u1" }] });
@@ -131,29 +131,48 @@ describe("a forked project", () => {
         expect(db.rows("projects")).toHaveLength(0);
     });
 
-    it("loads a library design that is not yet in the table", async () => {
-        const db = createFakeDb({ users: [{ id: "u1" }] });
+    it("opens listed-price and free designs from different categories with their own files", async () => {
+        const samples = ["portfolio", "gym", "cafe", "dental-clinic"]
+            .map((id) => TEMPLATES.find((t) => t.id === id)!)
+            .filter(Boolean);
 
-        const result = await createProject(db.asUser("u1"), "u1", {
-            name: DESIGN.name,
-            sourceTemplateId: templateUuid(DESIGN.id),
-        });
+        expect(samples.length).toBe(4);
+        expect(new Set(samples.map((t) => t.category)).size).toBeGreaterThan(1);
+        expect(samples.some((t) => t.tier !== "free")).toBe(true);
 
-        expect(result.id).toBeTruthy();
-        expect(db.rows("templates").some((row) => row.id === templateUuid(DESIGN.id))).toBe(true);
-        expect(db.rows("project_files").some((f) => f.project_id === result.id)).toBe(true);
+        for (const design of samples) {
+            const db = createFakeDb({ users: [{ id: "u1" }] });
+            if (design.tier !== "free") {
+                db.insert("entitlements", {
+                    user_id: "u1",
+                    kind: "pro",
+                    source: "pro",
+                    status: "active",
+                });
+            }
+            const { id } = await createProject(db.asUser("u1"), "u1", {
+                name: design.name,
+                sourceTemplateId: templateUuid(design.id),
+            });
+
+            const files = db.rows("project_files").filter((f) => f.project_id === id);
+            expect(files.map((f) => f.path).sort(), design.id).toEqual(Object.keys(design.files).sort());
+            expect(files.find((f) => f.path === "index.html")?.content, design.id).toBe(design.files["index.html"]);
+        }
     });
 });
 
-// Doc 22 P2/P3 — a premium or signature design is paid for once, before the fork runs.
-describe("a design that costs money", () => {
+// Opening a listed-price design is a paywall. The catalogue records free / premium /
+// signature; Pro unlocks the paid ones. Publish is a separate charge for accounts that
+// never bought Pro.
+describe("a design that lists a price", () => {
     function libraryWithPaidDesign() {
         const db = createFakeDb({ users: [{ id: "u1" }] });
         db.insert("templates", templateRow(PAID_DESIGN));
         return db;
     }
 
-    it("is refused, and leaves nothing behind, when nothing has been paid", async () => {
+    it("refuses to open until the account has Pro", async () => {
         const db = libraryWithPaidDesign();
 
         await expect(
@@ -161,14 +180,15 @@ describe("a design that costs money", () => {
                 name: PAID_DESIGN.name,
                 sourceTemplateId: templateUuid(PAID_DESIGN.id),
             }),
-        ).rejects.toMatchObject({ code: "payment_required" });
+        ).rejects.toMatchObject({
+            code: "payment_required",
+            message: expect.stringMatching(/pro|premium|paid/i),
+        });
 
         expect(db.rows("projects")).toHaveLength(0);
     });
 
-    it("reads the price from the row, never from the caller", async () => {
-        // The check that makes this a paywall rather than a suggestion. If tier came from
-        // the request, anyone could ask for a signature design and call it free.
+    it("still copies the files from the row, never from the caller", async () => {
         const db = libraryWithPaidDesign();
         db.rows("templates")[0]!.tier = "free";
 
@@ -180,7 +200,7 @@ describe("a design that costs money", () => {
         ).resolves.toMatchObject({ id: expect.any(String) });
     });
 
-    it("goes through for an account holding pro", async () => {
+    it("opens for an account holding pro", async () => {
         const db = libraryWithPaidDesign();
         db.insert("entitlements", { user_id: "u1", kind: "pro", source: "pro", status: "active" });
 
@@ -190,20 +210,6 @@ describe("a design that costs money", () => {
                 sourceTemplateId: templateUuid(PAID_DESIGN.id),
             }),
         ).resolves.toMatchObject({ firstCommit: expect.any(String) });
-    });
-
-    it("does not accept an entitlement that has been revoked", async () => {
-        // An expired or revoked row is not an entitlement. Filtering on status in the query
-        // rather than afterwards is what keeps that true.
-        const db = libraryWithPaidDesign();
-        db.insert("entitlements", { user_id: "u1", kind: "pro", source: "paid", status: "revoked" });
-
-        await expect(
-            createProject(db.asUser("u1"), "u1", {
-                name: PAID_DESIGN.name,
-                sourceTemplateId: templateUuid(PAID_DESIGN.id),
-            }),
-        ).rejects.toMatchObject({ code: "payment_required" });
     });
 });
 

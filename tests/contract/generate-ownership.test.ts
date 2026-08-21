@@ -30,6 +30,8 @@ vi.mock("@/lib/auth/session", () => ({
 const ai = vi.hoisted(() => ({
     checkGenerationBudget: vi.fn(),
     assertFreeGenerationAllowed: vi.fn(),
+    assertHeavyBuildAllowed: vi.fn(),
+    recordGenerationUseForBuild: vi.fn(),
     guardAiRequest: vi.fn(),
     create: vi.fn(),
 }));
@@ -37,6 +39,8 @@ const ai = vi.hoisted(() => ({
 vi.mock("@/lib/ai/jobs/budget", () => ({ checkGenerationBudget: ai.checkGenerationBudget }));
 vi.mock("@/lib/ai/jobs/quota", () => ({
     assertFreeGenerationAllowed: ai.assertFreeGenerationAllowed,
+    assertHeavyBuildAllowed: ai.assertHeavyBuildAllowed,
+    recordGenerationUseForBuild: ai.recordGenerationUseForBuild,
     recordFreeGeneration: vi.fn(),
 }));
 vi.mock("@/lib/limits/ai-guard", () => ({ guardAiRequest: ai.guardAiRequest }));
@@ -84,7 +88,17 @@ beforeEach(() => {
     }).id as string;
 
     ai.checkGenerationBudget.mockResolvedValue({ ok: true });
-    ai.assertFreeGenerationAllowed.mockResolvedValue(undefined);
+    ai.assertFreeGenerationAllowed.mockResolvedValue({
+        used: 0,
+        limit: 3,
+        remaining: 3,
+        unlimited: false,
+        package: 'free',
+        passes: 0,
+        canGenerate: true,
+    });
+    ai.assertHeavyBuildAllowed.mockResolvedValue(undefined);
+    ai.recordGenerationUseForBuild.mockResolvedValue(1);
     ai.guardAiRequest.mockResolvedValue({
         ok: true,
         recordUsage: vi.fn(),

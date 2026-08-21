@@ -1,6 +1,11 @@
 import { MAX_SECTIONS, SECTION_KEYS, type SectionKey } from '@/lib/contracts';
 import { variantsFor } from '../sections/contracts';
 import { nativeHeadingBrief, primaryNativeName } from './language';
+import {
+    asksTableOrdering,
+    briefForRequested,
+    requestedSections,
+} from './requested-pages';
 
 /** As proposed by the model; `type` is unvalidated. */
 export interface PlannedSection {
@@ -188,6 +193,12 @@ function rewriteBriefs(
             if (pricing && s.type === 'faq' && !/see our pricing page/i.test(s.brief)) {
                 s.brief = `${s.brief.replace(/\s*\.?\s*$/, '')} — ${PRICING_FAQ_NOTE}`;
             }
+            if (asksTableOrdering(prompt) && s.type === 'hero' && !/order now/i.test(s.brief)) {
+                s.brief = `${s.brief.replace(/\s*\.?\s*$/, '')} — primary CTA label is Order now (sends to the waiter, not payment)`;
+            }
+            if (asksTableOrdering(prompt) && s.type === 'menu' && !/cart|table|waiter/i.test(s.brief)) {
+                s.brief = `${s.brief.replace(/\s*\.?\s*$/, '')} — dishes guests can add to a cart and send to the waiter with a table number`;
+            }
         }
 
         if (nativeName && (s.type === 'hero' || s.type === 'about' || s.type === 'footer')
@@ -262,9 +273,11 @@ export function normalisePlan(
     }
 
     if (prompt && SCOPED_ASK.test(prompt)) {
+        const asked = new Set(requestedSections(prompt));
         const before = middle.length;
         middle = middle.filter((s) =>
-            s.type !== 'testimonials' && s.type !== 'faq' && s.type !== 'menu');
+            asked.has(s.type)
+            || (s.type !== 'testimonials' && s.type !== 'faq' && s.type !== 'menu'));
         if (middle.length < before) {
             repairs.push('dropped extras — description asked for a short page');
         }
@@ -332,6 +345,35 @@ export function normalisePlan(
                 brief: PRICING_BRIEF,
             });
             repairs.push('inserted services as pricing — description asked for a pricing table');
+        }
+    }
+
+    if (prompt) {
+        const asked = requestedSections(prompt);
+        for (const type of asked) {
+            if (type === 'hero' || type === 'footer') continue;
+            if (middle.some((s) => s.type === type)) continue;
+            const budget = MAX_SECTIONS - reserved - (wantContact && type !== 'contact' ? 1 : 0) - 1;
+            while (middle.length > budget) {
+                let i = -1;
+                for (const drop of DISPENSABLE) {
+                    if (asked.includes(drop)) continue;
+                    i = middle.findLastIndex((s) => s.type === drop);
+                    if (i >= 0) break;
+                }
+                if (i < 0) break;
+                repairs.push(`dropped ${middle[i].type} to keep the ${type} page they asked for`);
+                middle.splice(i, 1);
+            }
+            if (middle.length <= budget) {
+                const allowed = variantsFor(type);
+                middle.push({
+                    type,
+                    variant: allowed[0],
+                    brief: briefForRequested(type),
+                });
+                repairs.push(`inserted ${type} — description asked for that page`);
+            }
         }
     }
 

@@ -78,6 +78,12 @@ describe('POST /api/v1/auth/signup', () => {
             error: { code: 'over_request_rate_limit', status: 429, message: 'slow down' },
         });
         expect((await post()).payload.error.code).toBe('rate_limited');
+
+        signUp.mockResolvedValue({
+            data: { user: null, session: null },
+            error: { code: 'over_email_send_rate_limit', status: 400, message: 'email rate' },
+        });
+        expect((await post()).payload.error.code).toBe('rate_limited');
     });
 
     it('returns 202 pending when the provider issues a user but no session', async () => {
@@ -90,5 +96,8 @@ describe('POST /api/v1/auth/signup', () => {
 
         expect(status).toBe(202);
         expect(payload.data.pending).toBe(true);
+        expect(signUp.mock.calls[0][0].options.emailRedirectTo).toMatch(
+            /\/api\/v1\/auth\/confirm$/,
+        );
     });
 });

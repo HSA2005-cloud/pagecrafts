@@ -3,7 +3,7 @@ import type { ArtDirection, Composition, SectionKey } from '@/lib/contracts';
 export const STYLE_IDS = ['casual', 'photos', 'motion'] as const;
 export type StyleId = (typeof STYLE_IDS)[number];
 
-/** Planned product plans — not charged yet, but each look is born into one. */
+/** Product plans. Casual is free to use; Pro and Premium looks need account Pro. */
 export const STYLE_TIERS = ['free', 'pro', 'premium'] as const;
 export type StyleTier = (typeof STYLE_TIERS)[number];
 
@@ -16,41 +16,44 @@ export interface StyleSpec {
     art: ArtDirection;
     /** Layout variant overrides, applied when that section exists. */
     variants: Partial<Record<SectionKey, string>>;
-    /** Stamp real photographs into image slots. */
-    photos: boolean;
+    /** Stamp real photographs into image slots. `'hero'` = hero only (Casual). */
+    photos: boolean | 'hero';
 }
 
 /**
  * Three looks from one brief.
  *
- * Casual is the free default: a clean page with no photographs and no motion.
- * Photos is the Pro look: full-bleed imagery. Motion is Premium: colour and
- * scroll animation. Same words, three different sites — so a sweet shop is not
- * one generic page, it is a choice.
+ * Casual is the free default: warm colour, one hero photograph, still simple —
+ * not a grey wall of type, and not the full cinematic Photo-rich look. Photos is
+ * Pro: full-bleed imagery throughout. Motion is Premium: colour and scroll
+ * animation. Same words, three different sites — so a sweet shop is not one
+ * generic page, it is a choice.
  */
 export const STYLE_SPECS: Record<StyleId, StyleSpec> = {
     casual: {
         id: 'casual',
         label: 'Casual',
-        blurb: 'Clean and simple. Words first, no photographs, no animation.',
+        blurb: 'Simple, colourful, and a little inviting — one photo up top, no heavy gallery.',
         tier: 'free',
         priceInr: 0,
         art: {
-            themeId: 'mono-precision',
+            themeId: 'sunlit-craft',
             motionId: 'none',
             radiusId: 'soft',
             spacingId: 'default',
             imageryId: 'bright-clean',
         },
         variants: {
-            hero: 'centred',
+            // Split hero shows one picture beside the words. Photo-rich uses image-bg
+            // plus photos through the rest of the page; Casual stops at the hero.
+            hero: 'split-image',
             about: 'text',
             services: 'cards',
             menu: 'simple',
             contact: 'simple',
             footer: 'simple',
         },
-        photos: false,
+        photos: 'hero',
     },
     photos: {
         id: 'photos',

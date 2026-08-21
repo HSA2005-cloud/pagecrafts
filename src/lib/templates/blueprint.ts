@@ -2,14 +2,16 @@ import type { Category, ContentSchema, Field, Template, TemplateTier } from "@/l
 import { MOTIF_BY_CATEGORY, motifToSvg } from "./motifs";
 import { thumbnailPath } from "./thumbnails";
 import type { MotifId, PaletteRole } from "./motifs";
+import { chromeForTemplateTier } from "@/lib/sites/tier-chrome";
+import { chromeHeaderHtml, tierChromeCss } from "@/lib/sites/tier-chrome-markup";
 
 // Templates are authored as blueprints, not as hand-written HTML. One generator emits the
 // markup, the stylesheet and the content schema together, which is what keeps the promise
 // of "zero per-template UI" true: every design exposes the same slot vocabulary, so the
 // editor's content panel is generated from `content_schema` and never forked per template.
 //
-// It also keeps the gallery honest — the miniature on the tile is drawn by parsing these
-// same generated files, so a card cannot advertise a layout the template does not have.
+// Chrome follows product tier: free → sidebar Starter, premium → blended Pro top bar,
+// signature → liquid Premium deck (PageCrafts landing atmosphere).
 
 export type Layout = "split" | "full-bleed" | "centered" | "showcase";
 
@@ -37,26 +39,35 @@ export interface Blueprint {
     layout: Layout;
     nav: string[];
     hero: { headline: string; subhead: string; cta: string };
-    // The photograph that fills the hero. Optional: a design with none falls back to the
-    // code-drawn motif for its category, so the library never renders an empty frame.
     heroImage?: { src: string; alt: string };
     sections: SectionSpec[];
     footer: string;
-    /** Classifier slug when it differs from `id`. */
     vertical?: string;
 }
 
 const TIER_PRICE_INR: Record<TemplateTier, number> = { free: 0, premium: 499, signature: 999 };
 
-/** Corpus / classifier slugs that do not match the design id. */
+/** White / casual library tiles stay Free; dark tiles are at least Pro (premium). */
+function tierForPalette(palette: Palette, declared: TemplateTier): TemplateTier {
+    const hex = palette.bg.replace("#", "").trim();
+    if (hex.length < 6) return declared;
+    const r = Number.parseInt(hex.slice(0, 2), 16);
+    const g = Number.parseInt(hex.slice(2, 4), 16);
+    const b = Number.parseInt(hex.slice(4, 6), 16);
+    if ([r, g, b].some((n) => Number.isNaN(n))) return declared;
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    const light = luminance >= 0.55;
+    if (light) return "free";
+    // Keep an intentional Premium (signature) dark design; everything else dark is Pro.
+    if (declared === "signature") return "signature";
+    return "premium";
+}
+
 const VERTICAL_ALIAS: Record<string, string> = {
     "ngo-nonprofit": "ngo",
     "saas-product": "saas",
     architecture: "architecture-studio",
 };
-
-const SEARCH_ICON =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>';
 
 function escapeHtml(value: string): string {
     return value
@@ -70,18 +81,13 @@ function slug(value: string): string {
     return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-function heroMarkup(bp: Blueprint, motif: MotifId): string {
-    // A photograph where the design ships one; the code-drawn motif where it does not.
-    // Either way it sits in the hero.image slot, so swapping it is a content edit — not a
-    // template change — and the slot/schema parity the editor relies on holds.
+function heroMarkup(bp: Blueprint, motif: MotifId, chrome: ReturnType<typeof chromeForTemplateTier>): string {
     const art = bp.heroImage
-        // Eager: the hero is above the fold (and LCP). Lazy here left Chromium with an
-        // empty frame when thumbnails were rendered, which is why the gallery shipped
-        // blank dark tiles for some designs.
         ? `<img class="hero-photo" src="${escapeHtml(bp.heroImage.src)}" alt="${escapeHtml(bp.heroImage.alt)}" loading="eager" decoding="async" fetchpriority="high" />`
         : motifToSvg(motif, bp.palette);
 
-    return `    <section class="hero">
+    // Starter: simple image-led hero. Pro keeps layout variants. Premium wraps as a liquid slide.
+    const inner = `    <section class="hero${chrome === "liquid" ? " liquid-slide" : ""}">
       <div class="hero-copy">
         <h1 data-slot="hero.headline">${escapeHtml(bp.hero.headline)}</h1>
         <p data-slot="hero.subhead">${escapeHtml(bp.hero.subhead)}</p>
@@ -91,11 +97,14 @@ function heroMarkup(bp: Blueprint, motif: MotifId): string {
         ${art}
       </div>
     </section>`;
+
+    return inner;
 }
 
-function sectionMarkup(section: SectionSpec): string {
+function sectionMarkup(section: SectionSpec, chrome: ReturnType<typeof chromeForTemplateTier>): string {
     const heading = `<h2 data-slot="${section.key}.heading">${escapeHtml(section.heading)}</h2>`;
     const body = `<p data-slot="${section.key}.body">${escapeHtml(section.body)}</p>`;
+    const slideClass = chrome === "liquid" ? " section liquid-slide" : " section";
 
     if (section.kind === "cards") {
         const cards = (section.cards ?? [])
@@ -107,7 +116,7 @@ function sectionMarkup(section: SectionSpec): string {
             )
             .join("\n");
 
-        return `    <section class="section" id="${slug(section.heading)}">
+        return `    <section class="${slideClass.trim()}" id="${slug(section.heading)}">
       ${heading}
       ${body}
       <ul class="cards">
@@ -117,9 +126,7 @@ ${cards}
     }
 
     if (section.kind === "form") {
-        // action is left empty on purpose: publishing fills in the form endpoint the
-        // owner chose, and a template must never ship a third-party destination.
-        return `    <section class="section" id="${slug(section.heading)}">
+        return `    <section class="${slideClass.trim()}" id="${slug(section.heading)}">
       ${heading}
       ${body}
       <form class="form" action="" method="post">
@@ -129,16 +136,52 @@ ${cards}
     </section>`;
     }
 
-    return `    <section class="section" id="${slug(section.heading)}">
+    return `    <section class="${slideClass.trim()}" id="${slug(section.heading)}">
       ${heading}
       ${body}
     </section>`;
 }
 
 function indexHtml(bp: Blueprint, motif: MotifId): string {
+    const chrome = chromeForTemplateTier(bp.tier);
     const nav = bp.nav
         .map((label) => `        <a href="#${slug(label)}">${escapeHtml(label)}</a>`)
         .join("\n");
+    const headerWithSlot = chromeHeaderHtml({
+        kind: chrome,
+        title: bp.name,
+        homeHref: "#top",
+        navInner: nav,
+    }).replace(
+        `<a class="wordmark" href="#top">${escapeHtml(bp.name)}</a>`,
+        `<a class="wordmark" href="#top" data-slot="site.name">${escapeHtml(bp.name)}</a>`,
+    );
+
+    const mainInner = [
+        heroMarkup(bp, motif, chrome),
+        bp.sections.map((s) => sectionMarkup(s, chrome)).join("\n"),
+        `    <footer class="footer${chrome === "liquid" ? " liquid-slide" : ""}">
+      <p data-slot="site.footer">${escapeHtml(bp.footer)}</p>
+    </footer>`,
+    ].join("\n");
+
+    const bodyInner =
+        chrome === "sidebar"
+            ? `<div class="site-shell" id="top">
+${headerWithSlot}
+<div class="site-main">
+${mainInner}
+</div>
+</div>`
+            : chrome === "liquid"
+              ? `${headerWithSlot}
+<div class="liquid-deck" id="top">
+${mainInner}
+</div>`
+              : `${headerWithSlot}
+<div id="top">
+${mainInner}
+</div>`;
 
     return `<!doctype html>
 <html lang="en">
@@ -148,25 +191,12 @@ function indexHtml(bp: Blueprint, motif: MotifId): string {
     <title>${escapeHtml(bp.name)}</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body data-layout="${bp.layout}">
-    <header class="topbar">
-      <span class="wordmark" data-slot="site.name">${escapeHtml(bp.name)}</span>
-      <nav class="nav">
-${nav}
-      </nav>
-      <span class="search" role="img" aria-label="Search">${SEARCH_ICON}</span>
-    </header>
-${heroMarkup(bp, motif)}
-${bp.sections.map(sectionMarkup).join("\n")}
-    <footer class="footer">
-      <p data-slot="site.footer">${escapeHtml(bp.footer)}</p>
-    </footer>
+  <body data-layout="${bp.layout}" data-chrome="${chrome}" data-tier="${bp.tier}"${chrome === "liquid" ? ' class="site-liquid"' : ""}>
+${bodyInner}
   </body>
 </html>`;
 }
 
-// Per-layout hero rules. Everything else in the stylesheet is shared, so the library
-// stays coherent as it grows and a fix lands everywhere at once.
 const LAYOUT_CSS: Record<Layout, string> = {
     split: `.hero { display: grid; gap: 3rem; grid-template-columns: 1.05fr 0.95fr; align-items: center; padding: 4.5rem 2rem 3.5rem; }
 .hero-frame { aspect-ratio: 4 / 3; }`,
@@ -185,6 +215,16 @@ const LAYOUT_CSS: Record<Layout, string> = {
 
 function stylesCss(bp: Blueprint): string {
     const p = bp.palette;
+    const chrome = chromeForTemplateTier(bp.tier);
+    const starterHero =
+        chrome === "sidebar"
+            ? `.hero { position: relative; isolation: isolate; padding: 5rem 2rem 4rem; }
+.hero-copy { position: relative; z-index: 1; max-width: 36rem; }
+.hero-frame { position: absolute; inset: 0; z-index: 0; border-radius: 0; }
+.hero-frame::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, color-mix(in srgb, var(--bg) 88%, transparent) 20%, transparent 75%); }
+.hero-photo, .hero-art { width: 100%; height: 100%; object-fit: cover; }
+`
+            : "";
 
     return `:root {
   --bg: ${p.bg};
@@ -199,18 +239,14 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: ${chrome === "liquid" ? 'Outfit, "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif' : 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif'};
   line-height: 1.6;
 }
 a { color: inherit; }
 
-.topbar { display: flex; align-items: center; gap: 2rem; padding: 1.25rem 2rem; }
-.wordmark { font-weight: 700; letter-spacing: -0.01em; }
-.nav { margin-left: auto; display: flex; gap: 1.5rem; }
-.nav a { color: var(--muted); font-size: 0.875rem; text-decoration: none; }
-.nav a:hover { color: var(--ink); }
-.search { display: inline-flex; color: var(--muted); }
-.search svg { width: 1.125rem; height: 1.125rem; }
+${tierChromeCss(chrome)}
+${starterHero}
+${chrome === "sidebar" ? "" : LAYOUT_CSS[bp.layout]}
 
 .hero h1 { margin: 0; font-size: clamp(2.25rem, 5vw, 3.5rem); line-height: 1.05; letter-spacing: -0.025em; }
 .hero p { margin: 1rem 0 0; max-width: 34rem; color: var(--muted); font-size: 1.0625rem; }
@@ -218,7 +254,7 @@ a { color: inherit; }
   display: inline-block;
   margin-top: 1.75rem;
   padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
+  border-radius: ${chrome === "liquid" ? "999px" : "0.5rem"};
   background: var(--accent);
   color: var(--bg);
   font-weight: 600;
@@ -229,7 +265,6 @@ a { color: inherit; }
 .hero-frame { overflow: hidden; border-radius: 1rem; background: var(--panel); }
 .hero-art { display: block; width: 100%; height: 100%; }
 .hero-photo { display: block; width: 100%; height: 100%; object-fit: cover; }
-${LAYOUT_CSS[bp.layout]}
 
 .section { max-width: 64rem; margin: 0 auto; padding: 4rem 2rem; }
 .section h2 { margin: 0 0 0.75rem; font-size: 1.625rem; letter-spacing: -0.015em; }
@@ -267,7 +302,6 @@ ${LAYOUT_CSS[bp.layout]}
   .hero { grid-template-columns: 1fr; padding-top: 2.5rem; }
   .hero-copy { order: 0; }
   .hero-frame { order: 1; }
-  .nav { display: none; }
   .cards { grid-template-columns: 1fr; }
 }`;
 }
@@ -321,28 +355,25 @@ function contentSchema(bp: Blueprint): ContentSchema {
 
 export function buildTemplate(bp: Blueprint): Template {
     const motif = MOTIF_BY_CATEGORY[bp.category] ?? "frame";
+    const tier = tierForPalette(bp.palette, bp.tier);
+    const resolved: Blueprint = { ...bp, tier };
 
     return {
-        id: bp.id,
-        name: bp.name,
-        description: bp.description,
-        category: bp.category,
-        vertical: bp.vertical ?? VERTICAL_ALIAS[bp.id] ?? bp.id,
-        tags: bp.tags,
-        // The path the renderer actually writes to (R2 D18). This said
-        // `/templates/<id>/thumbnail.png` for as long as the field has existed and no such
-        // file was ever produced, so the record advertised a 404 to anybody who read it
-        // directly. thumbnailPath() is the one place that spelling lives now, shared with
-        // the renderer, so the two cannot drift apart again.
-        thumbnailUrl: thumbnailPath(bp.id),
-        tier: bp.tier,
-        priceInr: TIER_PRICE_INR[bp.tier],
-        license: bp.license,
-        sourceUrl: bp.sourceUrl,
-        contentSchema: contentSchema(bp),
+        id: resolved.id,
+        name: resolved.name,
+        description: resolved.description,
+        category: resolved.category,
+        vertical: resolved.vertical ?? VERTICAL_ALIAS[resolved.id] ?? resolved.id,
+        tags: resolved.tags,
+        thumbnailUrl: thumbnailPath(resolved.id),
+        tier,
+        priceInr: TIER_PRICE_INR[tier],
+        license: resolved.license,
+        sourceUrl: resolved.sourceUrl,
+        contentSchema: contentSchema(resolved),
         files: {
-            "index.html": indexHtml(bp, motif),
-            "styles.css": stylesCss(bp),
+            "index.html": indexHtml(resolved, motif),
+            "styles.css": stylesCss(resolved),
         },
     };
 }

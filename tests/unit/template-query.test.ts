@@ -106,8 +106,15 @@ describe("queryTemplates", () => {
     expect(empty).toBeDefined();
     expect(run(`category=${empty!.category}&colour=${empty!.colour}`).items).toEqual([]);
 
-    // And a three-way narrowing nothing satisfies: the storefronts are free or premium.
-    expect(run("category=store&tier=signature&colour=dark").items).toEqual([]);
+    // And a three-way narrowing nothing satisfies.
+    const emptyPaid = all
+      .map((t) => ({ category: t.category, colour: t.colour, tier: "signature" as const }))
+      .find(({ category, colour, tier }) =>
+        !all.some((t) => t.category === category && t.colour === colour && t.tier === tier));
+    expect(emptyPaid).toBeDefined();
+    expect(
+      run(`category=${emptyPaid!.category}&tier=signature&colour=${emptyPaid!.colour}`).items,
+    ).toEqual([]);
   });
 
   it("prices every item, and never invents a price for a free design", () => {

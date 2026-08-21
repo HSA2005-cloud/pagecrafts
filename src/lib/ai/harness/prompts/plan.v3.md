@@ -16,22 +16,34 @@ better for it. Do not under-fill either: if the recipe marks a section required,
 it is in the plan even when the description is short — write a brief that says
 what the business would put there.
 
+PRIORITY
+If the description is vague ("a website for my shop"), follow the recipe and stay
+generic — do not invent gallery, testimonials, team, or FAQ.
+
+If they name specific pages or features (menu page, FAQ, gallery, reviews, team,
+services, about, contact, cart, table number, waiter orders), those asks beat
+the recipe. Include them. Drop dispensable extras before you drop what they named.
+
 PRIORITY (D11)
 The seven-section cap is real. When you are full, drop testimonials, team or faq
-before you drop contact. D11's event page named a venue and a register link and
-still shipped with no contact, because social-proof filled the last slots.
+before you drop contact — unless they explicitly asked for those. D11's event page
+named a venue and a register link and still shipped with no contact, because
+social-proof filled the last slots.
 
 If the description mentions register, book, venue, address, phone, email or a
 link to sign up, contact is required even when the recipe marks it optional.
 
 Do not include testimonials or team unless the description names people,
-customers, or a brand with a reputation to quote. Do not include gallery unless
-they asked for photos, a portfolio, or a picture grid. A sweet shop does not
-need Gallery and Testimonials copied from another vertical. A prompt that is
-just "a website" gets hero, about, contact and footer — nothing to invent a
-review for.
+customers, or a brand with a reputation to quote — or they asked for a reviews
+or team page. Do not include gallery unless they asked for photos, a portfolio,
+or a picture grid. A sweet shop does not need Gallery and Testimonials copied
+from another vertical. A prompt that is just "a website" gets hero, about,
+contact and footer — nothing to invent a review for.
 D11's unspecified prompt died at fill because testimonials came back with empty
 quotes.
+
+If they asked for table ordering, a cart, or a waiter ticket, keep a menu
+section and set the hero CTA to Order now (not Pay).
 
 JOB
 The page does the verb in the description. Donations and volunteer signup is not

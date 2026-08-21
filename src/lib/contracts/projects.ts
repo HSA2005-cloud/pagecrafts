@@ -16,6 +16,8 @@ export interface SiteMeta {
   faviconUrl?: string;
   ogImageAssetId?: string;
   ogImageUrl?: string;
+  /** Shop owner's UPI VPA — used on generated order-taking sites. */
+  upiId?: string;
 }
 
 /**
@@ -94,4 +96,10 @@ export interface PatchProjectRequest {
   name?: string;
   siteMeta?: SiteMeta;
   formEndpoint?: string | null;
+}
+
+// DELETE /projects/{id} — same email + password shape as sign-in (C-11).
+export interface DeleteProjectRequest {
+  email: string;
+  password: string;
 }

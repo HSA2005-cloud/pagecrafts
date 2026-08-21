@@ -7,7 +7,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordField } from "@/components/auth/PasswordField";
-import { credentialsSchema, MIN_PASSWORD_LENGTH } from "@/lib/auth/credentials";
+import { credentialsSchema, credentialsIssue, MIN_PASSWORD_LENGTH } from "@/lib/auth/credentials";
 import { safeNext } from "@/lib/auth/safe-next";
 import { signUpFormSchema, passwordResetRequestSchema } from "@/lib/contracts/auth";
 import type { ApiResult, ErrorCode } from "@/lib/contracts";
@@ -27,10 +27,8 @@ type Mode = "signup" | "signin" | "forgot";
 const MESSAGES: Partial<Record<ErrorCode, string>> = {
     validation_failed: "Check the details above and try again.",
     unauthorized: "That email and password do not match. Try again, or reset your password.",
+    forbidden: "Confirm your email address to finish setting up your account.",
     rate_limited: "Too many attempts. Wait a few minutes and try again.",
-    // Not "something went wrong", which is the phrase UI Spec §7.18 exists to prevent:
-    // it names nothing and offers nothing. What a person needs here is that their
-    // details are fine and the fault is ours (R2 D19 copy audit).
     internal: "We could not finish that just now. Nothing is wrong with your details — try again in a moment.",
 };
 const FIELD_MESSAGES: Record<string, string> = {
@@ -99,14 +97,29 @@ export function AuthCard({
     async function post<T>(path: string, body: unknown): Promise<ApiResult<T>> {
         const response = await fetch(path, {
             method: "POST",
+            credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
         });
         return (await response.json()) as ApiResult<T>;
     }
 
+    function visibleError(result: ApiResult<unknown>): string {
+        if (result.ok) return MESSAGES.internal!;
+        if (result.error.code === "validation_failed" || result.error.code === "forbidden") {
+            return result.error.message || (MESSAGES[result.error.code] ?? MESSAGES.internal!);
+        }
+        return MESSAGES[result.error.code] ?? MESSAGES.internal!;
+    }
+
+    async function afterSession(path: string) {
+        router.refresh();
+        router.push(path);
+    }
+
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        if (busy) return;
         setError(null);
 
         if (mode === "forgot") {
@@ -116,10 +129,18 @@ export function AuthCard({
                 return;
             }
             setBusy(true);
-            const result = await post<unknown>("/api/v1/auth/password/reset", parsed.data).catch(() => null);
-            setBusy(false);
-            if (result === null) setError(MESSAGES.internal!);
-            else setSent(true);
+            try {
+                const result = await post<unknown>("/api/v1/auth/password/reset", parsed.data);
+                if (!result.ok) {
+                    setError(visibleError(result));
+                    return;
+                }
+                setSent(true);
+            } catch {
+                setError(MESSAGES.internal!);
+            } finally {
+                setBusy(false);
+            }
             return;
         }
 
@@ -127,7 +148,10 @@ export function AuthCard({
             const parsed = signUpFormSchema.safeParse({ email, password, confirmPassword });
             if (!parsed.success) {
                 const issue = parsed.error.issues[0];
-                setError(FIELD_MESSAGES[String(issue?.path[0] ?? "")] ?? MESSAGES.validation_failed!);
+                const field = String(issue?.path[0] ?? "");
+                if (field === "email" && !email.trim()) setError("Enter your email address.");
+                else if (field === "password" && !password) setError("Enter a password.");
+                else setError(FIELD_MESSAGES[field] ?? MESSAGES.validation_failed!);
                 return;
             }
             setBusy(true);
@@ -140,7 +164,7 @@ export function AuthCard({
             setBusy(false);
 
             if (result === null) { setError(MESSAGES.internal!); return; }
-            if (!result.ok) { setError(MESSAGES[result.error.code] ?? MESSAGES.internal!); return; }
+            if (!result.ok) { setError(visibleError(result)); return; }
             router.push(
                 result.data.pending
                     ? `/verify?email=${encodeURIComponent(parsed.data.email)}`
@@ -150,17 +174,18 @@ export function AuthCard({
             return;
         }
 
-        const parsed = credentialsSchema.safeParse({ email, password });
-        if (!parsed.success) {
-            setError("Enter your email and password.");
+        const issue = credentialsIssue({ email, password });
+        if (issue) {
+            setError(issue);
             return;
         }
+        const parsed = credentialsSchema.parse({ email, password });
         setBusy(true);
-        const result = await post<unknown>("/api/v1/auth/login", parsed.data).catch(() => null);
+        const result = await post<unknown>("/api/v1/auth/login", parsed).catch(() => null);
         setBusy(false);
 
         if (result === null) { setError(MESSAGES.internal!); return; }
-        if (!result.ok) { setError(MESSAGES[result.error.code] ?? MESSAGES.internal!); return; }
+        if (!result.ok) { setError(visibleError(result)); return; }
         router.push(destination);
         router.refresh();
     }

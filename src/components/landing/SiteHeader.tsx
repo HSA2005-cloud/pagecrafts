@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { Menu } from "lucide-react";
 import { BrandMark } from "@/components/landing/BrandMark";
-import { LogoutButton } from "@/components/auth/LogoutButton";
+import { ProfileMenu } from "@/components/settings/ProfileMenu";
 import type { Viewer } from "@/lib/auth/session";
 
 export const DECK_NAV = [
     { label: "Welcome", href: "/#welcome" },
     { label: "How it works", href: "/#how-it-works" },
+    { label: "Pricing", href: "/#pricing" },
+    { label: "Compare", href: "/#compare" },
     { label: "Build", href: "/#build" },
     { label: "Your sites", href: "/#sites" },
+    { label: "Settings", href: "/#settings" },
 ] as const;
 
 const LINK =
@@ -47,7 +50,12 @@ export function SiteHeader({
                     >
                         <BrandMark />
                     </Link>
-                    <GuestActions />
+                    <div className="flex items-center gap-3 sm:gap-5">
+                        <Link href="/pricing" className={`${LINK} hidden sm:inline`}>
+                            Pricing
+                        </Link>
+                        <GuestActions />
+                    </div>
                 </nav>
             </header>
         );
@@ -92,18 +100,22 @@ export function SiteHeader({
                                     </a>
                                 </li>
                             ))}
+                            {user ? (
+                                <li>
+                                    <Link href="/packages" className={`${LINK} block px-3 py-2`}>
+                                        More AI rebuilds
+                                    </Link>
+                                </li>
+                            ) : null}
                         </ul>
                     </details>
 
                     {user ? (
                         <>
-                            <span className="hidden text-sm text-muted-foreground sm:inline">
-                                {user.name}
-                            </span>
-                            <Link href="/settings" className={LINK}>
-                                Settings
+                            <Link href="/packages" className={LINK}>
+                                More AI rebuilds
                             </Link>
-                            <LogoutButton className={LINK} />
+                            <ProfileMenu user={user} />
                         </>
                     ) : (
                         <GuestActions />

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type AiOperation = 'classify' | 'generate' | 'edit';
+export type AiOperation = 'classify' | 'generate' | 'edit' | 'compose';
 
 /** Every provider we can talk to; chain order is separate (see `order`). */
 export type Provider = 'gemini' | 'groq' | 'cerebras';
@@ -18,6 +18,7 @@ const envSchema = z.object({
     AI_OUTPUT_CLASSIFY_TOKENS: z.coerce.number().int().positive().default(1_024),
     AI_OUTPUT_GENERATE_TOKENS: z.coerce.number().int().positive().default(4_000),
     AI_OUTPUT_EDIT_TOKENS: z.coerce.number().int().positive().default(2_000),
+    AI_OUTPUT_COMPOSE_TOKENS: z.coerce.number().int().positive().default(12_000),
 
     // Sampling, per operation (D12). Deliberately optional: left unset nothing is
     // sent and the provider's own default applies, which is what every
@@ -26,9 +27,11 @@ const envSchema = z.object({
     AI_TEMPERATURE_CLASSIFY: z.coerce.number().min(0).max(2).optional(),
     AI_TEMPERATURE_GENERATE: z.coerce.number().min(0).max(2).optional(),
     AI_TEMPERATURE_EDIT: z.coerce.number().min(0).max(2).optional(),
+    AI_TEMPERATURE_COMPOSE: z.coerce.number().min(0).max(2).optional(),
     AI_TOP_P_CLASSIFY: z.coerce.number().min(0).max(1).optional(),
     AI_TOP_P_GENERATE: z.coerce.number().min(0).max(1).optional(),
     AI_TOP_P_EDIT: z.coerce.number().min(0).max(1).optional(),
+    AI_TOP_P_COMPOSE: z.coerce.number().min(0).max(1).optional(),
 
     // Which prompt version each stage runs. A version number marks a decision,
     // so switching v1 → v3 is a config change with a before/after behind it,
@@ -39,11 +42,13 @@ const envSchema = z.object({
     AI_PROMPT_PLAN: z.string().default('plan.v3'),
     AI_PROMPT_FILL: z.string().default('fill-section.v3'),
     AI_PROMPT_EDIT: z.string().default('edit.v1'),
+    AI_PROMPT_COMPOSE: z.string().default('compose-site.v1'),
 
     // Per-operation timeouts. Shared across providers.
     GEMINI_TIMEOUT_CLASSIFY_MS: z.coerce.number().int().positive().default(5_000),
     GEMINI_TIMEOUT_GENERATE_MS: z.coerce.number().int().positive().default(45_000),
     GEMINI_TIMEOUT_EDIT_MS: z.coerce.number().int().positive().default(30_000),
+    GEMINI_TIMEOUT_COMPOSE_MS: z.coerce.number().int().positive().default(90_000),
 
     // ── Gemini (final fallback) ──────────────────────────────────────────────
     // Optional; the "at least one key" rule lives in the gateway builder.
@@ -62,13 +67,15 @@ const envSchema = z.object({
     // ── Groq (first priority) ────────────────────────────────────────────────
     GROQ_API_KEY: z.string().default(''),
     // Extra orgs, round-robined with GROQ_API_KEY. Comma or whitespace
-    // separated, and/or GROQ_API_KEY_2..6 so six secrets need not share a line.
+    // separated, and/or GROQ_API_KEY_2..8 so eight secrets need not share a line.
     GROQ_API_KEYS: z.string().default(''),
     GROQ_API_KEY_2: z.string().default(''),
     GROQ_API_KEY_3: z.string().default(''),
     GROQ_API_KEY_4: z.string().default(''),
     GROQ_API_KEY_5: z.string().default(''),
     GROQ_API_KEY_6: z.string().default(''),
+    GROQ_API_KEY_7: z.string().default(''),
+    GROQ_API_KEY_8: z.string().default(''),
     // gpt-oss-* support strict json_schema on Groq; the llama-3.x models do not.
     GROQ_MODEL_FAST: z.string().default('openai/gpt-oss-20b'),
     GROQ_MODEL_STRONG: z.string().default('openai/gpt-oss-120b'),
@@ -139,6 +146,7 @@ export interface PromptVersions {
     plan: string;
     fill: string;
     edit: string;
+    compose: string;
 }
 
 export interface AiConfig {
@@ -224,6 +232,8 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
         v.GROQ_API_KEY_4,
         v.GROQ_API_KEY_5,
         v.GROQ_API_KEY_6,
+        v.GROQ_API_KEY_7,
+        v.GROQ_API_KEY_8,
     );
 
     const providers: Record<Provider, ProviderConfig> = {
@@ -297,16 +307,19 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
             classify: v.GEMINI_TIMEOUT_CLASSIFY_MS,
             generate: v.GEMINI_TIMEOUT_GENERATE_MS,
             edit: v.GEMINI_TIMEOUT_EDIT_MS,
+            compose: v.GEMINI_TIMEOUT_COMPOSE_MS,
         },
         maxOutputTokens: {
             classify: v.AI_OUTPUT_CLASSIFY_TOKENS,
             generate: v.AI_OUTPUT_GENERATE_TOKENS,
             edit: v.AI_OUTPUT_EDIT_TOKENS,
+            compose: v.AI_OUTPUT_COMPOSE_TOKENS,
         },
         sampling: {
             classify: sampling(v.AI_TEMPERATURE_CLASSIFY, v.AI_TOP_P_CLASSIFY),
             generate: sampling(v.AI_TEMPERATURE_GENERATE, v.AI_TOP_P_GENERATE),
             edit: sampling(v.AI_TEMPERATURE_EDIT, v.AI_TOP_P_EDIT),
+            compose: sampling(v.AI_TEMPERATURE_COMPOSE, v.AI_TOP_P_COMPOSE),
         },
         prompts: {
             classify: v.AI_PROMPT_CLASSIFY,
@@ -314,6 +327,7 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
             plan: v.AI_PROMPT_PLAN,
             fill: v.AI_PROMPT_FILL,
             edit: v.AI_PROMPT_EDIT,
+            compose: v.AI_PROMPT_COMPOSE,
         },
     };
 }

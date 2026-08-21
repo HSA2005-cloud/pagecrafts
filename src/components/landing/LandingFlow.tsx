@@ -24,7 +24,7 @@ export function LandingFlow() {
                         Same words. Three different sites.
                     </h2>
                     <p className="mt-5 text-base leading-7 text-muted-foreground">
-                            Casual, photo-rich, or animated — same words, three different sites.
+                            Starter, Pro, or Premium — same words, three different sites.
                     </p>
                 </div>
 

@@ -13,7 +13,13 @@ import { Button } from "@/components/ui/button";
 // So the control says which state it is in and what the other state would mean, rather than
 // a switch with a label. A person should be able to tell what is true now without having to
 // work out which way round the toggle reads.
-export function TrainingConsent({ initial }: { initial: boolean }) {
+export function TrainingConsent({
+    initial,
+    framed = true,
+}: {
+    initial: boolean;
+    framed?: boolean;
+}) {
     const [optedIn, setOptedIn] = useState(initial);
     const [state, setState] = useState<"idle" | "saving" | "failed">("idle");
 
@@ -39,13 +45,15 @@ export function TrainingConsent({ initial }: { initial: boolean }) {
         }
     }
 
-    return (
-        <div className="rounded-2xl glass-panel p-5">
-            <p className="text-base font-semibold text-foreground">Help improve PageCraft</p>
+    const body = (
+        <>
+            <p className="text-base font-semibold text-foreground">
+                {framed ? "Help improve PageCrafts" : "AI and product improvement"}
+            </p>
 
             <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
                 {optedIn
-                    ? "Your descriptions and the sites made from them may be used to improve how PageCraft writes. You can turn this off at any time."
+                    ? "Your descriptions and the sites made from them may be used to improve how PageCrafts writes. You can turn this off at any time."
                     : "Your descriptions and the sites made from them are not used for anything but building your site. This is off unless you turn it on."}
             </p>
 
@@ -53,7 +61,7 @@ export function TrainingConsent({ initial }: { initial: boolean }) {
                 <Button
                     variant={optedIn ? "outline" : "outline-brand"}
                     size="sm"
-                    className="rounded-lg font-medium"
+                    className="cursor-pointer rounded-lg font-medium"
                     disabled={state === "saving"}
                     onClick={() => set(!optedIn)}
                 >
@@ -68,6 +76,10 @@ export function TrainingConsent({ initial }: { initial: boolean }) {
                           : "Currently off"}
                 </p>
             </div>
-        </div>
+        </>
     );
+
+    if (!framed) return body;
+
+    return <div className="rounded-2xl glass-panel p-5">{body}</div>;
 }

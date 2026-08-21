@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 
 import type { Category, CreateProjectResponse } from "@/lib/contracts";
+// Template chosen is a visual reference for generation.
 import { INTENT_CARDS } from "@/lib/discovery/intent-cards";
 import { apiPost } from "@/lib/api/client";
+import type { PaidPlan } from "@/lib/payments/pricing";
 import {
     briefErrors,
     briefFromQuery,
@@ -17,6 +19,7 @@ import {
 } from "@/lib/ai/generate/brief";
 import { Button } from "@/components/ui/button";
 import { BriefFields } from "@/components/discovery/BriefFields";
+import { LockedPlanNotice } from "@/components/discovery/LockedPlanNotice";
 import { cn } from "@/lib/utils";
 
 const PENDING_PROMPT_KEY = "pagecrafts:pending-generate";
@@ -49,11 +52,13 @@ export function IntentCapture({
     initialCategory = null,
     library = true,
     sourceTemplateId = null,
+    paidPlan = null,
 }: {
     initialDescribe?: string;
     initialCategory?: Category | null;
     library?: boolean;
     sourceTemplateId?: string | null;
+    paidPlan?: PaidPlan | null;
 } = {}) {
     const router = useRouter();
     const [brief, setBrief] = useState<SiteBrief>(() => briefFromQuery(initialDescribe));
@@ -74,11 +79,8 @@ export function IntentCapture({
         router.push("/signin");
     }
 
-    async function startFromDesign(next: SiteBrief, templateId: string) {
-        setBusy("generate");
-        setError(null);
-
-        const created = await apiPost<CreateProjectResponse>("/api/v1/projects", {
+    async function createFromDesign(next: SiteBrief, templateId: string) {
+        return apiPost<CreateProjectResponse>("/api/v1/projects", {
             name: projectNameFromBrief(next),
             sourceTemplateId: templateId,
             brief: {
@@ -90,19 +92,50 @@ export function IntentCapture({
                 extra: next.extra,
             },
         });
+    }
 
-        if (created.error || !created.data) {
-            const message = created.error ?? "The site could not be created.";
-            if (looksLikeSignIn(message)) {
-                rememberAndSignIn(next, composeBrief(next), templateId);
+    async function startFromDesign(next: SiteBrief, templateId: string) {
+        setBusy("generate");
+        setError(null);
+
+        try {
+            if (paidPlan) {
+                setError(null);
+                setBusy(null);
+                router.push("/plans");
                 return;
             }
-            setError(message);
-            setBusy(null);
-            return;
-        }
 
-        router.push(`/editor/${encodeURIComponent(created.data.id)}`);
+            const created = await createFromDesign(next, templateId);
+
+            if (created.code === "payment_required") {
+                const message = created.error ?? "This design needs Pro or Premium.";
+                if (looksLikeSignIn(message)) {
+                    rememberAndSignIn(next, composeBrief(next), templateId);
+                    return;
+                }
+                setError(message);
+                setBusy(null);
+                router.push("/plans");
+                return;
+            }
+
+            if (created.error || !created.data) {
+                const message = created.error ?? "The site could not be created.";
+                if (looksLikeSignIn(message)) {
+                    rememberAndSignIn(next, composeBrief(next), templateId);
+                    return;
+                }
+                setError(message);
+                setBusy(null);
+                return;
+            }
+
+            router.push(`/editor/${encodeURIComponent(created.data.id)}`);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Payment failed.");
+            setBusy(null);
+        }
     }
 
     async function startGeneration(next: SiteBrief) {
@@ -204,6 +237,14 @@ export function IntentCapture({
                         if (error) setError(null);
                     }}
                 />
+                {paidPlan ? (
+                    <div className="mt-5 border-t border-border/70 pt-4">
+                        <LockedPlanNotice
+                            badge={paidPlan === "premium" ? "Premium" : "Pro"}
+                            kind="design"
+                        />
+                    </div>
+                ) : null}
                 <div className="mt-5 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center">
                     {error ? (
                         <p role="alert" className="text-sm text-destructive sm:flex-1">
@@ -216,8 +257,9 @@ export function IntentCapture({
                     )}
                     <Button
                         onClick={() => void generate()}
-                        disabled={busy !== null}
-                        className="rounded-lg font-semibold sm:ml-auto"
+                        disabled={busy !== null || Boolean(paidPlan)}
+                        variant="brand"
+                        className="cursor-pointer rounded-lg font-semibold sm:ml-auto"
                     >
                         {busy === "generate"
                             ? fromDesign

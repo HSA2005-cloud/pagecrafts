@@ -47,7 +47,7 @@ export function GenerationTimeline({
                                         aria-hidden
                                         className={cn(
                                             'mt-1 w-px flex-1 min-h-4',
-                                            step.state === 'done' ? 'bg-primary/50' : 'bg-border',
+                                            step.state === 'done' ? 'bg-gold/50' : 'bg-border',
                                         )}
                                     />
                                 )}
@@ -89,7 +89,7 @@ function StepMark({ step }: { step: GenerationStep }) {
         return (
             <span
                 aria-hidden
-                className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                className="flex size-5 shrink-0 items-center justify-center rounded-full bg-gold text-gold-foreground"
             >
                 <Check className="size-3" strokeWidth={2.5} />
             </span>

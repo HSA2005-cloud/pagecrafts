@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getAccount, setTrainingConsent, setBillingProfile } from "@/lib/data/account";
-import { consentSchema, billingProfileSchema } from "@/lib/contracts/schemas";
+import { getAccount, setTrainingConsent, setBillingProfile, setNotifyPrefs, toAccountExport } from "@/lib/data/account";
+import { consentSchema, billingProfileSchema, notifyPrefsRequestSchema } from "@/lib/contracts/schemas";
+import { DEFAULT_NOTIFY_PREFS } from "@/lib/contracts";
 
 type Reply = { data: unknown; error: { message: string } | null };
 
@@ -61,12 +62,14 @@ describe("getAccount", () => {
       billingCity: "",
       gstin: "",
       billingReady: true,
+      notifyPrefs: DEFAULT_NOTIFY_PREFS,
     });
   });
 
   it("still returns email and consent when billing columns are not on the table yet", async () => {
     const { client } = fakeSupabase({
       users: [
+        { data: null, error: { message: "column users.phone does not exist" } },
         { data: null, error: { message: "column users.phone does not exist" } },
         { data: ROW, error: null },
       ],
@@ -83,6 +86,44 @@ describe("getAccount", () => {
       billingCity: "",
       gstin: "",
       billingReady: false,
+      notifyPrefs: DEFAULT_NOTIFY_PREFS,
+    });
+  });
+
+  it("keeps receipt fields when only notify_prefs is missing", async () => {
+    const { client } = fakeSupabase({
+      users: [
+        { data: null, error: { message: "column users.notify_prefs does not exist" } },
+        { data: { ...ROW, phone: "9876543210", billing_line: "MG Road" }, error: null },
+      ],
+    });
+
+    await expect(getAccount(client)).resolves.toMatchObject({
+      phone: "9876543210",
+      billingLine: "MG Road",
+      billingReady: true,
+      notifyPrefs: DEFAULT_NOTIFY_PREFS,
+    });
+  });
+
+  it("reads stored notice preferences rather than inventing them", async () => {
+    const { client } = fakeSupabase({
+      users: [
+        {
+          data: { ...ROW, notify_prefs: { email: false, published: true, updated: false, payments: true, product: true } },
+          error: null,
+        },
+      ],
+    });
+
+    await expect(getAccount(client)).resolves.toMatchObject({
+      notifyPrefs: {
+        email: false,
+        published: true,
+        updated: false,
+        payments: true,
+        product: true,
+      },
     });
   });
 
@@ -197,3 +238,99 @@ describe("billingProfileSchema", () => {
     ).toBe(false);
   });
 });
+
+describe("setNotifyPrefs", () => {
+  it("writes the notice object and nothing else", async () => {
+    const next = {
+      email: false,
+      published: true,
+      updated: true,
+      payments: false,
+      product: true,
+    };
+    const { client, updates } = fakeSupabase({
+      users: [
+        { data: null, error: null },
+        { data: { ...ROW, notify_prefs: next }, error: null },
+      ],
+    });
+
+    await expect(setNotifyPrefs(client, next)).resolves.toMatchObject({ notifyPrefs: next });
+    expect(updates[0].values).toEqual({ notify_prefs: next });
+  });
+
+  it("does not pretend a missing column saved", async () => {
+    const { client } = fakeSupabase({
+      users: [{ data: null, error: { message: "column users.notify_prefs does not exist" } }],
+    });
+
+    await expect(setNotifyPrefs(client, DEFAULT_NOTIFY_PREFS)).rejects.toMatchObject({
+      code: "internal",
+    });
+  });
+});
+
+describe("notifyPrefsRequestSchema", () => {
+  it("requires every notice, so a missing flag cannot be read as yes", () => {
+    expect(notifyPrefsRequestSchema.safeParse({}).success).toBe(false);
+    expect(
+      notifyPrefsRequestSchema.safeParse({
+        notifyPrefs: { email: true, published: true, updated: true, payments: true },
+      }).success,
+    ).toBe(false);
+    expect(
+      notifyPrefsRequestSchema.safeParse({ notifyPrefs: DEFAULT_NOTIFY_PREFS }).success,
+    ).toBe(true);
+  });
+});
+
+describe("toAccountExport", () => {
+  it("lists site names and live URLs, not file trees", () => {
+    const exportPayload = toAccountExport(
+      {
+        email: "someone@example.com",
+        emailVerified: true,
+        trainingOptIn: false,
+        createdAt: "2026-08-01T09:00:00.000Z",
+        displayName: "Ravi",
+        phone: "1",
+        billingLine: "MG Road",
+        billingCity: "Pune",
+        gstin: "",
+        billingReady: true,
+        notifyPrefs: DEFAULT_NOTIFY_PREFS,
+      },
+      [
+        {
+          id: "p1",
+          name: "Cafe",
+          status: "live",
+          liveUrl: "https://cafe.example",
+          thumbnailUrl: "https://cdn.example/thumb.png",
+          updatedAt: "2026-08-02T09:00:00.000Z",
+          failure: null,
+        },
+      ],
+      "2026-08-21T00:00:00.000Z",
+    );
+
+    expect(exportPayload).toEqual({
+      exportedAt: "2026-08-21T00:00:00.000Z",
+      account: {
+        email: "someone@example.com",
+        emailVerified: true,
+        createdAt: "2026-08-01T09:00:00.000Z",
+        displayName: "Ravi",
+        trainingOptIn: false,
+        notifyPrefs: DEFAULT_NOTIFY_PREFS,
+        phone: "1",
+        billingLine: "MG Road",
+        billingCity: "Pune",
+        gstin: "",
+      },
+      sites: [{ id: "p1", name: "Cafe", status: "live", liveUrl: "https://cafe.example" }],
+    });
+    expect(JSON.stringify(exportPayload)).not.toContain("thumb.png");
+  });
+});
+

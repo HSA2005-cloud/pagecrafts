@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assertCanPublish, checkEntitlement, hasPro } from "@/lib/data/entitlements";
+import { assertCanPublish, assertCanUsePaidDesign, checkEntitlement, hasPro } from "@/lib/data/entitlements";
 import { createFakeDb } from "../support/fake-db";
 
 // R3 D9 — the check publish makes before a site goes live (A-5, Doc 22 §6).
@@ -149,6 +149,20 @@ describe("pro", () => {
     });
 });
 
+describe("premium", () => {
+    it("covers publishing without a per-project grant, and is not the same as a pro row", async () => {
+        const { db, projectId } = account();
+        db.insert("entitlements", { user_id: "u1", kind: "premium", source: "paid", status: "active" });
+
+        await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).resolves.toMatchObject({
+            granted: true,
+            source: "pro",
+        });
+        expect(await hasPro(db.asUser("u1"), "u1")).toBe(true);
+        expect(db.rows("entitlements").some((row) => row.kind === "pro")).toBe(false);
+    });
+});
+
 describe("asking twice", () => {
     it("grants twice and changes nothing", async () => {
         // What makes a retried publish safe: the check is a read. If it charged, or consumed
@@ -167,5 +181,58 @@ describe("asking twice", () => {
             granted: true,
         });
         expect(db.rows("entitlements")).toHaveLength(1);
+    });
+});
+
+describe("opening a paid design", () => {
+    it("lets a Pro account through a Pro template", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+        db.insert("entitlements", { user_id: "u1", kind: "pro", source: "paid", status: "active" });
+
+        await expect(assertCanUsePaidDesign(db.asUser("u1"), "u1", "tmpl-1", "premium")).resolves.toBeUndefined();
+    });
+
+    it("lets a Premium account through a Premium design", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+        db.insert("entitlements", { user_id: "u1", kind: "premium", source: "paid", status: "active" });
+
+        await expect(assertCanUsePaidDesign(db.asUser("u1"), "u1", "tmpl-1", "signature")).resolves.toBeUndefined();
+        await expect(assertCanUsePaidDesign(db.asUser("u1"), "u1", "tmpl-1", "premium")).resolves.toBeUndefined();
+    });
+
+    it("does not let Pro cover a Premium design", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+        db.insert("entitlements", { user_id: "u1", kind: "pro", source: "paid", status: "active" });
+
+        await expect(assertCanUsePaidDesign(db.asUser("u1"), "u1", "tmpl-1", "premium")).resolves.toBeUndefined();
+        await expect(assertCanUsePaidDesign(db.asUser("u1"), "u1", "tmpl-1", "signature")).rejects.toMatchObject({
+            code: "payment_required",
+        });
+    });
+
+    it("unlocks only the template that was paid for", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+        db.insert("entitlements", {
+            user_id: "u1",
+            kind: "template",
+            template_id: "tmpl-gym",
+            source: "paid",
+            status: "active",
+        });
+
+        await expect(assertCanUsePaidDesign(db.asUser("u1"), "u1", "tmpl-gym", "premium")).resolves.toBeUndefined();
+        await expect(assertCanUsePaidDesign(db.asUser("u1"), "u1", "tmpl-shop", "premium")).rejects.toMatchObject({
+            code: "payment_required",
+        });
+    });
+
+    it("refuses everyone else, and does not invent a grant", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+
+        await expect(assertCanUsePaidDesign(db.asUser("u1"), "u1", "tmpl-1", "premium")).rejects.toMatchObject({
+            code: "payment_required",
+            message: expect.stringMatching(/Razorpay/i),
+        });
+        expect(db.rows("entitlements")).toHaveLength(0);
     });
 });

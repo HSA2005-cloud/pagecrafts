@@ -4,6 +4,7 @@ import { AlertCircle, Check, Loader2 } from 'lucide-react';
 
 import { useEditorStore } from '@/lib/editor-store';
 import { hasContactForm } from '@/lib/content/site-meta';
+import { upiIssue } from '@/lib/sites/upi';
 import ImagePicker, { type PickedImage } from './ImagePicker';
 import FieldShell, { controlClass, invalidClass, lengthHint } from './fields/FieldShell';
 import ImageField from './fields/ImageField';
@@ -63,6 +64,7 @@ export default function SiteSettings() {
         url: siteMeta.ogImageUrl ?? '',
     });
     const [endpoint, setEndpoint] = useState(formEndpoint ?? '');
+    const [upiId, setUpiId] = useState(siteMeta.upiId ?? '');
     const [picking, setPicking] = useState<'favicon' | 'og_image' | null>(null);
     const [saved, setSaved] = useState(false);
 
@@ -78,9 +80,11 @@ export default function SiteSettings() {
         setFavicon({ id: siteMeta.faviconAssetId ?? '', url: siteMeta.faviconUrl ?? '' });
         setOgImage({ id: siteMeta.ogImageAssetId ?? '', url: siteMeta.ogImageUrl ?? '' });
         setEndpoint(formEndpoint ?? '');
+        setUpiId(siteMeta.upiId ?? '');
     }
 
     const issue = endpointIssue(endpoint);
+    const upiProblem = upiId.trim() ? upiIssue(upiId) : null;
 
     // Whether this design has a contact form at all decides what the endpoint field says
     // about itself. The VFS mutates in place, so the file contents cannot be a dependency —
@@ -96,10 +100,11 @@ export default function SiteSettings() {
         description !== (siteMeta.description ?? '') ||
         favicon.url !== (siteMeta.faviconUrl ?? '') ||
         ogImage.url !== (siteMeta.ogImageUrl ?? '') ||
-        endpoint !== (formEndpoint ?? '');
+        endpoint !== (formEndpoint ?? '') ||
+        upiId !== (siteMeta.upiId ?? '');
 
     async function save() {
-        if (issue) return;
+        if (issue || upiProblem) return;
 
         setSaved(false);
         await saveSettings({
@@ -110,6 +115,7 @@ export default function SiteSettings() {
                 ...(favicon.url ? { faviconUrl: favicon.url } : {}),
                 ...(ogImage.id ? { ogImageAssetId: ogImage.id } : {}),
                 ...(ogImage.url ? { ogImageUrl: ogImage.url } : {}),
+                upiId: upiId.trim() || '',
             },
             formEndpoint: endpoint.trim() || null,
         });
@@ -175,6 +181,26 @@ export default function SiteSettings() {
             />
 
             <FieldShell
+                id="site-upi-id"
+                label="UPI ID for orders"
+                issue={upiProblem}
+                hint="Needed when this site takes orders. Customers pay this ID from their UPI app."
+            >
+                <input
+                    id="site-upi-id"
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={upiId}
+                    placeholder="name@okaxis"
+                    aria-invalid={upiProblem ? true : undefined}
+                    aria-describedby={upiProblem ? 'site-upi-id-error' : undefined}
+                    onChange={(e) => setUpiId(e.target.value)}
+                    className={`${controlClass} ${upiProblem ? invalidClass : ''}`}
+                />
+            </FieldShell>
+
+            <FieldShell
                 id="site-form-endpoint"
                 label="Contact form address"
                 issue={issue}
@@ -208,8 +234,8 @@ export default function SiteSettings() {
                 <button
                     type="button"
                     onClick={() => void save()}
-                    disabled={saving || !dirty || issue !== null}
-                    className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-40"
+                    disabled={saving || !dirty || issue !== null || upiProblem !== null}
+                    className="cursor-pointer rounded-md border border-gold bg-gold px-3 py-1.5 text-sm text-gold-foreground disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     {saving ? 'Saving…' : 'Save settings'}
                 </button>

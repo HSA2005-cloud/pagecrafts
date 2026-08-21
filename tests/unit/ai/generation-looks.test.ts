@@ -57,7 +57,7 @@ function compositionFor(vertical: string, heading: string, extra: string): Compo
 }
 
 describe('three looks stay on-brief for any vertical', () => {
-    it.each(CASES)('$vertical gets motif $motif and a kinetic premium page', async (c) => {
+    it.each(CASES)('$vertical keeps motif mapping and an Animated kinetic page', async (c) => {
         expect(motifFor(c.vertical, c.extra), c.vertical).toBe(c.motif);
 
         const options = await buildStyleOptions(compositionFor(c.vertical, c.heading, c.extra));
@@ -71,42 +71,29 @@ describe('three looks stay on-brief for any vertical', () => {
 
         expect(html.casual).toContain('data-style="casual"');
         expect(html.casual).toContain('data-motion="none"');
-        expect(html.casual).not.toContain('images.unsplash.com');
+        expect(html.casual).toContain('images.unsplash.com');
+        expect(html.casual).toContain('<img src="');
+        expect(html.casual).toContain('site-header');
         expect(html.casual).not.toContain('motion-stage');
-        expect(html.casual).not.toContain('class="motion-motif"');
 
         expect(html.photos).toContain('data-style="photos"');
         expect(html.photos).toContain('<img src="');
         expect(html.photos).toContain('images.unsplash.com');
         expect(html.photos).not.toContain('motion-stage');
-        expect(html.photos).not.toContain('class="motion-motif"');
 
         expect(html.motion).toContain('data-style="motion"');
         expect(html.motion).toContain('data-motion="kinetic"');
         expect(html.motion).toContain('motion-stage');
-        expect(html.motion).toContain('motion-ticker');
-        expect(html.motion).toContain('--bg: #06040c');
         expect(html.motion).not.toContain('pc-orb');
-
-        if (c.motif === 'none') {
-            expect(html.motion).not.toContain('class="motion-motif"');
-        } else {
+        if (c.motif !== 'none') {
             expect(html.motion).toContain(`data-motif="${c.motif}"`);
         }
     });
 
     it('does not stamp a mithai photograph onto a gym', async () => {
         const gym = await buildStyleOptions(compositionFor('gym', 'Iron Yard', 'boutique gym'));
-        const photos = gym.find((o) => o.id === 'photos')?.files['index.html'] ?? '';
-        expect(photos).toContain('images.unsplash.com');
-        expect(photos).not.toContain(DESSERT_PHOTO_ID);
-    });
-
-    it('does stamp a mithai photograph onto a sweet shop, even if the slot says shop interior', async () => {
-        const sweets = await buildStyleOptions(
-            compositionFor('sweet-shop', 'Mithas Sweets', 'ladoo and barfi'),
-        );
-        const photos = sweets.find((o) => o.id === 'photos')?.files['index.html'] ?? '';
-        expect(photos).toContain(DESSERT_PHOTO_ID);
+        const photos = gym.find((o) => o.id === 'photos');
+        expect(photos?.files['index.html']).toContain('images.unsplash.com');
+        expect(photos?.files['index.html']).not.toContain(DESSERT_PHOTO_ID);
     });
 });

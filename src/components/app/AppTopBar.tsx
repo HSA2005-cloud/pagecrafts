@@ -4,6 +4,7 @@ import { Bell, Plus, Sparkles } from "lucide-react";
 import type { Viewer } from "@/lib/auth/session";
 import { BrandMark } from "@/components/landing/BrandMark";
 import { FlowSteps } from "@/components/app/FlowSteps";
+import { ProfileMenu } from "@/components/settings/ProfileMenu";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -61,13 +62,7 @@ export function AppTopBar({
                 </span>
 
                 {user ? (
-                    <span
-                        title={user.email}
-                        className="flex size-9 items-center justify-center rounded-full border border-primary/40 text-sm font-semibold uppercase text-foreground"
-                    >
-                        <span aria-hidden>{user.name.slice(0, 1)}</span>
-                        <span className="sr-only">Signed in as {user.email}</span>
-                    </span>
+                    <ProfileMenu user={user} variant="avatar" />
                 ) : (
                     <Link
                         href="/signin"

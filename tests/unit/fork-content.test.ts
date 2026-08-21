@@ -152,6 +152,52 @@ describe("forking a design", () => {
         expect(b.calls()).toBe(a.calls());
     });
 
+    it("writes the brief onto the same design and adds About, Contact and Settings", async () => {
+        const { db, templateId } = libraryWithDesign();
+        db.rows("templates")[0]!.files = {
+            "index.html": `<!doctype html>
+<html>
+  <head><title>Restaurant</title><link rel="stylesheet" href="styles.css" /></head>
+  <body>
+    <header class="topbar">
+      <span class="wordmark" data-slot="site.name">Restaurant</span>
+      <nav class="nav"><a href="#menu">Menu</a></nav>
+    </header>
+    <h1 data-slot="hero.headline">Good food. Good mood.</h1>
+    <footer class="footer"><p data-slot="site.footer">Built with PageCraft.</p></footer>
+  </body>
+</html>`,
+            "styles.css": ".hero{}",
+        };
+
+        const { id } = await createProject(db.asUser("u1"), "u1", {
+            name: "Kettle & Co.",
+            sourceTemplateId: templateId,
+            brief: {
+                name: "Kettle & Co.",
+                offer: "Tea and cakes",
+                place: "Pune",
+                phone: "0201234567",
+            },
+        });
+
+        const project = db.rows("projects").find((p) => p.id === id)!;
+        const files = db.rows("project_files").filter((row) => row.project_id === id);
+        const paths = files.map((row) => row.path as string).sort();
+
+        expect(paths).toEqual(expect.arrayContaining([
+            "index.html",
+            "about.html",
+            "contact.html",
+            "settings.html",
+            "styles.css",
+        ]));
+        expect(files.find((row) => row.path === "index.html")?.content).toContain("Kettle &amp; Co.");
+        expect(files.find((row) => row.path === "about.html")?.content).toContain("Tea and cakes in Pune");
+        expect((project.content_schema as ContentSchema).sections.map((s) => s.key))
+            .toContain("aboutPage");
+    });
+
     it("gives the project its own copy of the schema and the words", async () => {
         const { db, templateId } = libraryWithDesign();
 

@@ -20,11 +20,17 @@ export function ResetPasswordForm() {
     const [confirm, setConfirm] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [done, setDone] = useState(false);
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        if (busy) return;
         setError(null);
 
+        if (!password) {
+            setError("Enter a new password.");
+            return;
+        }
         if (password !== confirm) {
             setError("Both passwords need to match.");
             return;
@@ -39,21 +45,42 @@ export function ResetPasswordForm() {
         try {
             const response = await fetch("/api/v1/auth/password/update", {
                 method: "POST",
+                credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(parsed.data),
             });
             const result = (await response.json()) as ApiResult<unknown>;
             if (!result.ok) {
-                setError(MESSAGES[result.error.code] ?? MESSAGES.internal!);
+                setError(
+                    result.error.code === "unauthorized"
+                        ? MESSAGES.unauthorized!
+                        : (result.error.message || MESSAGES[result.error.code] || MESSAGES.internal!),
+                );
                 return;
             }
-            router.push("/");
-            router.refresh();
+            setDone(true);
         } catch {
             setError(MESSAGES.internal!);
         } finally {
             setBusy(false);
         }
+    }
+
+    if (done) {
+        return (
+            <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6" aria-live="polite">
+                <h1 className="text-lg font-semibold text-card-foreground">Password updated</h1>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Your password has been reset successfully. You can now sign in with your new password.
+                </p>
+                <Button className="mt-5 w-full" onClick={() => {
+                    router.refresh();
+                    router.push("/new");
+                }}>
+                    Continue
+                </Button>
+            </div>
+        );
     }
 
     return (
@@ -70,7 +97,7 @@ export function ResetPasswordForm() {
                 {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
             </div>
 
-            <Button type="submit" className="mt-5 w-full" disabled={busy}>
+            <Button type="submit" variant="brand" className="mt-5 w-full" disabled={busy}>
                 {busy ? "Saving…" : "Save new password"}
             </Button>
         </form>

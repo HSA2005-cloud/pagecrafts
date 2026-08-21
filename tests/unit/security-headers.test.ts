@@ -40,7 +40,14 @@ describe('security headers (NFR-110, NFR-113)', () => {
         expect(policy).toContain("default-src 'self'");
         expect(policy).toContain("object-src 'none'");
         expect(policy).toContain("base-uri 'self'");
-        expect(policy).toContain("form-action 'self'");
+        expect(policy).toContain("form-action 'self' https:");
+        expect(policy).toContain('https://api.razorpay.com');
+        expect(policy).toContain('https://checkout.razorpay.com');
+        expect(policy).toContain('https://cdn.razorpay.com');
+    });
+
+    it('lets Razorpay open the card 3DS window instead of about:blank', () => {
+        expect(find(false, 'Cross-Origin-Opener-Policy')).toBe('same-origin-allow-popups');
     });
 
     it('still allows the image sources the gallery actually uses', () => {

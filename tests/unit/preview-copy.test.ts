@@ -16,4 +16,8 @@ describe('friendly preview copy', () => {
             'This page is too large to preview.',
         );
     });
+
+    it('still maps missing assets without jargon', () => {
+        expect(friendlyPreviewIssue('Missing stylesheet: styles.css')).not.toMatch(/stylesheet/i);
+    });
 });

@@ -184,9 +184,15 @@ paths:
       operationId: deleteProject
       security:
         - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteProjectRequest'
       responses:
         '200':
-          description: Project removed (our row only).
+          description: Project removed (our row only), after the same password check as sign-in.
           content:
             application/json:
               schema:
@@ -715,6 +721,62 @@ paths:
                 $ref: '#/components/schemas/AccountResult'
         default:
           $ref: '#/components/responses/Error'
+  /account/profile:
+    patch:
+      operationId: setBillingProfile
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingProfileRequest'
+      responses:
+        '200':
+          description: Receipt name and address. Never a card or bank number.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /account/notifications:
+    patch:
+      operationId: setNotifyPrefs
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotifyPrefsRequest'
+      responses:
+        '200':
+          description: Which email notices this account wants.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResult'
+        default:
+          $ref: '#/components/responses/Error'
+  /account/export:
+    get:
+      operationId: exportAccount
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: >-
+            A copy of account facts and site names. Not file trees, and not a published
+            page on the internet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountExportResult'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     sessionCookie:
@@ -1160,6 +1222,17 @@ components:
         formEndpoint:
           type: [string, 'null']
           format: uri
+    DeleteProjectRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 10
+          maxLength: 128
     ProjectListResult:
       type: object
       required: [ok, data]
@@ -1727,6 +1800,45 @@ components:
       properties:
         trainingOptIn:
           type: boolean
+    NotifyPrefs:
+      type: object
+      required: [email, published, updated, payments, product]
+      properties:
+        email:
+          type: boolean
+        published:
+          type: boolean
+        updated:
+          type: boolean
+        payments:
+          type: boolean
+        product:
+          type: boolean
+    NotifyPrefsRequest:
+      type: object
+      required: [notifyPrefs]
+      properties:
+        notifyPrefs:
+          $ref: '#/components/schemas/NotifyPrefs'
+    BillingProfileRequest:
+      type: object
+      required: [displayName, phone, billingLine, billingCity, gstin]
+      properties:
+        displayName:
+          type: string
+          maxLength: 80
+        phone:
+          type: string
+          maxLength: 20
+        billingLine:
+          type: string
+          maxLength: 120
+        billingCity:
+          type: string
+          maxLength: 80
+        gstin:
+          type: string
+          maxLength: 15
     AccountResult:
       type: object
       required: [ok, data]
@@ -1735,7 +1847,7 @@ components:
           const: true
         data:
           type: object
-          required: [email, emailVerified, trainingOptIn, createdAt]
+          required: [email, emailVerified, trainingOptIn, createdAt, notifyPrefs]
           properties:
             email:
               type: string
@@ -1748,6 +1860,72 @@ components:
             createdAt:
               type: string
               format: date-time
+            displayName:
+              type: string
+            phone:
+              type: string
+            billingLine:
+              type: string
+            billingCity:
+              type: string
+            gstin:
+              type: string
+            billingReady:
+              type: boolean
+            notifyPrefs:
+              $ref: '#/components/schemas/NotifyPrefs'
+    AccountExportResult:
+      type: object
+      required: [ok, data]
+      properties:
+        ok:
+          const: true
+        data:
+          type: object
+          required: [exportedAt, account, sites]
+          properties:
+            exportedAt:
+              type: string
+              format: date-time
+            account:
+              type: object
+              required: [email, emailVerified, createdAt, displayName, trainingOptIn, notifyPrefs, phone, billingLine, billingCity, gstin]
+              properties:
+                email:
+                  type: string
+                emailVerified:
+                  type: boolean
+                createdAt:
+                  type: string
+                  format: date-time
+                displayName:
+                  type: string
+                trainingOptIn:
+                  type: boolean
+                notifyPrefs:
+                  $ref: '#/components/schemas/NotifyPrefs'
+                phone:
+                  type: string
+                billingLine:
+                  type: string
+                billingCity:
+                  type: string
+                gstin:
+                  type: string
+            sites:
+              type: array
+              items:
+                type: object
+                required: [id, name, status, liveUrl]
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  status:
+                    type: string
+                  liveUrl:
+                    type: [string, 'null']
     DeleteAccountResult:
       type: object
       required: [ok, data]

@@ -317,4 +317,51 @@ describe('normalisePlan', () => {
     it('does not treat "post surgery" as a pricing ask', () => {
         expect(wantsPricing('physio clinic in bandra, sports injuries back pain and post surgery rehab')).toBe(false);
     });
+
+    it('inserts pages the person named when the plan skipped them', () => {
+        const out = normalisePlan([
+            { type: 'hero', variant: 'centred', brief: 'a' },
+            { type: 'about', variant: 'text', brief: 'b' },
+            { type: 'contact', variant: 'simple', brief: 'c' },
+            { type: 'footer', variant: 'simple', brief: 'd' },
+        ], {
+            prompt: 'south indian restaurant — I need a menu page, an FAQ page, and a gallery of the dining room',
+        });
+
+        expect(out.sections.map((s) => s.type)).toEqual(
+            expect.arrayContaining(['menu', 'faq', 'gallery']),
+        );
+        expect(out.repairs.some((r) => /asked for that page/i.test(r))).toBe(true);
+    });
+
+    it('forces menu + Order now brief when they ask for cart and waiter tickets', () => {
+        const out = normalisePlan([
+            { type: 'hero', variant: 'centred', brief: 'welcome' },
+            { type: 'about', variant: 'text', brief: 'story' },
+            { type: 'footer', variant: 'simple', brief: 'end' },
+        ], {
+            prompt: 'restaurant site with add to cart, table number, and send to waiter tickets',
+        });
+
+        expect(out.sections.map((s) => s.type)).toContain('menu');
+        expect(out.sections.find((s) => s.type === 'hero')?.brief).toMatch(/Order now/i);
+        expect(out.sections.find((s) => s.type === 'menu')?.brief).toMatch(/waiter/i);
+    });
+
+    it('stays generic when they only ask for a restaurant website', () => {
+        const out = normalisePlan([
+            { type: 'hero', variant: 'centred', brief: 'a' },
+            { type: 'about', variant: 'text', brief: 'b' },
+            { type: 'menu', variant: 'grouped', brief: 'c' },
+            { type: 'gallery', variant: 'grid', brief: 'd' },
+            { type: 'testimonials', variant: 'quotes', brief: 'e' },
+            { type: 'contact', variant: 'simple', brief: 'f' },
+            { type: 'footer', variant: 'simple', brief: 'g' },
+        ], { prompt: 'website for my south indian restaurant with a menu' });
+
+        expect(out.sections.map((s) => s.type)).toContain('menu');
+        expect(out.sections.map((s) => s.type)).not.toContain('gallery');
+        expect(out.sections.map((s) => s.type)).not.toContain('testimonials');
+        expect(out.sections.find((s) => s.type === 'hero')?.brief).not.toMatch(/Order now/i);
+    });
 });

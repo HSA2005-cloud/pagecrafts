@@ -21,9 +21,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PageCraft — describe it, publish it, it's yours",
+  title: "PageCrafts — craft. publish. impact.",
   description:
     "Build a real website by describing it. No code, nothing to install. Free to build; Rs 249 to go live.",
+  icons: {
+    icon: "/brand/pagecrafts-lockup.png",
+    apple: "/brand/pagecrafts-lockup.png",
+  },
+  openGraph: {
+    title: "PageCrafts — craft. publish. impact.",
+    description:
+      "Build a real website by describing it. No code, nothing to install. Free to build; Rs 249 to go live.",
+    images: ["/brand/pagecrafts-lockup.png"],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

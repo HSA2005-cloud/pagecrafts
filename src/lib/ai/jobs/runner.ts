@@ -4,7 +4,9 @@ import { plan } from '../generate/plan';
 import { fillSection } from '../generate/fill';
 import { assemble } from '../generate/assemble';
 import { compositionToFiles } from '../generate/to-files';
-import { buildStyleOptions } from '../generate/options';
+import { buildCustomStyleOptions, buildStyleOptions } from '../generate/options';
+import { composeCustomSite } from '../generate/compose-custom';
+import { estimateSiteBuild } from '../generate/complexity';
 import { bankPhotoUrl } from '../generate/photos';
 import { checkAndRecord } from '../composition/validate';
 import { withOneRepair } from '../generate/repair';
@@ -71,6 +73,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
     try {
         await advance('planning');
 
+        const estimate = estimateSiteBuild(job.prompt);
         const intent = await classify(job.prompt);
         const provider = bill('classify', intent.usage);
         fallbackAttrs = {
@@ -81,6 +84,55 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             sections: intent.data.sections,
         };
 
+        if (estimate.mode === 'custom') {
+            await emit('plan', {
+                mode: 'custom',
+                band: estimate.band,
+                estimatedTokens: estimate.estimatedTokens,
+                reasons: estimate.reasons,
+            });
+            await advance('streaming', {
+                provider,
+                sectionsTotal: 1,
+                ledger: [...ledger.all()],
+            });
+
+            const composed = await composeCustomSite(job.prompt, intent.data);
+            bill('compose', composed.usage);
+            await emit('section', { type: 'custom', variant: 'files' });
+
+            await advance('validating');
+            await emit('validate');
+
+            const composition = composed.data.composition;
+            const variants = buildCustomStyleOptions(composition, composed.data.files);
+            const picked = variants[0];
+            const files = picked?.files ?? composed.data.files;
+            const endedAt = Date.now();
+            const current = (await store.get(job.id)) ?? job;
+            const settled: Job = {
+                ...current,
+                status: 'done',
+                composition: picked?.composition ?? composition,
+                files,
+                variants,
+                endedAt,
+                ledger: [...ledger.all()],
+            };
+            await persistSettled(settled);
+            await emit('done');
+            await advance('done', {
+                composition: settled.composition,
+                files,
+                variants,
+                endedAt,
+                ledger: settled.ledger,
+            });
+            const done = (await store.get(job.id)) ?? job;
+            deps.onSettled?.(done);
+            return done;
+        }
+
         const p = await fetchProfile(intent.data.vertical);
         bill('profile', p.usage);
 
@@ -89,6 +141,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
         fallbackAttrs.sections = planned.data.map((section) => section.type);
 
         await emit('plan', {
+            mode: 'recipe',
             sections: planned.data.length,
             types: planned.data.map((section) => section.type),
         });
@@ -162,17 +215,30 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             }
         }
 
-        const variants = await buildStyleOptions(composition, lookupPhoto);
+        const variants = await buildStyleOptions(composition, lookupPhoto, job.prompt);
         const picked = variants[0];
         const files = picked?.files ?? compositionToFiles(composition);
         const endedAt = Date.now();
-        await emit('done');
-        await advance('done', {
+        const current = (await store.get(job.id)) ?? job;
+        const settled: Job = {
+            ...current,
+            status: 'done',
             composition: picked?.composition ?? composition,
             files,
             variants,
             endedAt,
             ledger: [...ledger.all()],
+        };
+        // Persist the default look before marking the job done, so the editor
+        // can open it without a Free / Pro / Premium picker in between.
+        await persistSettled(settled);
+        await emit('done');
+        await advance('done', {
+            composition: settled.composition,
+            files,
+            variants,
+            endedAt,
+            ledger: settled.ledger,
         });
         const done = (await store.get(job.id)) ?? job;
         deps.onSettled?.(done);

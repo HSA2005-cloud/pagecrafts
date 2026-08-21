@@ -73,7 +73,7 @@ export default function ChatComposer({
                         type="button"
                         onClick={() => setDomainNote((open) => !open)}
                         aria-expanded={domainNote}
-                        className="cursor-pointer rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="cursor-pointer rounded-full border border-gold bg-gold px-3 py-1 text-xs font-semibold text-gold-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
                     >
                         Get started
                     </button>
@@ -91,7 +91,7 @@ export default function ChatComposer({
 
             {banner && domainNote ? (
                 <p className="border-b border-border/70 px-3 py-2 text-xs leading-5 text-muted-foreground">
-                    Custom domains are coming. For now your site lives on a PageCraft
+                    Custom domains are coming. For now your site lives on a PageCrafts
                     address — we will let you know when you can point your own name at it.
                 </p>
             ) : null}
@@ -132,7 +132,7 @@ export default function ChatComposer({
                     <button
                         type="submit"
                         disabled={busy || locked || !draft.trim()}
-                        className="h-11 cursor-pointer rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                        className="h-11 cursor-pointer rounded-full border border-gold bg-gold px-4 text-sm font-semibold text-gold-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-40"
                     >
                         {busy ? 'Sending…' : 'Send'}
                     </button>

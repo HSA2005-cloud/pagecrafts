@@ -6,7 +6,7 @@ import { readCredentials } from "@/lib/auth/credentials";
 import { toSessionUser } from "@/lib/auth/session";
 import { ok, fail, guard } from "@/lib/errors/respond";
 import { readJson } from "@/lib/kernel/body";
-import { publicEnv } from "@/lib/config/env";
+import { authConfirmUrl } from "@/lib/auth/confirm-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,13 +41,17 @@ export async function POST(request: NextRequest) {
       email: credentials.value.email,
       password: credentials.value.password,
       options: {
-        emailRedirectTo: `${publicEnv.appUrl}/api/v1/auth/confirm?next=/new`,
+        emailRedirectTo: authConfirmUrl(),
         ...(name ? { data: { full_name: name } } : {}),
       },
     });
 
     if (error) {
-      if (error.status === 429) {
+      if (
+        error.status === 429 ||
+        error.code === "over_request_rate_limit" ||
+        error.code === "over_email_send_rate_limit"
+      ) {
         return fail("rate_limited", "Too many attempts. Try again shortly.");
       }
       if (error.code === "weak_password") {

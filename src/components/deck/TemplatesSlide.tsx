@@ -6,6 +6,9 @@ import { FilterChips } from "@/components/discovery/FilterChips";
 import { GalleryGrid } from "@/components/discovery/GalleryGrid";
 import { GalleryError } from "@/components/discovery/GalleryStates";
 import { PromptEcho } from "@/components/discovery/PromptEcho";
+import { supabaseViewerClient } from "@/lib/auth/server";
+import { viewer } from "@/lib/auth/session";
+import { getBilling } from "@/lib/payments/checkout";
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -64,7 +67,7 @@ export async function TemplatesSlide({ params }: { params: Params }) {
                 <p className="max-w-xl text-sm leading-6 text-muted-foreground">
                     {prompt
                         ? "Closest matches first. Choose a design you love — you can customize it in the next step."
-                        : "Every design is free to edit — you only pay when you go live."}
+                        : "Paid designs stay locked until you buy that one. Free designs you can use straight away."}
                 </p>
                 {prompt && (
                     <PromptEcho
@@ -82,6 +85,18 @@ export async function TemplatesSlide({ params }: { params: Params }) {
             </div>
         </div>
     );
+}
+
+async function loadUnlockedTemplateIds(): Promise<string[]> {
+    try {
+        const user = await viewer();
+        if (!user) return [];
+        const supabase = await supabaseViewerClient();
+        const billing = await getBilling(supabase, user.id);
+        return billing.unlockedTemplateIds;
+    } catch {
+        return [];
+    }
 }
 
 async function Gallery({
@@ -129,6 +144,8 @@ async function Gallery({
                 personalised={Boolean(prompt || query.category || query.intent)}
                 resetHref="/templates"
                 ranked={query.sort === "recommended" && Boolean(query.intent)}
+                lockable
+                unlockedTemplateIds={await loadUnlockedTemplateIds()}
             />
         </>
     );

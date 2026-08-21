@@ -36,7 +36,7 @@ describe('filesForPreview', () => {
         });
 
         expect(overlay['index.html']).toContain('Handmade sweets');
-        expect(overlay['index.html']).toContain('class="site-header"');
+        expect(overlay['index.html']).toContain('site-header');
         expect(overlay['index.html']).toContain('href="#top"');
         expect(overlay['composition.json']).toContain('Sugar & Co');
         expect(files['index.html']).toBe('<h1>Old</h1>');

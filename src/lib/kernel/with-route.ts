@@ -15,6 +15,7 @@ export interface RouteContext<Body, Params> {
   params: Params;
   body: Body;
   userId: string; // "" when auth is "none"
+  email: string; // "" when auth is "none" or the session has no address
   supabase: SupabaseClient; // scoped to the session, so RLS applies
   recordUsage: (usage: UsageReport) => Promise<void>; // no-op unless limit is "ai"
 }
@@ -38,6 +39,7 @@ export function withRoute<
       const params = segment ? await segment.params : ({} as Params);
 
       let userId = "";
+      let email = "";
       let supabase: SupabaseClient;
       if (opts.auth === "none") {
         supabase = await supabaseRoute();
@@ -45,6 +47,7 @@ export function withRoute<
         // Throws ApiError('unauthorized') when there is no session.
         const session = await requireUser();
         userId = session.userId;
+        email = session.email ?? "";
         supabase = session.supabase;
       }
 
@@ -66,7 +69,7 @@ export function withRoute<
       const noUsage = async () => {};
 
       if (opts.limit !== "ai") {
-        return await opts.handler({ req, params, body, userId, supabase, recordUsage: noUsage });
+        return await opts.handler({ req, params, body, userId, email, supabase, recordUsage: noUsage });
       }
 
       const guard = await guardAiRequest(userId, req.headers);
@@ -75,7 +78,7 @@ export function withRoute<
 
       try {
         return await opts.handler({
-          req, params, body, userId, supabase,
+          req, params, body, userId, email, supabase,
           recordUsage: guard.recordUsage,
         });
       } finally {

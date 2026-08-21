@@ -8,10 +8,12 @@ import {
     generationSteps,
     generationThought,
 } from '@/lib/editor/generation-steps';
+import { explainCreationIssue } from '@/lib/editor/ai-fix';
 import { PREVIEW_IFRAME_SANDBOX, withPreviewCsp } from '@/lib/preview-security';
 import { previewDocumentUrl } from '@/lib/editor/preview-frame';
 import { cn } from '@/lib/utils';
 import { GenerationTimeline } from './GenerationTimeline';
+import { AskAiFixDialog } from './AskAiFixDialog';
 
 type Viewport = 'full' | 'phone';
 
@@ -31,6 +33,7 @@ export function GeneratingOverlay({
     looks = [],
     prompt,
     error,
+    onAskAiFix,
     className,
 }: {
     status: JobStatus | 'loading';
@@ -42,11 +45,13 @@ export function GeneratingOverlay({
     looks?: readonly GenerationLook[];
     prompt?: string | null;
     error?: string | null;
+    onAskAiFix?: (instruction: string) => void;
     className?: string;
 }) {
     const readyLooks = looks.filter((look) => look.html.trim().length > 0);
     const [selectedLook, setSelectedLook] = useState<string | null>(null);
     const [viewport, setViewport] = useState<Viewport>('full');
+    const [askOpen, setAskOpen] = useState(false);
 
     const activeLookId = selectedLook && readyLooks.some((look) => look.id === selectedLook)
         ? selectedLook
@@ -71,6 +76,7 @@ export function GeneratingOverlay({
         plannedSections,
         variantCount: readyLooks.length,
     });
+    const fix = error ? explainCreationIssue(error, 'generation') : null;
 
     return (
         <div
@@ -85,10 +91,20 @@ export function GeneratingOverlay({
                     thought={thought}
                     prompt={prompt}
                 />
-                {error ? (
-                    <p role="alert" className="mt-4 text-sm text-destructive">
-                        {error}
-                    </p>
+                {fix ? (
+                    <div className="mt-4 rounded-2xl border border-border/70 bg-card/80 p-4">
+                        <p className="text-sm font-medium text-foreground">{fix.title}</p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">{fix.what}</p>
+                        {onAskAiFix ? (
+                            <button
+                                type="button"
+                                onClick={() => setAskOpen(true)}
+                                className="mt-3 h-11 w-full cursor-pointer rounded-full border border-gold bg-gold px-4 text-sm font-semibold text-gold-foreground hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+                            >
+                                Fix with AI
+                            </button>
+                        ) : null}
+                    </div>
                 ) : null}
             </aside>
 
@@ -100,19 +116,20 @@ export function GeneratingOverlay({
                             Your site
                         </h2>
                         {readyLooks.length > 1 ? (
-                            <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
-                                {readyLooks.map((look) => (
+                            <div className="look-chunk-grid flex min-w-0 items-center gap-1 overflow-x-auto">
+                                {readyLooks.map((look, i) => (
                                     <button
                                         key={look.id}
                                         type="button"
                                         aria-pressed={look.id === activeLookId}
                                         onClick={() => setSelectedLook(look.id)}
                                         className={cn(
-                                            'h-8 shrink-0 cursor-pointer rounded-full px-3 text-xs transition-colors',
+                                            'look-chunk-card h-8 shrink-0 cursor-pointer rounded-full px-3 text-xs transition-colors',
                                             look.id === activeLookId
                                                 ? 'bg-secondary text-foreground'
                                                 : 'text-muted-foreground hover:bg-muted',
                                         )}
+                                        style={{ animationDelay: `${i * 80}ms` }}
                                     >
                                         {look.label}
                                     </button>
@@ -155,6 +172,19 @@ export function GeneratingOverlay({
                     <LiveSitePreview html={html} viewport={viewport} />
                 </div>
             </section>
+
+            {fix && onAskAiFix ? (
+                <AskAiFixDialog
+                    open={askOpen}
+                    title={fix.title}
+                    what={fix.what}
+                    onDismiss={() => setAskOpen(false)}
+                    onConfirm={() => {
+                        setAskOpen(false);
+                        onAskAiFix(fix.instruction);
+                    }}
+                />
+            ) : null}
         </div>
     );
 }

@@ -5,8 +5,16 @@ import { TemplateCard } from "@/components/discovery/TemplateCard";
 import { IntentCapture } from "@/components/discovery/IntentCapture";
 import { buttonVariants } from "@/components/ui/button";
 import type { TemplateSummary } from "@/lib/templates/query";
+import { templateUuid } from "@/lib/templates/template-id";
+import { templateBadge } from "@/lib/payments/pricing";
 
-export function BuildSlide({ templates }: { templates: TemplateSummary[] }) {
+export function BuildSlide({
+    templates,
+    unlockedTemplateIds = [],
+}: {
+    templates: TemplateSummary[];
+    unlockedTemplateIds?: string[];
+}) {
     const tiles = templates.slice(0, 12);
 
     return (
@@ -29,14 +37,20 @@ export function BuildSlide({ templates }: { templates: TemplateSummary[] }) {
                         </p>
                     </header>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {tiles.map((template, index) => (
-                            <TemplateCard
-                                key={template.id}
-                                template={template}
-                                index={index + 1}
-                                compact
-                            />
-                        ))}
+                        {tiles.map((template, index) => {
+                            const forkId = templateUuid(template.id);
+                            return (
+                                <TemplateCard
+                                    key={template.id}
+                                    template={template}
+                                    index={index + 1}
+                                    compact
+                                    lockable
+                                    unlocked={!templateBadge(template.tier) || unlockedTemplateIds.includes(forkId)}
+                                    forkId={forkId}
+                                />
+                            );
+                        })}
                     </div>
                     <Link
                         href="/templates"
@@ -61,6 +75,24 @@ export function BuildSlide({ templates }: { templates: TemplateSummary[] }) {
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
                         Name, place, and what they do. We write every page from those facts.
                     </p>
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                        On Free, you can create or regenerate a site{" "}
+                        <span className="font-medium text-foreground">3 times</span> (each round
+                        gives three looks). Need more? Upgrade to{" "}
+                        <span className="font-medium text-foreground">Advanced</span> for 10× AI
+                        usage — that is separate from Starter, Pro, and Premium design tiers.
+                    </p>
+                    <Link
+                        href="/packages"
+                        className={buttonVariants({
+                            variant: "outline-brand",
+                            size: "sm",
+                            className: "mt-3 rounded-full font-semibold",
+                        })}
+                    >
+                        View AI rebuilds
+                        <ArrowRight aria-hidden />
+                    </Link>
                     <div className="mt-5">
                         <IntentCapture library={false} />
                     </div>

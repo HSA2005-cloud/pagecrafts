@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ExternalLink, Globe, PencilLine } from "lucide-react";
 
 import type { ProjectStatus, ProjectSummary } from "@/lib/contracts";
+import { DeleteSiteButton } from "@/components/dashboard/DeleteSiteDialog";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { CardIndex } from "@/components/ui/card-index";
@@ -56,7 +57,17 @@ function updatedAgo(iso: string, now: number): string {
     return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-export function SiteCard({ site, index }: { site: ProjectSummary; index?: number }) {
+export function SiteCard({
+    site,
+    index,
+    email,
+    onDeleted,
+}: {
+    site: ProjectSummary;
+    index?: number;
+    email: string;
+    onDeleted: () => void;
+}) {
     const status = site.status;
 
     const [now, setNow] = useState(() => Date.now());
@@ -123,6 +134,12 @@ export function SiteCard({ site, index }: { site: ProjectSummary; index?: number
                     <PencilLine aria-hidden />
                     Edit
                 </Link>
+                <DeleteSiteButton
+                    siteId={site.id}
+                    siteName={site.name}
+                    email={email}
+                    onDeleted={onDeleted}
+                />
             </div>
         </li>
     );

@@ -183,10 +183,23 @@ export const PREVIEW_BOOTSTRAP_JS = `(function () {
       return;
     }
     if (/^(javascript|mailto|tel):/i.test(href)) return;
+    var path = href.split('?')[0].split('#')[0].replace(/^\\.\\//, '').replace(/^\\//, '');
+    if (/\\.html?$/i.test(path) && !/^[a-z][a-z0-9+.-]*:/i.test(href)) {
+      e.preventDefault();
+      try { parent.postMessage({ __pagecraft: true, kind: 'navigate', path: path }, '*'); } catch (err) {}
+      return;
+    }
     e.preventDefault();
   }
   function onSubmit(e) {
     e.preventDefault();
+    var form = e.target;
+    if (!form || !form.querySelector) return;
+    var status = form.querySelector('.form-status');
+    if (status) {
+      status.hidden = false;
+      status.textContent = 'Thanks — we got your message.';
+    }
   }
   try {
     HTMLFormElement.prototype.submit = function () {};

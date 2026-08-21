@@ -29,7 +29,8 @@ describe("the template library", () => {
     expect(build).toContain("Explore more");
     expect(page).toContain("Back to Build");
     expect(page).toContain('href="/#build"');
-    expect(choose).toContain("/new?template=");
-    expect(choose).not.toContain("/editor/");
+        expect(choose).toContain("/new?template=");
+        expect(choose).toContain("cursor-pointer");
+        expect(choose).not.toContain("/editor/");
   });
 });

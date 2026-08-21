@@ -85,3 +85,25 @@ export const planSchema: Schema = {
     },
     required: ['sections'],
 };
+/** Freeform multi-file site (custom / heavy builds). */
+export const composeSiteSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+        title: { type: Type.STRING },
+        description: { type: Type.STRING },
+        files: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    path: { type: Type.STRING },
+                    content: { type: Type.STRING },
+                },
+                required: ['path', 'content'],
+                propertyOrdering: ['path', 'content'],
+            },
+        },
+    },
+    required: ['title', 'description', 'files'],
+    propertyOrdering: ['title', 'description', 'files'],
+};

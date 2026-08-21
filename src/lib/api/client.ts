@@ -1,9 +1,11 @@
-import type { ApiResult } from '@/lib/contracts';
+import type { ApiResult, ErrorCode } from '@/lib/contracts';
 import { friendlyMessage, OFFLINE_MESSAGE, UNREADABLE_MESSAGE } from './messages';
 
 export interface CallResult<T> {
     data: T | null;
     error: string | null;
+    /** Present when the server answered with an error envelope. */
+    code?: ErrorCode;
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<CallResult<T>> {
@@ -37,7 +39,11 @@ async function call<T>(path: string, init?: RequestInit): Promise<CallResult<T>>
     }
 
     if (!body.ok) {
-        return { data: null, error: friendlyMessage(body.error.code, body.error.message) };
+        return {
+            data: null,
+            error: friendlyMessage(body.error.code, body.error.message),
+            code: body.error.code,
+        };
     }
 
     return { data: body.data, error: null };
