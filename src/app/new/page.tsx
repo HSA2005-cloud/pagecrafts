@@ -39,11 +39,6 @@ export default async function NewProjectPage({
             ? `Name, place, and what they do — we will put those facts on ${design.name}.`
             : "A one-liner is not enough. Name, place, and what they do — then AI writes every page from those facts."}
         </p>
-        {design && design.tier !== "free" ? (
-          <p className="text-xs text-muted-foreground">
-            This design is paid. You will be asked to pay once before it is set up.
-          </p>
-        ) : null}
       </header>
 
       <IntentCapture

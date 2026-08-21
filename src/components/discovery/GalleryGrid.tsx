@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import type { Category } from "@/lib/contracts";
 import { CATEGORY_LABELS } from "@/lib/discovery/categories";
 import type { SortKey, TemplateSummary } from "@/lib/templates/query";
+import type { PlanId } from "@/lib/plans/catalog";
 import { TemplateCard } from "@/components/discovery/TemplateCard";
 import { CardIndex } from "@/components/ui/card-index";
 import { SortSelect } from "@/components/discovery/SortSelect";
@@ -50,6 +51,7 @@ export function GalleryGrid({
     personalised,
     resetHref,
     ranked = false,
+    plan = "starter",
 }: {
     templates: TemplateSummary[];
     /** How many designs the library holds, for the "showing N of M" line. */
@@ -61,6 +63,8 @@ export function GalleryGrid({
     resetHref: string;
     /** True when a description was classified, so the order carries a real score (D6). */
     ranked?: boolean;
+    /** The viewer's plan, threaded to every tile so locks reflect it (R-plans). */
+    plan?: PlanId;
 }) {
     const filtered = templates.length !== total;
 
@@ -104,7 +108,12 @@ export function GalleryGrid({
             {templates.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                     {(split ? matched : templates).map((template, index) => (
-                        <TemplateCard key={template.id} template={template} index={index + 1} />
+                        <TemplateCard
+                            key={template.id}
+                            template={template}
+                            index={index + 1}
+                            plan={plan}
+                        />
                     ))}
                 </div>
             )}
@@ -120,6 +129,7 @@ export function GalleryGrid({
                                 key={template.id}
                                 template={template}
                                 index={matched.length + index + 1}
+                                plan={plan}
                             />
                         ))}
                     </div>

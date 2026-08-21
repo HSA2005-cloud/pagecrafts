@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { capturedPayment, verifyWebhook } from "@/lib/payments/razorpay";
 import { grantPublish } from "@/lib/payments/checkout";
+import { applyPlanOrder } from "@/lib/payments/plans";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,6 +45,24 @@ export async function POST(req: NextRequest) {
   if (!payment) return NextResponse.json({ ok: true, ignored: true });
 
   const { projectId, userId, kind } = payment.notes;
+
+  // A plan upgrade (R-plans). The order row is the dedupe key, so a webhook that races or
+  // repeats the checkout verify settles the same purchase once.
+  if (kind === "plan") {
+    try {
+      await applyPlanOrder(payment.orderId, payment.paymentId);
+    } catch (error) {
+      console.error("[payments] could not apply plan after payment", {
+        paymentId: payment.paymentId,
+        orderId: payment.orderId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json({ ok: false }, { status: 500 });
+    }
+
+    console.info("[payments] plan applied", { orderId: payment.orderId, paymentId: payment.paymentId });
+    return NextResponse.json({ ok: true });
+  }
 
   // The notes were written by us when the order was created. If they are not here, this
   // payment was not for something we know how to unlock — worth saying loudly, because it

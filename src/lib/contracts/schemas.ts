@@ -104,3 +104,17 @@ export const billingProfileSchema = z.object({
   gstin: z.string().trim().max(15),
 });
 
+// POST /plans/checkout — which plan to buy. Only the paid plans are purchasable; the price
+// is read from the catalogue on the server, never from this body (R-plans).
+export const planCheckoutSchema = z.object({
+  plan: z.enum(["pro", "premium"]),
+});
+
+// POST /plans/verify — the three values Razorpay Checkout hands the browser on success. The
+// signature is what the server recomputes; the ids name the order and payment it covers.
+export const planVerifySchema = z.object({
+  razorpayOrderId: z.string().min(1).max(64),
+  razorpayPaymentId: z.string().min(1).max(64),
+  razorpaySignature: z.string().min(1).max(256),
+});
+

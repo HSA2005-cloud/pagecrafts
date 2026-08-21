@@ -45,6 +45,7 @@ const POLICIES: Record<string, OwnerRule> = {
     assets: "via_project",
     generations: "own_user_id",
     entitlements: "own_user_id",
+    plan_purchases: "own_user_id",
     ai_edit_proposals: "own_user_id",
     // Reference data shared by every generation, written only by the service role.
     vertical_profiles: "public",

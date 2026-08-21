@@ -1,9 +1,18 @@
+import Link from "next/link";
+
 import type { AccountResponse } from "@/lib/contracts";
 import { BillingProfile } from "@/components/settings/BillingProfile";
 import { TrainingConsent } from "@/components/settings/TrainingConsent";
 import { DeleteAccount } from "@/components/settings/DeleteAccount";
+import { PLAN_CATALOG, type PlanId } from "@/lib/plans/catalog";
 
-export function SettingsSlide({ account }: { account: AccountResponse | null }) {
+export function SettingsSlide({
+    account,
+    plan = "starter",
+}: {
+    account: AccountResponse | null;
+    plan?: PlanId;
+}) {
     return (
         <section
             id="settings"
@@ -63,6 +72,27 @@ export function SettingsSlide({ account }: { account: AccountResponse | null }) 
                                     </dd>
                                 </div>
                             </dl>
+                        </div>
+
+                        <div className="rounded-2xl glass-panel p-5">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-base font-semibold text-foreground">Plan</p>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        You are on the{" "}
+                                        <span className="font-semibold text-foreground">
+                                            {PLAN_CATALOG[plan].name}
+                                        </span>{" "}
+                                        plan.
+                                    </p>
+                                </div>
+                                <Link
+                                    href="/plans"
+                                    className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    {plan === "premium" ? "View plans" : "Manage plan"}
+                                </Link>
+                            </div>
                         </div>
 
                         <BillingProfile initial={account} />

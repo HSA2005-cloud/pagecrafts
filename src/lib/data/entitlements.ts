@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EntitlementCheck, EntitlementKind, EntitlementSource } from "@/lib/contracts";
 import { ApiError } from "@/lib/errors/respond";
+import { getStoredPlan } from "@/lib/data/plan";
+import { planGrantsPro } from "@/lib/plans/catalog";
 
 // The server-side entitlement check (R3 D9, A-5, Doc 22 §6).
 //
@@ -87,6 +89,13 @@ export async function checkEntitlement(
 
     const pro = rows.find((row) => row.kind === "pro");
     if (pro) return { kind, granted: true, source: "pro", expiresAt: pro.expires_at };
+
+    // A Pro or Premium account plan carries the same weight as a `pro` entitlement: it
+    // satisfies publish, edit_unlock and pro alike (R-plans). The plan is the account-level
+    // unlock; the entitlement rows remain for per-project grants (a single paid publish) and
+    // for the launch offer, and either path answers "yes" here.
+    const plan = await getStoredPlan(supabase);
+    if (planGrantsPro(plan)) return { kind, granted: true, source: "pro" };
 
     return { kind, granted: false };
 }

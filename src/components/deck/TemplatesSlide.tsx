@@ -6,6 +6,9 @@ import { FilterChips } from "@/components/discovery/FilterChips";
 import { GalleryGrid } from "@/components/discovery/GalleryGrid";
 import { GalleryError } from "@/components/discovery/GalleryStates";
 import { PromptEcho } from "@/components/discovery/PromptEcho";
+import { supabaseViewerClient } from "@/lib/auth/server";
+import { getStoredPlan } from "@/lib/data/plan";
+import type { PlanId } from "@/lib/plans/catalog";
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -52,6 +55,14 @@ export async function TemplatesSlide({ params }: { params: Params }) {
     const query = parseTemplateQuery(queryParamsOf(search));
     const prompt = toPrompt(typeof params.q === "string" ? params.q : undefined);
 
+    // The viewer's plan decides which tiles read as locked. Read once here and thread down.
+    let plan: PlanId = "starter";
+    try {
+        plan = await getStoredPlan(await supabaseViewerClient());
+    } catch {
+        plan = "starter";
+    }
+
     return (
         <div>
             <header data-reveal className="flex flex-col gap-3">
@@ -78,7 +89,7 @@ export async function TemplatesSlide({ params }: { params: Params }) {
             </header>
 
             <div className="mt-8 flex flex-col gap-8">
-                <Gallery query={query} prompt={prompt} search={search} />
+                <Gallery query={query} prompt={prompt} search={search} plan={plan} />
             </div>
         </div>
     );
@@ -88,10 +99,12 @@ async function Gallery({
     query,
     prompt,
     search,
+    plan,
 }: {
     query: TemplateQuery;
     prompt: string | undefined;
     search: URLSearchParams;
+    plan: PlanId;
 }) {
     let result;
     try {
@@ -129,6 +142,7 @@ async function Gallery({
                 personalised={Boolean(prompt || query.category || query.intent)}
                 resetHref="/templates"
                 ranked={query.sort === "recommended" && Boolean(query.intent)}
+                plan={plan}
             />
         </>
     );

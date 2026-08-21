@@ -3,9 +3,11 @@ import type { TemplateSummary } from "@/lib/templates/query";
 import { TemplatePreview } from "@/components/discovery/TemplatePreview";
 import { TemplateDetailModal } from "@/components/discovery/TemplateDetailModal";
 import { PriceBadge } from "@/components/discovery/PriceBadge";
+import { TemplateAccessBadge } from "@/components/discovery/TemplateAccessBadge";
 import { CardIndex } from "@/components/ui/card-index";
+import { canAccessTier, type PlanId } from "@/lib/plans/catalog";
 
-// A tile: the design, its name, and what it costs.
+// A tile: the design, its name, and whether this plan can use it.
 //
 // The whole tile is one button, so opening a design is a single target for a mouse and a
 // single stop for a keyboard (the core flow has to be keyboard-completable — D20).
@@ -13,14 +15,23 @@ export function TemplateCard({
     template,
     index,
     compact = false,
+    plan = "starter",
 }: {
     template: TemplateSummary;
     index: number;
     compact?: boolean;
+    /** The viewer's plan, so a design they cannot fork reads as locked (R-plans). */
+    plan?: PlanId;
 }) {
+    const locked = !canAccessTier(plan, template.tier);
+
     return (
         <article className="card-hover group relative overflow-hidden rounded-xl border border-border bg-card focus-within:border-primary/40">
-            <TemplateDetailModal templateId={template.id} templateName={template.name}>
+            <TemplateDetailModal
+                templateId={template.id}
+                templateName={template.name}
+                plan={plan}
+            >
                 <button
                     type="button"
                     className="block w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -59,12 +70,21 @@ export function TemplateCard({
                             <TemplatePreview preview={template.preview} priority={index <= 4} />
                         )}
 
-                        {/* The price, on the design, before any choice (UI Spec §7.5). */}
-                        <PriceBadge
-                            tier={template.tier}
-                            priceInr={template.priceInr}
-                            className="absolute right-2 top-2 z-[1] shadow-sm"
-                        />
+                        {/* Access, on the design, before any choice (UI Spec §7.5, R-plans).
+                            A design this plan can use keeps its price/free badge; one it
+                            cannot shows the plan it needs, with a lock. */}
+                        {locked ? (
+                            <TemplateAccessBadge
+                                tier={template.tier}
+                                className="absolute right-2 top-2 z-[1] shadow-sm"
+                            />
+                        ) : (
+                            <PriceBadge
+                                tier={template.tier}
+                                priceInr={template.priceInr}
+                                className="absolute right-2 top-2 z-[1] shadow-sm"
+                            />
+                        )}
                     </span>
 
                     <span

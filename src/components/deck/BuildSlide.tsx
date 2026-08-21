@@ -5,8 +5,15 @@ import { TemplateCard } from "@/components/discovery/TemplateCard";
 import { IntentCapture } from "@/components/discovery/IntentCapture";
 import { buttonVariants } from "@/components/ui/button";
 import type { TemplateSummary } from "@/lib/templates/query";
+import type { PlanId } from "@/lib/plans/catalog";
 
-export function BuildSlide({ templates }: { templates: TemplateSummary[] }) {
+export function BuildSlide({
+    templates,
+    plan = "starter",
+}: {
+    templates: TemplateSummary[];
+    plan?: PlanId;
+}) {
     const tiles = templates.slice(0, 12);
 
     return (
@@ -35,6 +42,7 @@ export function BuildSlide({ templates }: { templates: TemplateSummary[] }) {
                                 template={template}
                                 index={index + 1}
                                 compact
+                                plan={plan}
                             />
                         ))}
                     </div>

@@ -3,10 +3,13 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 
+import { Lock } from "lucide-react";
+
 import type { ApiResult } from "@/lib/contracts";
 import type { TemplatePreview as PreviewSpec } from "@/lib/discovery/preview";
 import { CATEGORY_LABELS } from "@/lib/discovery/categories";
-import { madeOfLine, priceLine, type TemplateDetail } from "@/lib/templates/detail";
+import { madeOfLine, type TemplateDetail } from "@/lib/templates/detail";
+import { canAccessTier, lockLabelForTier, type PlanId } from "@/lib/plans/catalog";
 import { Badge } from "@/components/ui/badge";
 import { UseDesignButton } from "./UseDesignButton";
 import { buttonVariants } from "@/components/ui/button";
@@ -100,10 +103,13 @@ type State =
 export function TemplateDetailModal({
     templateId,
     templateName,
+    plan = "starter",
     children,
 }: {
     templateId: string;
     templateName: string;
+    /** The viewer's plan, so a design they cannot fork offers "View Plans" not "Use" (R-plans). */
+    plan?: PlanId;
     children: React.ReactNode;
 }) {
     const [state, setState] = useState<State>({ status: "idle" });
@@ -154,7 +160,7 @@ export function TemplateDetailModal({
     };
 
     const detail = state.status === "ready" ? state.detail : null;
-    const price = detail ? priceLine(detail.tier, detail.priceInr) : null;
+    const locked = detail ? !canAccessTier(plan, detail.tier) : false;
 
     return (
         <Dialog onOpenChange={onOpenChange}>
@@ -265,25 +271,33 @@ export function TemplateDetailModal({
                             </Link>
                         </p>
 
-                        {/* The price sits beside the button it applies to, before the choice
-                            and never after (UI Spec §7.18). Free designs carry no price. */}
-                        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
-                            {price ? (
-                                <span className="mr-auto flex flex-col">
-                                    <span className="text-base font-semibold text-foreground">
-                                        {price}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                        one-time, for this design
-                                    </span>
+                        {/* A design this plan cannot use offers the plan it needs, not the
+                            editor (R-plans, UI §13). Otherwise the price sits beside the
+                            button it applies to, before the choice and never after
+                            (UI Spec §7.18); free designs carry no price. */}
+                        {locked ? (
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Lock className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+                                    This template requires the {lockLabelForTier(detail.tier)} plan.
                                 </span>
-                            ) : null}
-                            <UseDesignButton
-                                forkId={detail.forkId}
-                                name={detail.name}
-                                tier={detail.tier}
-                            />
-                        </div>
+                                <Link
+                                    href="/plans"
+                                    className={buttonVariants({ variant: "brand", size: "lg" })}
+                                >
+                                    View Plans
+                                </Link>
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
+                                {detail.tier !== "free" ? (
+                                    <span className="mr-auto text-xs text-muted-foreground">
+                                        Included with your {lockLabelForTier(detail.tier)} plan.
+                                    </span>
+                                ) : null}
+                                <UseDesignButton forkId={detail.forkId} name={detail.name} />
+                            </div>
+                        )}
                     </div>
                 ) : null}
             </DialogContent>

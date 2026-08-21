@@ -20,11 +20,25 @@ const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
 
 const ORDERS_URL = "https://api.razorpay.com/v1/orders";
 
-export interface OrderNotes {
+// Notes travel with a Razorpay order and come back on the webhook, and they are the only
+// thing that says what a payment was for. Two shapes, told apart by `kind`:
+//   publish — a single site going live (per-project, R3 D9)
+//   plan    — an account-level upgrade to Pro or Premium (R-plans)
+// Written server-side when the order is created and never taken from the request: a caller
+// who could name the plan or project being paid for could unlock it for someone else.
+export interface PublishNotes {
+    kind: "publish";
     projectId: string;
     userId: string;
-    kind: "publish";
 }
+
+export interface PlanNotes {
+    kind: "plan";
+    plan: "pro" | "premium";
+    userId: string;
+}
+
+export type OrderNotes = PublishNotes | PlanNotes;
 
 export interface RazorpayOrder {
     id: string;
@@ -125,10 +139,45 @@ export function verifyWebhook(rawBody: string, signature: string | null): boolea
     return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * Did this browser really complete this order? (R-plans checkout verification.)
+ *
+ * Razorpay Checkout hands the browser three values on success — order id, payment id and a
+ * signature — and the signature is an HMAC of `order_id|payment_id` with the *key secret*.
+ * Recomputing it here is what turns the browser's "it worked" into something the server can
+ * trust; without it, the success callback is a claim anyone can POST. This is the checkout
+ * counterpart to verifyWebhook (which signs the whole body with the *webhook* secret), and
+ * the two are deliberately separate secrets for two separate channels.
+ *
+ * Compared in constant time, for the same reason the webhook is: an early return leaks the
+ * right answer one character at a time.
+ */
+export function verifyPaymentSignature(
+    orderId: string,
+    paymentId: string,
+    signature: string | null,
+): boolean {
+    if (!signature) return false;
+
+    const { keySecret } = credentials();
+    const expected = createHmac("sha256", keySecret).update(`${orderId}|${paymentId}`).digest("hex");
+    const a = Buffer.from(expected, "utf8");
+    const b = Buffer.from(signature, "utf8");
+
+    return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export interface CapturedNotes {
+    kind?: string;
+    projectId?: string;
+    userId?: string;
+    plan?: string;
+}
+
 export interface CapturedPayment {
     paymentId: string;
     orderId: string;
-    notes: Partial<OrderNotes>;
+    notes: CapturedNotes;
 }
 
 /**
@@ -160,6 +209,6 @@ export function capturedPayment(body: unknown): CapturedPayment | null {
     return {
         paymentId,
         orderId,
-        notes: (entity.notes ?? {}) as Partial<OrderNotes>,
+        notes: (entity.notes ?? {}) as CapturedNotes,
     };
 }

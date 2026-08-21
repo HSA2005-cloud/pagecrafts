@@ -1097,7 +1097,7 @@ export const DESIGNS: Template[] = [
         description: "A hotel site — an inviting hero, the rooms on offer and a booking prompt.",
         category: "hospitality",
         tags: ["hospitality", "hotel", "dark", "warm"],
-        tier: "free",
+        tier: "signature",
         license: "MIT",
         sourceUrl: source(),
         layout: "full-bleed",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
@@ -324,10 +325,18 @@ export function StyleChooser({
                             </Button>
                         </>
                     ) : quota && !quota.unlimited && quota.remaining <= 0 ? (
-                        <p className="max-w-lg text-sm text-muted-foreground">
-                            You have used your {quota.limit} free generations. Pick one of the looks
-                            above, or upgrade to generate more.
-                        </p>
+                        <div className="flex max-w-lg flex-col items-center gap-2">
+                            <p className="text-sm text-muted-foreground">
+                                You have used your {quota.limit} free generations. Pick one of the
+                                looks above, or upgrade for unlimited generations.
+                            </p>
+                            <Link
+                                href="/plans"
+                                className="rounded-lg border border-primary/40 px-4 py-2 text-sm font-semibold text-brand-ink transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                View plans
+                            </Link>
+                        </div>
                     ) : null}
                 </footer>
             )}

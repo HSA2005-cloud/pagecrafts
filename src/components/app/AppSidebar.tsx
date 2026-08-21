@@ -134,16 +134,15 @@ export function AppSidebar({
                     <Sparkles className="size-5 text-primary" strokeWidth={1.75} aria-hidden />
                     <p className="mt-3 text-base font-semibold text-foreground">Upgrade to Pro</p>
                     <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                        Unlock custom domains, more AI generations, and priority support.
+                        Unlock paid templates, unlimited AI generations, and publishing without a
+                        per-site checkout.
                     </p>
-                    <button
-                        type="button"
-                        disabled
-                        title="Billing is not live yet"
-                        className="mt-4 w-full rounded-lg border border-primary/40 px-3 py-2 text-sm font-semibold text-brand-ink disabled:cursor-not-allowed disabled:opacity-60"
+                    <Link
+                        href="/plans"
+                        className="mt-4 block w-full rounded-lg border border-primary/40 px-3 py-2 text-center text-sm font-semibold text-brand-ink transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                        Upgrade now
-                    </button>
+                        View plans
+                    </Link>
                 </div>
 
                 {user ? (

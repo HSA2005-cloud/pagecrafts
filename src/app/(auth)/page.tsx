@@ -7,6 +7,8 @@ import { viewer, type Viewer } from "@/lib/auth/session";
 import { supabaseViewerClient } from "@/lib/auth/server";
 import { listProjects } from "@/lib/data/projects";
 import { getAccount } from "@/lib/data/account";
+import { getStoredPlan } from "@/lib/data/plan";
+import type { PlanId } from "@/lib/plans/catalog";
 import type { AccountResponse, ProjectSummary } from "@/lib/contracts";
 import { parseTemplateQuery, queryTemplates, type TemplateSummary } from "@/lib/templates/query";
 import { WelcomeSlide } from "@/components/deck/WelcomeSlide";
@@ -41,6 +43,7 @@ export default async function RootPage({
 
     let sites: ProjectSummary[] | null = [];
     let account: AccountResponse | null = null;
+    let plan: PlanId = "starter";
     try {
         const supabase = await supabaseViewerClient();
         try {
@@ -53,6 +56,11 @@ export default async function RootPage({
         } catch {
             account = null;
         }
+        try {
+            plan = await getStoredPlan(supabase);
+        } catch {
+            plan = "starter";
+        }
     } catch {
         sites = null;
         account = null;
@@ -63,7 +71,9 @@ export default async function RootPage({
     // from describe used to leave one tile where twelve belong).
     const templates = queryTemplates(parseTemplateQuery(new URLSearchParams())).items;
 
-    return <Home user={user} sites={sites} account={account} templates={templates} />;
+    return (
+        <Home user={user} sites={sites} account={account} templates={templates} plan={plan} />
+    );
 }
 
 function Home({
@@ -71,11 +81,13 @@ function Home({
     sites,
     account,
     templates,
+    plan,
 }: {
     user: Viewer;
     sites: ProjectSummary[] | null;
     account: AccountResponse | null;
     templates: TemplateSummary[];
+    plan: PlanId;
 }) {
     return (
         <div className="relative">
@@ -89,9 +101,9 @@ function Home({
                 <main>
                     <WelcomeSlide name={user.name} templates={templates} />
                     <ValueProps />
-                    <BuildSlide templates={templates} />
+                    <BuildSlide templates={templates} plan={plan} />
                     <SitesSlide signedIn sites={sites} />
-                    <SettingsSlide account={account} />
+                    <SettingsSlide account={account} plan={plan} />
                 </main>
             </div>
         </div>

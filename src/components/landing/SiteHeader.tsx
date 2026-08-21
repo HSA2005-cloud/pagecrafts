@@ -100,6 +100,9 @@ export function SiteHeader({
                             <span className="hidden text-sm text-muted-foreground sm:inline">
                                 {user.name}
                             </span>
+                            <Link href="/plans" className={LINK}>
+                                User Plans
+                            </Link>
                             <Link href="/settings" className={LINK}>
                                 Settings
                             </Link>
