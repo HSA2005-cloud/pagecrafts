@@ -37,6 +37,15 @@ export const AI_DAILY_PER_USER: DailyCap = {
   cents: 100,
 };
 
+// How many AI generations a Starter (free) account may run against a single site (E-1).
+//
+// This is the per-site cap the free plan is limited to; Pro and Premium accounts are not
+// subject to it. It is enforced on the server by counting rows in `public.generations` for
+// the project, so it survives refresh, logout, and a second browser — a cap the client is
+// trusted to observe is not a cap. Deleting the site does not reset it: the rows are the
+// history. Pro/Premium bypass it entirely.
+export const STARTER_AI_PER_SITE = 10;
+
 export const AI_DAILY_GLOBAL: DailyCap = {
   requests: 900,
   cents: 2_000,
