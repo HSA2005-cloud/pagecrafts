@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+    CreditCard,
     Globe,
     LayoutGrid,
     LayoutTemplate,
@@ -30,6 +31,7 @@ const NAV: NavItem[] = [
     { label: "Your sites", icon: LayoutGrid },
     { label: "Templates", icon: LayoutTemplate, href: "/templates" },
     { label: "AI Assistant", icon: Sparkles, badge: "Beta" },
+    { label: "Plans", icon: CreditCard, href: "/plans" },
     { label: "Domains", icon: Globe },
     { label: "Team", icon: Users },
     { label: "Settings", icon: Settings },
@@ -132,14 +134,12 @@ export function AppSidebar({
                     <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
                         Unlock custom domains, more AI generations, and priority support.
                     </p>
-                    <button
-                        type="button"
-                        disabled
-                        title="Billing is not live yet"
-                        className="mt-4 w-full rounded-lg border border-primary/40 px-3 py-2 text-sm font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    <Link
+                        href="/plans"
+                        className="mt-4 block w-full rounded-lg border border-primary/40 px-3 py-2 text-center text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
                     >
                         Upgrade now
-                    </button>
+                    </Link>
                 </div>
 
                 {user ? (
