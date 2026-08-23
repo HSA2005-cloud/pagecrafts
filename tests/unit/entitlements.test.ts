@@ -1,27 +1,54 @@
 import { describe, expect, it } from "vitest";
 
-import { assertCanPublish, checkEntitlement, hasPro } from "@/lib/data/entitlements";
+import { assertCanPublish, checkEntitlement, hasPro, resolvePlan } from "@/lib/data/entitlements";
 import { createFakeDb } from "../support/fake-db";
 
-// R3 D9 — the check publish makes before a site goes live (A-5, Doc 22 §6).
+// R3 D9 / E-1 — the check publish makes before a site goes live (A-5, Doc 22 §6).
 //
-// The table has existed since D5 and nothing read it until D8. What matters here is not the
-// query but the two properties around it: the answer comes from the database rather than
-// the request, and asking is free, so a retried publish finds the grant the first attempt
-// was made under instead of reaching for a payment already taken.
+// The rule follows the design's tier: a free design goes live for free on any plan, while a
+// paid design needs a plan that covers it or a per-project publish grant. Two properties still
+// matter most — the answer comes from the database rather than the request, and asking is free,
+// so a retried publish finds the grant the first attempt was made under.
 
 const HOUR = 3600_000;
 const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
 
-function account() {
+// A paid (premium-tier) design, so the publish gate is actually exercised: a Starter account
+// does not cover it, which is what makes a per-project grant meaningful.
+function paidAccount() {
     const db = createFakeDb({ users: [{ id: "u1" }] });
-    const project = db.insert("projects", { user_id: "u1", name: "Kettle & Co.", content_json: {} });
+    db.insert("templates", { id: "tmpl_premium", tier: "premium" });
+    const project = db.insert("projects", {
+        user_id: "u1",
+        name: "Kettle & Co.",
+        content_json: {},
+        source_template_id: "tmpl_premium",
+    });
     return { db, projectId: project.id as string };
 }
 
-describe("a grant for one project", () => {
-    it("lets that project publish", async () => {
-        const { db, projectId } = account();
+describe("a free design", () => {
+    it("goes live for free on a Starter account, with no entitlement", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+        const project = db.insert("projects", { user_id: "u1", name: "Free site", content_json: {} });
+
+        await expect(
+            assertCanPublish(db.asUser("u1"), "u1", project.id as string),
+        ).resolves.toMatchObject({ granted: true, source: "launch_offer" });
+    });
+});
+
+describe("a paid design", () => {
+    it("is refused for a Starter account with nothing paid, and says why", async () => {
+        const { db, projectId } = paidAccount();
+
+        await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).rejects.toMatchObject({
+            code: "payment_required",
+        });
+    });
+
+    it("goes live with a per-project publish grant", async () => {
+        const { db, projectId } = paidAccount();
         db.insert("entitlements", {
             user_id: "u1",
             project_id: projectId,
@@ -36,10 +63,15 @@ describe("a grant for one project", () => {
         });
     });
 
-    it("does not let a different project publish on it", async () => {
+    it("does not let a grant for one project publish a different one", async () => {
         // Paying for one site is paying for one site.
-        const { db, projectId } = account();
-        const other = db.insert("projects", { user_id: "u1", name: "Other", content_json: {} });
+        const { db, projectId } = paidAccount();
+        const other = db.insert("projects", {
+            user_id: "u1",
+            name: "Other",
+            content_json: {},
+            source_template_id: "tmpl_premium",
+        });
         db.insert("entitlements", {
             user_id: "u1",
             project_id: projectId,
@@ -52,22 +84,11 @@ describe("a grant for one project", () => {
             assertCanPublish(db.asUser("u1"), "u1", other.id as string),
         ).rejects.toMatchObject({ code: "payment_required" });
     });
-
-    it("refuses when nothing has been paid, and says why", async () => {
-        const { db, projectId } = account();
-
-        await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).rejects.toMatchObject({
-            code: "payment_required",
-        });
-    });
 });
 
 describe("a lapsed grant is not a grant", () => {
-    it("ignores a row whose expiry has passed even though it still reads active", async () => {
-        // status and expires_at are separate columns and nothing sweeps them, so a
-        // subscription that ended at midnight still says 'active'. Trusting status alone
-        // would keep a lapsed account publishing indefinitely.
-        const { db, projectId } = account();
+    it("ignores a publish row whose expiry has passed even though it still reads active", async () => {
+        const { db, projectId } = paidAccount();
         db.insert("entitlements", {
             user_id: "u1",
             project_id: projectId,
@@ -83,7 +104,7 @@ describe("a lapsed grant is not a grant", () => {
     });
 
     it("accepts one that has not expired yet", async () => {
-        const { db, projectId } = account();
+        const { db, projectId } = paidAccount();
         db.insert("entitlements", {
             user_id: "u1",
             project_id: projectId,
@@ -99,7 +120,7 @@ describe("a lapsed grant is not a grant", () => {
     });
 
     it("ignores a revoked row", async () => {
-        const { db, projectId } = account();
+        const { db, projectId } = paidAccount();
         db.insert("entitlements", {
             user_id: "u1",
             project_id: projectId,
@@ -115,8 +136,8 @@ describe("a lapsed grant is not a grant", () => {
 });
 
 describe("pro", () => {
-    it("covers publishing without a per-project grant", async () => {
-        const { db, projectId } = account();
+    it("covers publishing a paid design without a per-project grant", async () => {
+        const { db, projectId } = paidAccount();
         db.insert("entitlements", { user_id: "u1", kind: "pro", source: "pro", status: "active" });
 
         await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).resolves.toMatchObject({
@@ -126,9 +147,7 @@ describe("pro", () => {
     });
 
     it("is still distinguishable from a one-off purchase", async () => {
-        // The caller can tell a subscription from a payment, which matters for anything that
-        // reports on revenue or decides what to say when it ends.
-        const { db, projectId } = account();
+        const { db, projectId } = paidAccount();
         db.insert("entitlements", { user_id: "u1", kind: "pro", source: "pro", status: "active" });
 
         const check = await checkEntitlement(db.asUser("u1"), "u1", projectId, "publish");
@@ -136,7 +155,7 @@ describe("pro", () => {
     });
 
     it("lapses like anything else", async () => {
-        const { db } = account();
+        const { db } = paidAccount();
         db.insert("entitlements", {
             user_id: "u1",
             kind: "pro",
@@ -149,11 +168,42 @@ describe("pro", () => {
     });
 });
 
+describe("resolvePlan", () => {
+    it("is starter when there is no subscription", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+        expect(await resolvePlan(db.asUser("u1"), "u1")).toBe("starter");
+    });
+
+    it("is pro with an active pro row", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+        db.insert("entitlements", { user_id: "u1", kind: "pro", source: "pro", status: "active" });
+        expect(await resolvePlan(db.asUser("u1"), "u1")).toBe("pro");
+    });
+
+    it("is premium with an active premium row, outranking pro", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+        db.insert("entitlements", { user_id: "u1", kind: "pro", source: "pro", status: "active" });
+        db.insert("entitlements", { user_id: "u1", kind: "premium", source: "premium", status: "active" });
+        expect(await resolvePlan(db.asUser("u1"), "u1")).toBe("premium");
+    });
+
+    it("ignores a lapsed premium row and falls back to pro", async () => {
+        const db = createFakeDb({ users: [{ id: "u1" }] });
+        db.insert("entitlements", { user_id: "u1", kind: "pro", source: "pro", status: "active" });
+        db.insert("entitlements", {
+            user_id: "u1",
+            kind: "premium",
+            source: "premium",
+            status: "active",
+            expires_at: iso(-HOUR),
+        });
+        expect(await resolvePlan(db.asUser("u1"), "u1")).toBe("pro");
+    });
+});
+
 describe("asking twice", () => {
     it("grants twice and changes nothing", async () => {
-        // What makes a retried publish safe: the check is a read. If it charged, or consumed
-        // the grant, the second attempt after a network blip would cost the person again.
-        const { db, projectId } = account();
+        const { db, projectId } = paidAccount();
         db.insert("entitlements", {
             user_id: "u1",
             project_id: projectId,
