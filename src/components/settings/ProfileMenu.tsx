@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 
-import type { AccountResponse, NotifyPrefs } from "@/lib/contracts";
-import { DEFAULT_NOTIFY_PREFS } from "@/lib/contracts";
+import type { AccountResponse, BillingSummary, NotifyPrefs } from "@/lib/contracts";
+import { ACCOUNT_PLAN_LABEL, canUpgradePlan, DEFAULT_NOTIFY_PREFS } from "@/lib/contracts";
 import { apiGet, apiPatch } from "@/lib/api/client";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { PreferenceSwitch } from "@/components/settings/PreferenceSwitch";
@@ -37,13 +37,18 @@ export function ProfileMenu({
 }) {
   const pathname = usePathname();
   const [prefs, setPrefs] = useState<NotifyPrefs | null>(null);
+  const [plan, setPlan] = useState<BillingSummary["plan"] | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    void apiGet<AccountResponse>("/api/v1/account").then((account) => {
+    void Promise.all([
+      apiGet<AccountResponse>("/api/v1/account"),
+      apiGet<BillingSummary>("/api/v1/account/billing"),
+    ]).then(([account, billing]) => {
       if (cancelled) return;
       if (account.data) setPrefs(account.data.notifyPrefs);
+      if (billing.data) setPlan(billing.data.plan);
     });
     return () => {
       cancelled = true;
@@ -138,6 +143,17 @@ export function ProfileMenu({
         )}
       >
         <p className="truncate px-2 text-xs text-muted-foreground">{user.email}</p>
+        {plan ? (
+          <div className="flex min-h-9 items-center justify-between gap-3 px-2">
+            <p className="text-sm text-foreground">Current plan</p>
+            <p className="text-sm font-medium text-foreground">{ACCOUNT_PLAN_LABEL[plan]}</p>
+          </div>
+        ) : null}
+        {plan && canUpgradePlan(plan) ? (
+          <Link href="/plans" className={MENU_LINK}>
+            Upgrade
+          </Link>
+        ) : null}
         <div className="flex min-h-11 items-center justify-between gap-3 px-2">
           <p id="profile-email-notices" className="text-sm text-foreground">
             Email notices

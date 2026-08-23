@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { ApiResult } from "@/lib/contracts";
 import type { TemplatePreview as PreviewSpec } from "@/lib/discovery/preview";
 import { CATEGORY_LABELS } from "@/lib/discovery/categories";
-import { madeOfLine, priceLine, type TemplateDetail } from "@/lib/templates/detail";
+import { madeOfLine, type TemplateDetail } from "@/lib/templates/detail";
 import { Badge } from "@/components/ui/badge";
 import { UseDesignButton } from "./UseDesignButton";
 import { LockedPlanNotice } from "./LockedPlanNotice";
@@ -160,8 +160,9 @@ export function TemplateDetailModal({
     };
 
     const detail = state.status === "ready" ? state.detail : null;
-    const price = showPrice && detail && !locked ? priceLine(detail.tier, detail.priceInr) : null;
-    const paidBadge = detail ? templateBadge(detail.tier) : null;
+    const price =
+        showPrice && detail && !locked && detail.tier !== "free" ? "Free" : null;
+    const paidBadge = detail && locked ? templateBadge(detail.tier) : null;
 
     return (
         <Dialog onOpenChange={onOpenChange}>
@@ -285,7 +286,7 @@ export function TemplateDetailModal({
                                                 {price}
                                             </span>
                                             <span className="text-xs text-muted-foreground">
-                                                listed price
+                                                Included in your plan
                                             </span>
                                         </span>
                                     ) : null}
@@ -294,6 +295,7 @@ export function TemplateDetailModal({
                                         name={detail.name}
                                         tier={detail.tier}
                                         showPayNote={showPrice}
+                                        unlocked={!locked}
                                     />
                                 </>
                             )}

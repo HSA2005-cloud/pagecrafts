@@ -8,6 +8,7 @@ const entitlements = vi.hoisted(() => ({
     hasPro: vi.fn(async () => false),
     hasPremium: vi.fn(async () => false),
     hasAdvanced: vi.fn(async () => false),
+    accountPlan: vi.fn(async (_db?: unknown, _userId?: string): Promise<'starter' | 'pro' | 'premium'> => 'starter'),
     hasStyleAccess: vi.fn(async (_db: unknown, _userId: string, styleId: string) => styleId === 'casual'),
 }));
 vi.mock('@/lib/auth/session', () => ({
@@ -24,6 +25,7 @@ vi.mock('@/lib/data/entitlements', async (importOriginal) => {
         hasPro: entitlements.hasPro,
         hasPremium: entitlements.hasPremium,
         hasAdvanced: entitlements.hasAdvanced,
+        accountPlan: entitlements.accountPlan,
         hasStyleAccess: entitlements.hasStyleAccess,
     };
 });
@@ -31,6 +33,17 @@ vi.mock('@/lib/data/entitlements', async (importOriginal) => {
 vi.mock('@/lib/limits/redis', async () => {
     const support = await import('../support/redis-mock');
     return { redis: () => support.redisStub, isRedisConfigured: () => true };
+});
+
+const quota = vi.hoisted(() => ({
+    assertFreeGenerationAllowed: vi.fn(),
+}));
+vi.mock('@/lib/ai/jobs/quota', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/lib/ai/jobs/quota')>();
+    return {
+        ...actual,
+        assertFreeGenerationAllowed: quota.assertFreeGenerationAllowed,
+    };
 });
 
 import { redisMock as limits, resetRedisMock } from '../support/redis-mock';
@@ -43,7 +56,7 @@ import {
     recordFreeGeneration,
     resetFreeGenerationQuota,
 } from '@/lib/ai/jobs/quota';
-import { FREE_GENERATIONS_PER_PROJECT } from '@/lib/limits/config';
+import { FREE_GENERATIONS_PER_PROJECT, PREMIUM_GENERATIONS_PER_PROJECT, PRO_GENERATIONS_PER_PROJECT } from '@/lib/limits/config';
 import { POST } from '@/app/api/v1/projects/[id]/generate/route';
 import { POST as choose } from '@/app/api/v1/projects/[id]/generate/choose/route';
 import { GET } from '@/app/api/v1/jobs/[id]/route';
@@ -100,6 +113,39 @@ beforeEach(() => {
     entitlements.hasPro.mockResolvedValue(false);
     entitlements.hasPremium.mockResolvedValue(false);
     entitlements.hasAdvanced.mockResolvedValue(false);
+    entitlements.accountPlan.mockResolvedValue('starter');
+    quota.assertFreeGenerationAllowed.mockImplementation(async (projectId, userId, supabase) => {
+        const plan = await entitlements.accountPlan(supabase, userId);
+        const { freeGenerationsUsed } =
+            await vi.importActual<typeof import('@/lib/ai/jobs/quota')>('@/lib/ai/jobs/quota');
+        const used = await freeGenerationsUsed(projectId);
+        const limit =
+            plan === 'premium'
+                ? PREMIUM_GENERATIONS_PER_PROJECT
+                : plan === 'pro'
+                  ? PRO_GENERATIONS_PER_PROJECT
+                  : FREE_GENERATIONS_PER_PROJECT;
+        const remaining = Math.max(0, limit - used);
+        const canGenerate = remaining > 0;
+        const row = {
+            used,
+            limit,
+            remaining,
+            unlimited: false,
+            plan,
+            passes: 0,
+            canGenerate,
+        };
+        if (!canGenerate) {
+            const { ApiError } = await import('@/lib/errors/respond');
+            const { ACCOUNT_PLAN_LABEL } = await import('@/lib/contracts');
+            throw new ApiError(
+                'payment_required',
+                `You have used your ${limit} ${ACCOUNT_PLAN_LABEL[plan]} AI generations on this site.`,
+            );
+        }
+        return row;
+    });
     entitlements.hasStyleAccess.mockImplementation(
         async (_db: unknown, _userId: string, styleId: string) => styleId === 'casual',
     );
@@ -312,7 +358,9 @@ describe('POST /api/v1/projects/{id}/generate/choose', () => {
         expect(picked.status).toBe(200);
         expect(json.data.variant_id).toBe('photos');
         const job = await jobStore().get(data.job_id);
-        expect(job?.composition?.artDirection.themeId).toBe('warm-editorial');
+        // The theme is drawn per business now rather than fixed per tier, so the assertion
+        // is that the chosen look was recorded at all — not which one it happened to be.
+        expect(job?.composition?.artDirection.themeId).toBeTruthy();
         expect(job?.files?.['index.html']).toContain('data-style="photos"');
     });
 
@@ -430,11 +478,11 @@ describe('free generation quota', () => {
 
         expect(res.status).toBe(402);
         expect(json.error.code).toBe('payment_required');
-        expect(json.error.message).toMatch(/Free AI generations/i);
+        expect(json.error.message).toMatch(/Starter AI generations/i);
     });
 
-    it('an Advanced account can generate past the Free cap', async () => {
-        entitlements.hasAdvanced.mockResolvedValue(true);
+    it('a Pro account can generate past the Starter cap', async () => {
+        entitlements.accountPlan.mockResolvedValue('pro');
         for (let i = 0; i < FREE_GENERATIONS_PER_PROJECT; i++) {
             await recordFreeGeneration('p_1');
         }

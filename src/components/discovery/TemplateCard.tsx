@@ -15,13 +15,17 @@ function CardFace({
     compact,
     showPrice,
     locked,
+    unlocked,
 }: {
     template: TemplateSummary;
     index: number;
     compact: boolean;
     showPrice: boolean;
     locked: boolean;
+    unlocked: boolean;
 }) {
+    const paid = Boolean(templateBadge(template.tier));
+    const showFree = !locked && paid;
     return (
         <>
             <span className="relative block overflow-hidden">
@@ -49,6 +53,7 @@ function CardFace({
                         tier={template.tier}
                         priceInr={template.priceInr}
                         locked={locked}
+                        unlocked={showFree}
                         className="absolute right-2 top-2 z-[2] shadow-sm"
                     />
                 ) : null}
@@ -119,6 +124,7 @@ export function TemplateCard({
                         compact={compact}
                         showPrice={showPrice}
                         locked={locked}
+                        unlocked={unlocked}
                     />
                 </button>
             </TemplateDetailModal>

@@ -81,6 +81,39 @@ describe("webhook verification", () => {
     });
 });
 
+describe("checkout signature verification", () => {
+    const KEY_SECRET = "rzp_test_secret";
+
+    beforeEach(() => {
+        vi.stubEnv("RAZORPAY_KEY_ID", "rzp_test_key");
+        vi.stubEnv("RAZORPAY_KEY_SECRET", KEY_SECRET);
+        vi.resetModules();
+    });
+
+    function sign(orderId: string, paymentId: string, secret = KEY_SECRET) {
+        return createHmac("sha256", secret).update(`${orderId}|${paymentId}`).digest("hex");
+    }
+
+    it("accepts HMAC(order_id|payment_id, key_secret)", async () => {
+        const { verifyPaymentSignature } = await import("@/lib/payments/razorpay");
+        expect(verifyPaymentSignature("order_1", "pay_1", sign("order_1", "pay_1"))).toBe(true);
+    });
+
+    it("refuses a forged signature", async () => {
+        const { verifyPaymentSignature } = await import("@/lib/payments/razorpay");
+        expect(verifyPaymentSignature("order_1", "pay_1", sign("order_1", "pay_1", "other"))).toBe(
+            false,
+        );
+    });
+
+    it("refuses when order or payment id was swapped", async () => {
+        const { verifyPaymentSignature } = await import("@/lib/payments/razorpay");
+        const signature = sign("order_1", "pay_1");
+        expect(verifyPaymentSignature("order_2", "pay_1", signature)).toBe(false);
+        expect(verifyPaymentSignature("order_1", "pay_2", signature)).toBe(false);
+    });
+});
+
 describe("reading a webhook body", () => {
     const entity = {
         id: "pay_123",
@@ -140,20 +173,32 @@ describe("reading a webhook body", () => {
 });
 
 describe("the routes that open checkout", () => {
-    it("grants Pro from the webhook when the notes say so", () => {
+    it("grants Pro from verify and the webhook when the notes say so", () => {
         const webhook = readFileSync(
             join(process.cwd(), "src", "app", "api", "v1", "payments", "razorpay", "webhook", "route.ts"),
+            "utf8",
+        );
+        const verify = readFileSync(
+            join(process.cwd(), "src", "app", "api", "v1", "payments", "razorpay", "verify", "route.ts"),
             "utf8",
         );
         const hook = readFileSync(
             join(process.cwd(), "src", "hooks", "useRazorpayCheckout.tsx"),
             "utf8",
         );
+        const checkout = readFileSync(
+            join(process.cwd(), "src", "lib", "payments", "checkout.ts"),
+            "utf8",
+        );
 
-        expect(webhook).toContain("grantTemplate");
-        expect(webhook).toContain("grantStyle");
-        expect(webhook).toContain('kind === "template"');
-        expect(webhook).toContain('kind === "style"');
+        expect(webhook).toContain("fulfillPaidNotes");
+        expect(verify).toContain("fulfillPaidNotes");
+        expect(verify).toContain("fetchOrder");
+        expect(verify).toContain("requireUserId");
+        expect(verify).toContain("verifyPaymentSignature");
+        expect(checkout).toContain("fulfillPaidNotes");
+        expect(checkout).toContain("grantPro");
+        expect(checkout).toContain("grantPremium");
         expect(hook).toContain("openTemplateCheckout");
         expect(hook).toContain("openStyleCheckout");
         expect(hook).toContain("openPlanCheckout");
@@ -165,36 +210,18 @@ describe("the routes that open checkout", () => {
         expect(hook).toContain("/api/v1/account/packages/advanced/checkout");
         expect(hook).toContain("/api/v1/account/packages/generation/checkout");
         expect(hook).toContain("checkout.razorpay.com");
-        expect(webhook).toContain("grantAdvanced");
-        expect(webhook).toContain("grantGenerationPassPurchase");
-        expect(webhook).toContain('kind === "advanced"');
-        expect(webhook).toContain('kind === "generation_pass"');
-        expect(webhook).toContain("grantPro");
-        expect(webhook).toContain("grantPremium");
-        expect(webhook).not.toContain("verified: true");
     });
 
-    it("wires Packages checkout like publish — confirm dialog, no paymentsReady hard-disable", () => {
-        const panel = readFileSync(
-            join(process.cwd(), "src", "components", "settings", "PackagesPanel.tsx"),
-            "utf8",
-        );
+    it("redirects the old Packages page to User Plans", () => {
         const page = readFileSync(
             join(process.cwd(), "src", "app", "packages", "page.tsx"),
             "utf8",
         );
 
-        expect(panel).toContain("confirmDialog");
-        expect(panel).toContain("openAdvancedCheckout");
-        expect(panel).toContain("openGenerationPassCheckout");
-        expect(panel).toContain("RAZORPAY_KEY_ID");
-        expect(panel).toContain("RAZORPAY_KEY_SECRET");
-        expect(panel).not.toContain("disabled={!billing.paymentsReady");
-        expect(page).toContain("paymentsConfigured");
-        expect(page).toContain("paymentsReady: paymentsConfigured()");
+        expect(page).toContain('redirect("/plans")');
     });
 
-    it("opens Razorpay when a paid template or look is chosen, and does not grant from the browser", () => {
+    it("opens Razorpay when a paid template or look is chosen, and grants only after server verify", () => {
         const unlock = readFileSync(
             join(process.cwd(), "src", "hooks", "useUnlockPaidDesign.ts"),
             "utf8",
@@ -216,6 +243,10 @@ describe("the routes that open checkout", () => {
             join(process.cwd(), "src", "app", "api", "v1", "payments", "razorpay", "verify", "route.ts"),
             "utf8",
         );
+        const plans = readFileSync(
+            join(process.cwd(), "src", "components", "settings", "PlansPanel.tsx"),
+            "utf8",
+        );
 
         expect(unlock).toContain("openPlanCheckout");
         expect(unlock).toContain("waitForPlanGrant");
@@ -228,7 +259,14 @@ describe("the routes that open checkout", () => {
         expect(fork).toContain("PAID_DESIGN_MESSAGE");
         expect(choose).toContain("hasStyleAccess");
         expect(choose).not.toContain("hasPro");
-        expect(verify).not.toContain("grantPro");
-        expect(verify).not.toContain("grantPublish");
+        // Browser success is not enough — verify must HMAC and fulfill from order notes.
+        expect(verify).toContain("verifyPaymentSignature");
+        expect(verify).toContain("fulfillPaidNotes");
+        expect(verify).not.toContain("grantPublish(");
+        expect(plans).toContain("Choose Pro");
+        expect(plans).toContain("Choose Premium");
+        expect(plans).toContain("Payment cancelled. Your current plan has not changed.");
+        expect(plans).toContain("paymentsReady");
+        expect(plans).toContain("production-payments-setup");
     });
 });

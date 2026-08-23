@@ -3,6 +3,7 @@ import { compositionShell } from '@/lib/render/page-shell';
 import { sectionContentKey } from './schema';
 import type { StyleId } from './styles';
 import { motionMotifMarkup, motionStageMarkup, motionTickerMarkup } from './motion-motif';
+import { interactionKit } from './interaction';
 import {
     pageHref,
     planSitePages,
@@ -392,30 +393,72 @@ body:has([data-style="motion"]) {
   min-height: 92vh;
   padding: 7rem 6vw 8.5rem;
 }
-[data-style="motion"] [data-type="hero"] .img-slot { display: none; }
+[data-style="motion"] [data-type="hero"] .img-slot {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0.72;
+  animation: pc-kenburns 26s ease-in-out infinite alternate;
+  will-change: transform;
+}
+[data-style="motion"] [data-type="hero"] .img-slot img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+}
+[data-style="motion"] [data-type="hero"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(8, 5, 16, 0.5) 0%,
+    rgba(8, 5, 16, 0.18) 38%,
+    rgba(8, 5, 16, 0.82) 100%
+  );
+}
 [data-style="motion"] [data-type="hero"] .hero-copy {
   position: relative;
   z-index: 3;
-  max-width: 18ch;
+  max-width: min(52rem, 88vw);
 }
 [data-style="motion"] [data-type="hero"] .lede {
   margin-inline: auto;
-  font-size: 1.15rem;
-  color: rgba(246, 243, 255, 0.72);
+  max-width: 46ch;
+  font-size: clamp(1.05rem, 1.5vw, 1.35rem);
+  line-height: 1.6;
+  color: rgba(250, 248, 255, 0.92);
+  text-shadow: 0 1px 14px rgba(8, 5, 16, 0.7);
 }
 [data-style="motion"] [data-type="hero"] h1 {
-  font-size: clamp(3.1rem, 11vw, 7.4rem);
+  font-size: clamp(2.4rem, 8.2vw, 6.6rem);
   font-weight: 800;
-  letter-spacing: -0.07em;
-  line-height: 0.88;
+  letter-spacing: -0.055em;
+  line-height: 0.94;
   margin: 0 auto 0.7em;
-  max-width: 12ch;
+  max-width: min(16ch, 100%);
+  overflow-wrap: break-word;
+  text-wrap: balance;
   background: linear-gradient(115deg, #fff 8%, #fff 32%, var(--accent) 52%, #fbbf24 74%, #fff 100%);
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   animation: pc-type 9s ease-in-out infinite;
+  filter: drop-shadow(0 2px 18px rgba(8, 5, 16, 0.75));
+}
+@keyframes pc-kenburns {
+  from { transform: scale(1.05) translate3d(0, 0, 0); }
+  to { transform: scale(1.17) translate3d(0, -2%, 0); }
 }
 [data-style="motion"] .eyebrow {
   display: inline-flex;
@@ -497,9 +540,9 @@ body:has([data-style="motion"]) {
 }
 [data-style="motion"] .motion-motif svg {
   position: absolute;
-  right: 2%;
-  top: 8%;
-  width: min(52vw, 540px);
+  right: 4%;
+  top: 10%;
+  width: min(26vw, 260px);
   height: auto;
   display: block;
   filter: drop-shadow(0 0 36px color-mix(in srgb, var(--accent) 45%, transparent));
@@ -735,6 +778,7 @@ body:has([data-style="motion"]) {
   [data-style="motion"] .motion-flare,
   [data-style="motion"] .motion-ticker p,
   [data-style="motion"] [data-type="hero"] h1,
+  [data-style="motion"] [data-type="hero"] .img-slot,
   [data-style="motion"] .cta,
   [data-style="motion"] .cta::after { animation: none; }
 }
@@ -755,7 +799,14 @@ function pageInner(
 }
 
 /** A generated site as the file tree persistence already stores. */
-export function compositionToFiles(composition: Composition, style?: StyleId): FileMap {
+export function compositionToFiles(
+    composition: Composition,
+    style?: StyleId,
+    seed = '',
+): FileMap {
+    // Premium only. interactionKit returns nothing for the other two looks, so a Free or Pro
+    // page ships byte-identical to before.
+    const interaction = style ? interactionKit(style, seed, composition.vertical) : [];
     const visible = composition.sections.filter((s) => s.visible);
     const pages = planSitePages(composition);
     const title = composition.meta.title || 'Home';
@@ -785,6 +836,7 @@ export function compositionToFiles(composition: Composition, style?: StyleId): F
             lang: composition.meta.lang,
             artDirection: composition.artDirection,
             body,
+            interaction,
         });
     }
 

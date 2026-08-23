@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { EntitlementCheck, EntitlementKind, EntitlementSource } from "@/lib/contracts";
+import type { EntitlementCheck, EntitlementKind, EntitlementSource, AccountPlan } from "@/lib/contracts";
 import { ApiError } from "@/lib/errors/respond";
 import { requiredPlanForTemplate } from "@/lib/payments/pricing";
+import { supabaseAdminOrNull } from "./supabase-admin";
 
 // The server-side entitlement check (R3 D9, A-5, Doc 22 §6).
 //
@@ -122,6 +123,16 @@ export async function hasPremium(supabase: SupabaseClient, userId: string): Prom
     return (await checkEntitlement(supabase, userId, null, "premium")).granted;
 }
 
+/** Live account plan from entitlements — Starter when no paid plan row is active. */
+export async function accountPlan(
+    supabase: SupabaseClient,
+    userId: string,
+): Promise<AccountPlan> {
+    if (await hasPremium(supabase, userId)) return "premium";
+    if (await hasPro(supabase, userId)) return "pro";
+    return "starter";
+}
+
 /** True when the account holds the Advanced AI usage package. */
 export async function hasAdvanced(supabase: SupabaseClient, userId: string): Promise<boolean> {
     return (await checkEntitlement(supabase, userId, null, "advanced")).granted;
@@ -194,6 +205,10 @@ export async function assertCanUseStyle(
 /**
  * The gate publish calls. Throws rather than returning false, so a caller cannot forget to
  * look at the answer — the failure mode of a boolean gate is publishing anyway.
+ *
+ * Going live on a PageCrafts address is free. When nothing is paid yet, a publish grant is
+ * written here so the host step can proceed. Custom domain registration is paid separately,
+ * later — not at this gate.
  */
 export async function assertCanPublish(
     supabase: SupabaseClient,
@@ -202,15 +217,23 @@ export async function assertCanPublish(
 ): Promise<EntitlementCheck> {
     const check = await checkEntitlement(supabase, userId, projectId, "publish");
 
-    if (!check.granted) {
-        throw new ApiError(
-            "payment_required",
-            "This site needs to be paid for before it can go live.",
-            `projectId=${projectId}`,
-        );
+    if (check.granted) return check;
+
+    const row = {
+        user_id: userId,
+        project_id: projectId,
+        kind: "publish" as const,
+        source: "launch_offer" as const,
+        status: "active",
+    };
+    const writer = supabaseAdminOrNull() ?? supabase;
+    const { error } = await writer.from("entitlements").insert(row);
+
+    if (error && error.code !== "23505") {
+        throw new ApiError("internal", "Could not unlock publishing.", error.message);
     }
 
-    return check;
+    return { kind: "publish", granted: true, source: "launch_offer", expiresAt: null };
 }
 
 /** Doc 22 P5: the first change within this long after going live is free. */

@@ -20,9 +20,18 @@ const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
 
 const ORDERS_URL = "https://api.razorpay.com/v1/orders";
 
+export type OrderKind =
+    | "publish"
+    | "pro"
+    | "premium"
+    | "template"
+    | "style"
+    | "advanced"
+    | "generation_pass";
+
 export interface OrderNotes {
     userId: string;
-    kind: "publish" | "pro" | "premium" | "template" | "style" | "advanced" | "generation_pass";
+    kind: OrderKind;
     /** Present for a publish order; omitted for item and account unlocks. */
     projectId?: string;
     /** Catalogue design being bought. */
@@ -44,9 +53,12 @@ export interface RazorpayOrder {
 
 function credentials(): { keyId: string; keySecret: string } {
     if (!KEY_ID || !KEY_SECRET) {
+        console.error(
+            "[payments] missing RAZORPAY_KEY_ID and/or RAZORPAY_KEY_SECRET — cannot create or verify orders",
+        );
         throw new ApiError(
             "internal",
-            "Payments are not set up on this server.",
+            "We couldn't start the payment. Payments are not set up on this server yet.",
             "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required",
         );
     }
@@ -88,11 +100,25 @@ export async function createOrder(
     const body = (await response.json()) as Record<string, unknown>;
 
     if (!response.ok) {
-        const error = body.error as { description?: string } | undefined;
+        const error = body.error as
+            | { description?: string; code?: string; reason?: string }
+            | undefined;
+        const detail = error?.description ?? `razorpay ${response.status}`;
+
+        // The description was only ever passed as ApiError's third argument, which nothing
+        // logs and nothing returns. So a wrong key, a live/test mismatch or a rejected
+        // amount all arrived on screen as the same sentence with the reason discarded.
+        console.error(
+            `[razorpay] order refused ${response.status}`,
+            error?.code ?? "",
+            error?.reason ?? "",
+            detail,
+        );
+
         throw new ApiError(
             "internal",
             "We could not start that payment. Please try again.",
-            error?.description ?? `razorpay ${response.status}`,
+            detail,
         );
     }
 
@@ -100,6 +126,51 @@ export async function createOrder(
         id: body.id as string,
         amount: Number(body.amount),
         currency: body.currency as string,
+    };
+}
+
+export interface FetchedOrder {
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    notes: Partial<OrderNotes>;
+}
+
+/**
+ * Read an order back from Razorpay (notes + amount). Used after checkout signature
+ * verification so the server — not the browser — decides what the payment unlocked.
+ */
+export async function fetchOrder(orderId: string): Promise<FetchedOrder> {
+    const { keyId, keySecret } = credentials();
+    const auth = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+
+    const response = await fetch(`${ORDERS_URL}/${encodeURIComponent(orderId)}`, {
+        headers: { Authorization: `Basic ${auth}` },
+    });
+
+    const body = (await response.json()) as Record<string, unknown>;
+
+    if (!response.ok) {
+        const error = body.error as { description?: string } | undefined;
+        console.error("[payments] could not fetch Razorpay order", {
+            orderId,
+            status: response.status,
+            description: error?.description,
+        });
+        throw new ApiError(
+            "internal",
+            "We couldn't confirm that payment. Please try again in a moment.",
+            error?.description ?? `razorpay order ${response.status}`,
+        );
+    }
+
+    return {
+        id: body.id as string,
+        amount: Number(body.amount),
+        currency: (body.currency as string) ?? "INR",
+        status: (body.status as string) ?? "",
+        notes: (body.notes ?? {}) as Partial<OrderNotes>,
     };
 }
 
@@ -144,8 +215,9 @@ export function verifyWebhook(rawBody: string, signature: string | null): boolea
  * not WEBHOOK_SECRET, because this proves the payment round-trip was genuine, not
  * that a webhook body was.
  *
- * This check is a courtesy: it lets the UI show "Payment confirmed" immediately.
- * The entitlement is still granted only by the webhook, where the real trust lies.
+ * After this passes, the verify route loads the order notes from Razorpay and grants
+ * the matching entitlement. The webhook remains a second, idempotent path for the
+ * same grant when the browser never reaches verify.
  */
 export function verifyPaymentSignature(
     orderId: string,

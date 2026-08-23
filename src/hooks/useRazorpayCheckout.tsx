@@ -226,6 +226,7 @@ export function useRazorpayCheckout(
                         ondismiss: () => {
                             paintRazorpayBackdrop(false);
                             setStatus('idle');
+                            setError(null);
                             onDismiss?.();
                         },
                     },
@@ -236,7 +237,11 @@ export function useRazorpayCheckout(
                 rzp.open();
             } catch (err) {
                 paintRazorpayBackdrop(false);
-                const message = err instanceof Error ? err.message : 'Payment failed.';
+                const message =
+                    err instanceof Error
+                        ? err.message
+                        : "We couldn't start the payment. Please try again.";
+                console.error('[payments] checkout failed', message);
                 setStatus('error');
                 setError(message);
                 onError?.(message);

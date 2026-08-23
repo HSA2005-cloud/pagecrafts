@@ -442,12 +442,28 @@ export async function startPlanCheckout(
     userId: string,
     plan: "pro" | "premium",
 ): Promise<CheckoutResponse> {
+    if (plan !== "pro" && plan !== "premium") {
+        throw new ApiError("validation_failed", "That plan cannot be purchased.");
+    }
+
+    if (!paymentsConfigured()) {
+        console.error(
+            "[payments] plan checkout blocked — RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET missing",
+        );
+        throw new ApiError(
+            "internal",
+            "We couldn't start the payment. Payments are not set up on this server yet.",
+            "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required",
+        );
+    }
+
     const billing = await getBilling(supabase, userId);
     if (plan === "pro" && (billing.plan === "pro" || billing.plan === "premium")) {
         return { granted: true };
     }
     if (plan === "premium" && billing.plan === "premium") return { granted: true };
 
+    // Price is server-owned. The browser only names the plan.
     const priceInr = plan === "premium" ? PREMIUM_PRICE_INR : PRO_PRICE_INR;
     const notes: OrderNotes = { userId, kind: plan };
     const order = await createOrder(
@@ -536,6 +552,121 @@ export async function startGenerationPassCheckout(
 
 export async function grantGenerationPassPurchase(userId: string): Promise<void> {
     await grantGenerationPasses(userId, 1);
+}
+
+const ORDER_KINDS = new Set<OrderNotes["kind"]>([
+    "publish",
+    "pro",
+    "premium",
+    "template",
+    "style",
+    "advanced",
+    "generation_pass",
+]);
+
+/**
+ * Apply a paid order's notes: unlock the plan, design, look, package, or publish row.
+ *
+ * Used by both the checkout verify route (after HMAC of order|payment) and the
+ * webhook (after HMAC of the raw body). Grants are idempotent — a second call for
+ * the same payment is a no-op, never a downgrade.
+ *
+ * When `requireUserId` is set (browser verify), notes.userId must match the signed-in
+ * person so one account cannot claim another account's order.
+ */
+export async function fulfillPaidNotes(
+    notes: Partial<OrderNotes>,
+    meta: { paymentId: string; orderId: string },
+    options?: { requireUserId?: string },
+): Promise<{ kind: OrderNotes["kind"] }> {
+    const { userId, kind, projectId, templateId, styleId } = notes;
+
+    if (!userId || !kind || !ORDER_KINDS.has(kind as OrderNotes["kind"])) {
+        console.error("[payments] captured payment carries no usable notes", {
+            paymentId: meta.paymentId,
+            orderId: meta.orderId,
+        });
+        throw new ApiError(
+            "validation_failed",
+            "This payment could not be matched to a purchase. Please contact support if you were charged.",
+        );
+    }
+
+    const resolvedKind = kind as OrderNotes["kind"];
+
+    if (options?.requireUserId && options.requireUserId !== userId) {
+        console.error("[payments] verified payment user mismatch", {
+            paymentId: meta.paymentId,
+            orderId: meta.orderId,
+            expectedUserId: options.requireUserId,
+        });
+        throw new ApiError(
+            "forbidden",
+            "This payment belongs to a different account.",
+        );
+    }
+
+    if (resolvedKind === "advanced") {
+        await grantAdvanced(userId);
+        console.info("[payments] Advanced unlocked", { userId, paymentId: meta.paymentId });
+        return { kind: resolvedKind };
+    }
+
+    if (resolvedKind === "generation_pass") {
+        await grantGenerationPassPurchase(userId);
+        console.info("[payments] generation pass granted", { userId, paymentId: meta.paymentId });
+        return { kind: resolvedKind };
+    }
+
+    if (resolvedKind === "template") {
+        if (!templateId) {
+            console.error("[payments] captured template payment carries no design", meta);
+            throw new ApiError(
+                "validation_failed",
+                "This payment could not be matched to a design. Please contact support if you were charged.",
+            );
+        }
+        await grantTemplate(userId, templateId);
+        console.info("[payments] template unlocked", {
+            userId,
+            templateId,
+            paymentId: meta.paymentId,
+        });
+        return { kind: resolvedKind };
+    }
+
+    if (resolvedKind === "style") {
+        if (!styleId) {
+            console.error("[payments] captured look payment carries no style", meta);
+            throw new ApiError(
+                "validation_failed",
+                "This payment could not be matched to a look. Please contact support if you were charged.",
+            );
+        }
+        await grantStyle(userId, styleId);
+        console.info("[payments] look unlocked", { userId, styleId, paymentId: meta.paymentId });
+        return { kind: resolvedKind };
+    }
+
+    if (resolvedKind === "pro" || resolvedKind === "premium") {
+        if (resolvedKind === "premium") await grantPremium(userId);
+        else await grantPro(userId);
+        const label = resolvedKind === "premium" ? "Premium" : "Pro";
+        console.info(`[payments] ${label} unlocked`, { userId, paymentId: meta.paymentId });
+        return { kind: resolvedKind };
+    }
+
+    if (!projectId) {
+        console.error("[payments] captured publish payment carries no project", meta);
+        throw new ApiError(
+            "validation_failed",
+            "This payment could not be matched to a site. Please contact support if you were charged.",
+        );
+    }
+
+    await grantPublish(projectId, userId, "paid");
+    console.info("[payments] publish unlocked", { projectId, paymentId: meta.paymentId });
+    return { kind: resolvedKind };
 }
 
 /** What Settings and /plans show: the live plan, whether checkout can open, and every grant. */

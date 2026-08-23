@@ -34,18 +34,19 @@ describe("account settings", () => {
 
   it("sends the sidebar to designs, and plans live on /plans", () => {
     const sidebar = read("src", "components", "app", "AppSidebar.tsx");
-    const publish = read("src", "components", "editor", "PublishCheckoutButton.tsx");
+    const publish = read("src", "components", "editor", "GoLiveButton.tsx");
     const packages = read("src", "components", "settings", "PackagesPanel.tsx");
     const plansPage = read("src", "app", "plans", "page.tsx");
 
-    expect(sidebar).toContain('href="/templates"');
+    expect(sidebar).toContain('href: "/plans"');
+    expect(sidebar).not.toContain('href="/packages"');
     expect(sidebar).toContain("Browse designs");
     expect(sidebar).not.toContain("UpgradeToProButton");
     expect(sidebar).not.toContain("Billing is not live yet");
     expect(plansPage).toContain("PlansPanel");
-    expect(publish).toContain("openCheckout");
-    expect(publish).toContain("checkout");
-    expect(publish).toContain("confirmDialog");
+    expect(publish).toContain("Go Live");
+    expect(publish).toContain("startProjectPublish");
+    expect(publish).toContain("Your site is live");
     expect(packages).toContain("confirmDialog");
     expect(packages).toContain("openAdvancedCheckout");
     expect(packages).toContain("openGenerationPassCheckout");
@@ -55,11 +56,20 @@ describe("account settings", () => {
   it("puts User Plans on the username menu", () => {
     const menu = read("src", "components", "settings", "ProfileMenu.tsx");
     const header = read("src", "components", "landing", "SiteHeader.tsx");
+    const top = read("src", "components", "app", "AppTopBar.tsx");
     const remove = read("src", "components", "settings", "DeleteAccount.tsx");
 
     expect(header).toContain("<ProfileMenu");
+    expect(header).toContain('href="/plans"');
+    expect(header).toContain("User Plans");
+    expect(top).toContain('href="/plans"');
+    expect(top).toContain("User Plans");
     expect(menu).toContain('href="/plans"');
     expect(menu).toContain("User Plans");
+    expect(menu).toContain("Current plan");
+    expect(menu).toContain("canUpgradePlan");
+    expect(menu).toContain("Upgrade");
+    expect(menu).toContain("/api/v1/account/billing");
     expect(menu).toContain("/api/v1/account");
     expect(menu).toContain("Email notices");
     expect(menu).toContain('href="/?slide=settings"');
@@ -94,9 +104,12 @@ describe("paid designs", () => {
     expect(card).toContain("TemplateDetailModal");
     expect(detail).toContain("LockedPlanNotice");
     expect(detail).not.toContain("BuyPaidItemCta");
-    expect(notice).toContain("See User Plans");
+    expect(notice).toContain("Upgrade to");
     expect(notice).toContain('href="/plans"');
     expect(plans).toContain("openPlanCheckout");
-    expect(plans).toContain("Upgrade to");
+    expect(plans).toContain("Choose Pro");
+    expect(plans).toContain("Choose Premium");
+    expect(plans).toContain("Current plan");
+    expect(plans).toContain("Popular");
   });
 });

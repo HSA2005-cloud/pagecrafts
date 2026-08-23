@@ -1,13 +1,15 @@
-import { apiGet, apiPatch, apiPut, apiUpload } from '@/lib/api/client';
+import { apiGet, apiPatch, apiPost, apiPostHeaders, apiPut, apiUpload } from '@/lib/api/client';
 import type {
     AssetResponse,
     Commit,
     Composition,
     ContentOp,
+    DeploymentResponse,
     EditProposal,
     FileMap,
     ImageSearchResponse,
     ListCommitsResponse,
+    PublishProjectResponse,
     RestoreResponse,
     GetProjectFilesResponse,
     PatchContentResponse,
@@ -15,7 +17,6 @@ import type {
     ProjectDetail,
     SectionKey,
 } from '@/lib/contracts';
-import { apiPost } from '@/lib/api/client';
 import type { CreateCommitResponse } from '@/lib/contracts';
 
 export interface CommitResult {
@@ -306,4 +307,28 @@ export async function loadGenerationJob(
 
     if (error || !data) return { job: null, error: error ?? EMPTY_REPLY };
     return { job: data, error: null };
+}
+
+export async function startProjectPublish(
+    projectId: string,
+    idempotencyKey: string,
+): Promise<{ deploymentId: string | null; error: string | null }> {
+    const { data, error } = await apiPostHeaders<PublishProjectResponse>(
+        `${projectUrl(projectId)}/publish`,
+        { 'Idempotency-Key': idempotencyKey },
+    );
+
+    if (error || !data) return { deploymentId: null, error: error ?? EMPTY_REPLY };
+    return { deploymentId: data.deploymentId, error: null };
+}
+
+export async function pollDeployment(
+    deploymentId: string,
+): Promise<{ deployment: DeploymentResponse | null; error: string | null }> {
+    const { data, error } = await apiGet<DeploymentResponse>(
+        `/api/v1/deployments/${encodeURIComponent(deploymentId)}`,
+    );
+
+    if (error || !data) return { deployment: null, error: error ?? EMPTY_REPLY };
+    return { deployment: data, error: null };
 }
