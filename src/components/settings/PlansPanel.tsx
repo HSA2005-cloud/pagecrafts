@@ -21,6 +21,7 @@ function PlanCta({
     covered,
     busy,
     pending,
+    paymentsReady,
     onUpgrade,
 }: {
     id: AccountPlan;
@@ -28,6 +29,7 @@ function PlanCta({
     covered: boolean;
     busy: boolean;
     pending: boolean;
+    paymentsReady: boolean;
     onUpgrade: (plan: "pro" | "premium") => void;
 }) {
     if (active) {
@@ -57,7 +59,7 @@ function PlanCta({
                 type="button"
                 variant="brand"
                 className="min-h-11 w-full cursor-pointer rounded-xl font-semibold"
-                disabled={busy}
+                disabled={busy || !paymentsReady}
                 onClick={() => onUpgrade("pro")}
             >
                 {busy && pending ? "Opening Razorpay…" : "Choose Pro"}
@@ -71,7 +73,7 @@ function PlanCta({
                 type="button"
                 variant="destructive"
                 className="min-h-11 w-full cursor-pointer rounded-xl font-semibold"
-                disabled={busy}
+                disabled={busy || !paymentsReady}
                 onClick={() => onUpgrade("premium")}
             >
                 {busy && pending ? "Opening Razorpay…" : "Choose Premium"}
@@ -132,6 +134,12 @@ export function PlansPanel({
     async function upgrade(plan: "pro" | "premium") {
         if (!signedIn) {
             router.push(`/signin?next=${encodeURIComponent("/plans")}`);
+            return;
+        }
+        if (!billing.paymentsReady) {
+            setMessage(
+                "Checkout is not set up on this server yet. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to the server environment, then restart the app.",
+            );
             return;
         }
         setMessage(null);
@@ -243,6 +251,7 @@ export function PlansPanel({
                                     covered={covered && !active}
                                     busy={busy}
                                     pending={pending === id}
+                                    paymentsReady={billing.paymentsReady}
                                     onUpgrade={(plan) => void upgrade(plan)}
                                 />
                             </div>
@@ -262,6 +271,18 @@ export function PlansPanel({
                     {error ?? message}
                 </p>
             )}
+
+            {!billing.paymentsReady ? (
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                    Payments are not configured on this server yet. Set{" "}
+                    <code className="font-mono text-xs">RAZORPAY_KEY_ID</code> and{" "}
+                    <code className="font-mono text-xs">RAZORPAY_KEY_SECRET</code> in the server
+                    environment (see <code className="font-mono text-xs">.env.example</code>), then
+                    restart the app. Checkout also needs{" "}
+                    <code className="font-mono text-xs">RAZORPAY_WEBHOOK_SECRET</code> so your plan
+                    unlocks after payment.
+                </p>
+            ) : null}
 
             <p className="text-sm text-muted-foreground">
                 AI rebuild limits follow your plan — Starter gets {FREE_GENERATIONS_PER_PROJECT}{" "}

@@ -19,6 +19,8 @@ const FRIENDLY: Record<ErrorCode, string> = {
     payload_too_large: 'That was too large to send.',
     generation_failed: 'The site could not be generated.',
     payment_required: 'This needs an upgrade before it can run.',
+    payments_unavailable:
+        'Checkout is not set up on this server yet. Add Razorpay keys to the server environment, then try again.',
     hosting_error: 'The hosting service did not respond.',
     service_unavailable: 'PageCrafts is having trouble right now. Your work is safe. Try again in a moment.',
     internal: 'We could not finish that just now. Your work is safe in this tab — try again in a moment.',

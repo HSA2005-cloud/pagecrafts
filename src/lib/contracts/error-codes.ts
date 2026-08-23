@@ -12,6 +12,7 @@ export type ErrorCode =
   | "payload_too_large"
   | "generation_failed"
   | "payment_required"
+  | "payments_unavailable"
   | "hosting_error"
   | "service_unavailable"
   | "internal";

@@ -45,7 +45,7 @@ export interface RazorpayOrder {
 function credentials(): { keyId: string; keySecret: string } {
     if (!KEY_ID || !KEY_SECRET) {
         throw new ApiError(
-            "internal",
+            "payments_unavailable",
             "Payments are not set up on this server.",
             "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required",
         );
@@ -104,8 +104,8 @@ export async function createOrder(
         );
 
         throw new ApiError(
-            "internal",
-            "We could not start that payment. Please try again.",
+            "payments_unavailable",
+            "We could not open Razorpay checkout. Please try again in a moment.",
             detail,
         );
     }

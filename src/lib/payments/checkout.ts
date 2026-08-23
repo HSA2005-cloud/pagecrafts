@@ -437,6 +437,10 @@ function expandUnlocks(
 /**
  * Start paying for Pro or Premium, or discover they already hold it (or a higher plan).
  */
+function devPlanGrantEnabled(): boolean {
+    return process.env.PAGECRAFTS_DEV_GRANT_PLANS === "true";
+}
+
 export async function startPlanCheckout(
     supabase: SupabaseClient,
     userId: string,
@@ -447,6 +451,18 @@ export async function startPlanCheckout(
         return { granted: true };
     }
     if (plan === "premium" && billing.plan === "premium") return { granted: true };
+
+    if (!paymentsConfigured()) {
+        if (devPlanGrantEnabled()) {
+            if (plan === "premium") await grantPremium(userId);
+            else await grantPro(userId);
+            return { granted: true };
+        }
+        throw new ApiError(
+            "payments_unavailable",
+            "Payments are not set up on this server.",
+        );
+    }
 
     const priceInr = plan === "premium" ? PREMIUM_PRICE_INR : PRO_PRICE_INR;
     const notes: OrderNotes = { userId, kind: plan };
@@ -489,7 +505,7 @@ export async function startAdvancedCheckout(
     if (data && isLivePlanRow(data, Date.now())) return { granted: true };
 
     if (!paymentsConfigured()) {
-        throw new ApiError("internal", "Payments are not set up on this server.");
+        throw new ApiError("payments_unavailable", "Payments are not set up on this server.");
     }
 
     const notes: OrderNotes = { userId, kind: "advanced" };
@@ -514,7 +530,7 @@ export async function startGenerationPassCheckout(
     userId: string,
 ): Promise<CheckoutResponse> {
     if (!paymentsConfigured()) {
-        throw new ApiError("internal", "Payments are not set up on this server.");
+        throw new ApiError("payments_unavailable", "Payments are not set up on this server.");
     }
 
     const notes: OrderNotes = { userId, kind: "generation_pass" };
