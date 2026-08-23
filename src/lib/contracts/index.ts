@@ -15,6 +15,8 @@ export type { ContentSchema, ContentSection, Field, FieldType } from "./content-
 export type { ErrorCode } from "./error-codes";
 export type { Category, FileMap, Template, TemplateTier } from "./template";
 export { CATEGORY_IDS } from "./template";
+export type { Plan, PaidPlan } from "./plan";
+export { PLANS, PLAN_RANK, PLAN_LABEL, TIER_MIN_PLAN, PLAN_PRICE_INR, planAllowsTier, isSubscriber } from "./plan";
 export * from './assets';
 export * from './files';
 export * from "./deploy";

@@ -18,9 +18,10 @@ import { putProjectFiles } from "./project-files";
 import { createCommit } from "./commits";
 import { contentFromFiles } from "@/lib/content/from-files";
 import { PROJECTS_PER_USER } from "@/lib/limits/config";
+import { planAllowsTier, isSubscriber, TIER_MIN_PLAN, PLAN_LABEL } from "@/lib/contracts";
 // Shared with the publish gate (R3 D9), so fork and publish agree about what a live
 // entitlement is — including that a lapsed one is not.
-import { hasPro } from "./entitlements";
+import { resolvePlan } from "./entitlements";
 
 const DETAIL_COLUMNS =
   "id, name, source_template_id, content_json, content_schema, site_meta, form_endpoint, updated_at, " +
@@ -176,8 +177,8 @@ export async function createProject(
 ): Promise<CreateProjectResponse> {
   // Both gates are checked here rather than in the route, because they are facts about the
   // database and the route only has the caller's word for anything (R3 D8).
-  const pro = await hasPro(supabase, userId);
-  await assertUnderQuota(supabase, userId, pro);
+  const plan = await resolvePlan(supabase, userId);
+  await assertUnderQuota(supabase, userId, isSubscriber(plan));
 
   const { data, error } = await supabase
     .from("projects")
@@ -213,15 +214,15 @@ export async function createProject(
     }
     if (!template) throw new ApiError("not_found", "That design does not exist.");
 
-    // Doc 22 P2/P3: a premium or signature design is paid for once, before the fork runs.
-    // The price is read from the row and never from the request — a paywall the caller is
-    // trusted to declare is not a paywall. Thrown inside the try, so the catch below removes
-    // the empty project rather than leaving a site nobody paid for sitting in a dashboard.
+    // Doc 22 P2/P3: a premium or signature design needs a plan that covers its tier before
+    // the fork runs. The tier is read from the row and never from the request — a paywall the
+    // caller is trusted to declare is not a paywall. Thrown inside the try, so the catch below
+    // removes the empty project rather than leaving a site nobody paid for in a dashboard.
     const tier = (template.tier ?? "free") as TemplateTier;
-    if (tier !== "free" && !pro) {
+    if (!planAllowsTier(plan, tier)) {
       throw new ApiError(
         "payment_required",
-        "This design needs to be paid for before you can use it.",
+        `This design needs the ${PLAN_LABEL[TIER_MIN_PLAN[tier]]} plan. Upgrade to use it.`,
         `tier=${tier}`,
       );
     }

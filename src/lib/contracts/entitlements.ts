@@ -5,9 +5,11 @@
 // - publish     : per-project — the site may go live (free launch offer, paid Rs 249, or Pro)
 // - edit_unlock : per-project — reopen editing on a published site (Doc 22 P5); the first
 //                 change within 7 days of publishing is free (goodwill window)
-// - pro         : per-user    — subscription (unlimited edits, premium templates, etc.)
-export type EntitlementKind = "publish" | "edit_unlock" | "pro";
-export type EntitlementSource = "launch_offer" | "paid" | "pro";
+// - pro         : per-user    — Pro subscription (premium-tier designs, unlimited AI, etc.)
+// - premium     : per-user    — Premium subscription (everything Pro has, plus signature-tier
+//                 designs). The highest plan.
+export type EntitlementKind = "publish" | "edit_unlock" | "pro" | "premium";
+export type EntitlementSource = "launch_offer" | "paid" | "pro" | "premium";
 export type EntitlementStatus = "active" | "expired" | "revoked";
 
 export interface Entitlement {

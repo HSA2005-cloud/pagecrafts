@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { EntitlementCheck, EntitlementKind, EntitlementSource } from "@/lib/contracts";
+import type {
+    EntitlementCheck,
+    EntitlementKind,
+    EntitlementSource,
+    Plan,
+    TemplateTier,
+} from "@/lib/contracts";
+import { planAllowsTier } from "@/lib/contracts";
 import { ApiError } from "@/lib/errors/respond";
 
 // The server-side entitlement check (R3 D9, A-5, Doc 22 §6).
@@ -59,8 +66,9 @@ async function liveEntitlements(
         .filter((row) => {
             const r = row as unknown as EntitlementRow & { project_id: string | null };
             if (!isLive(r, now)) return false;
-            // A project-scoped grant only counts for its own project; `pro` counts always.
-            return r.kind === "pro" || r.project_id === projectId;
+            // A project-scoped grant only counts for its own project; a subscription (pro or
+            // premium) is user-level and counts always.
+            return r.kind === "pro" || r.kind === "premium" || r.project_id === projectId;
         })
         .map((row) => row as unknown as EntitlementRow);
 }
@@ -85,37 +93,99 @@ export async function checkEntitlement(
         return { kind, granted: true, source: exact.source, expiresAt: exact.expires_at };
     }
 
-    const pro = rows.find((row) => row.kind === "pro");
-    if (pro) return { kind, granted: true, source: "pro", expiresAt: pro.expires_at };
+    // Any subscription (Pro or Premium) satisfies publish and edit_unlock — a plan that did
+    // not cover going live would be a plan nobody could describe.
+    const sub = rows.find((row) => row.kind === "pro" || row.kind === "premium");
+    if (sub) {
+        return { kind, granted: true, source: sub.source, expiresAt: sub.expires_at };
+    }
 
     return { kind, granted: false };
 }
 
-/** True when the account holds a live `pro` subscription. */
+/** True when the account holds any live paid subscription (Pro or Premium). */
 export async function hasPro(supabase: SupabaseClient, userId: string): Promise<boolean> {
-    return (await checkEntitlement(supabase, userId, null, "pro")).granted;
+    return (await resolvePlan(supabase, userId)) !== "starter";
+}
+
+/**
+ * The account's current plan, resolved from the database (A-5).
+ *
+ * Premium outranks Pro; a lapsed or revoked row is not counted (isLive). This is the single
+ * server-side answer to "what may this user do" — never taken from the client, so flipping a
+ * value in the browser cannot buy an upgrade.
+ */
+export async function resolvePlan(supabase: SupabaseClient, userId: string): Promise<Plan> {
+    const rows = await liveEntitlements(supabase, userId, null);
+    if (rows.some((row) => row.kind === "premium")) return "premium";
+    if (rows.some((row) => row.kind === "pro")) return "pro";
+    return "starter";
+}
+
+/** The pricing tier of a project's source design, read from the row (never the request). */
+export async function projectTier(
+    supabase: SupabaseClient,
+    projectId: string,
+): Promise<TemplateTier> {
+    const { data: project, error } = await supabase
+        .from("projects")
+        .select("source_template_id")
+        .eq("id", projectId)
+        .maybeSingle();
+
+    if (error) throw new ApiError("internal", "Could not read the project.", error.message);
+    if (!project) throw new ApiError("not_found", "That project does not exist.");
+
+    const templateId = (project as { source_template_id: string | null }).source_template_id;
+    if (!templateId) return "free";
+
+    const { data: template, error: templateError } = await supabase
+        .from("templates")
+        .select("tier")
+        .eq("id", templateId)
+        .maybeSingle();
+
+    if (templateError) {
+        throw new ApiError("internal", "Could not read the design.", templateError.message);
+    }
+
+    return ((template as { tier: TemplateTier } | null)?.tier ?? "free") as TemplateTier;
 }
 
 /**
  * The gate publish calls. Throws rather than returning false, so a caller cannot forget to
  * look at the answer — the failure mode of a boolean gate is publishing anyway.
+ *
+ * The rule follows the design's tier, not a blanket fee (E-1 §publish):
+ *   - a free design goes live for free, on any plan (including Starter);
+ *   - a paid design (premium/signature) needs a plan that covers its tier, or a per-project
+ *     `publish`/subscription grant for that specific site.
+ * The tier is read from the database, so no request payload can turn a paid design free.
  */
 export async function assertCanPublish(
     supabase: SupabaseClient,
     userId: string,
     projectId: string,
 ): Promise<EntitlementCheck> {
-    const check = await checkEntitlement(supabase, userId, projectId, "publish");
+    const tier = await projectTier(supabase, projectId);
+    const plan = await resolvePlan(supabase, userId);
 
-    if (!check.granted) {
-        throw new ApiError(
-            "payment_required",
-            "This site needs to be paid for before it can go live.",
-            `projectId=${projectId}`,
-        );
+    // Plan covers the design's tier — free designs are covered for everyone.
+    if (planAllowsTier(plan, tier)) {
+        const source: EntitlementSource =
+            plan === "premium" ? "premium" : plan === "pro" ? "pro" : "launch_offer";
+        return { kind: "publish", granted: true, source };
     }
 
-    return check;
+    // Otherwise a per-project purchase (or subscription) for this site still lets it publish.
+    const check = await checkEntitlement(supabase, userId, projectId, "publish");
+    if (check.granted) return check;
+
+    throw new ApiError(
+        "payment_required",
+        "This design needs a higher plan before this site can go live.",
+        `projectId=${projectId};tier=${tier}`,
+    );
 }
 
 /** Doc 22 P5: the first change within this long after going live is free. */
@@ -168,7 +238,8 @@ export async function checkEditPermission(
 
     const unlock = await checkEntitlement(supabase, userId, projectId, "edit_unlock");
     if (unlock.granted) {
-        return { allowed: true, reason: unlock.source === "pro" ? "pro" : "unlocked" };
+        const bySubscription = unlock.source === "pro" || unlock.source === "premium";
+        return { allowed: true, reason: bySubscription ? "pro" : "unlocked" };
     }
 
     return { allowed: false, reason: "locked" };
