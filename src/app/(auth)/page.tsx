@@ -104,7 +104,7 @@ function Home({
                     <WelcomeSlide name={user.name} templates={templates} />
                     <ValueProps />
                     <PricingSlide />
-                    <CompareSlide />
+                    <CompareSlide plan={billing?.plan ?? "starter"} />
                     <BuildSlide
                         templates={templates}
                         unlockedTemplateIds={billing?.unlockedTemplateIds ?? []}

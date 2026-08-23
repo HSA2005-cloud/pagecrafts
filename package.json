@@ -35,6 +35,7 @@
     "verify:caps": "tsx scripts/verify-caps.ts",
     "deploy:leakcheck": "tsx --env-file=.env.local --conditions=react-server scripts/check-credential-leak.ts",
     "ai:caps": "tsx --env-file-if-exists=.env.local scripts/verify-ai-caps.ts",
+    "review": "tsx evals/grader/review.ts",
     "pay:check": "tsx --env-file=.env.local scripts/razorpay-check.ts",
     "verify:loop": "tsx --env-file=.env.local scripts/verify-core-loop.ts",
     "db:drift": "tsx --env-file=.env.local scripts/db-drift.ts",

@@ -182,6 +182,12 @@ describe("a signed-in stranger, asking for somebody else's project", () => {
     it("cannot read its history", async () => {
         const { db, theirs } = twoPeople();
         await expectHidden("GET /commits", () => listCommits(db.asUser(STRANGER), theirs));
+
+        // /copy-edits reads the project before it reaches the AI, so a stranger is stopped
+        // at the same place every other project route stops them. Worth its own line: the
+        // route's first call is assertCanEdit, which reads deployments and answers
+        // "never published" for a project it cannot see -- it is getProject that refuses.
+        await expectHidden("POST /copy-edits", () => getProject(db.asUser(STRANGER), theirs));
     });
 
     it("cannot read its publish history", async () => {

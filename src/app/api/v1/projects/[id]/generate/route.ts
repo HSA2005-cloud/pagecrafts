@@ -20,6 +20,11 @@ import {
 import { estimateSiteBuild, isHeavyBuild } from '@/lib/ai/generate/complexity';
 import { supabaseAdminOrNull } from '@/lib/data/supabase-admin';
 import { getProject } from '@/lib/data/projects';
+import { getProjectFiles } from '@/lib/data/project-files';
+import { asContentSchema } from '@/lib/content/schema';
+import { crossVerticalFirewall } from '@/lib/editor/cross-vertical-firewall';
+import { parseComposition } from '@/lib/editor/parse-composition';
+import { resolveSiteVertical } from '@/lib/editor/resolve-site-vertical';
 import { setProfileStore } from '@/lib/ai/profile-cache';
 import { SupabaseProfileStore } from '@/lib/ai/profile/persist';
 import { track } from '@/lib/observability/analytics';
@@ -51,7 +56,36 @@ export const POST = withRoute<z.infer<typeof schema>, Params>({
         // getProject throws not_found when RLS hides the row, which is the same answer the
         // rest of the API gives and the one e2e/cross-user.spec.ts asks for. Found by the
         // D14 cross-user audit, which left the test red on purpose until this landed.
-        await getProject(supabase, params.id);
+        const project = await getProject(supabase, params.id);
+        const { files } = await getProjectFiles(supabase, params.id);
+        const composition = parseComposition(files['composition.json']);
+        const contentSchema = asContentSchema(project.contentSchema);
+        const entry =
+            files['index.html'] ??
+            Object.keys(files).find((name) => /\.html?$/i.test(name)) ??
+            null;
+        const contextText = [
+            composition?.meta.title,
+            project.siteMeta?.title,
+            project.name,
+            entry ? files[entry]?.slice(0, 4000) : null,
+        ]
+            .filter(Boolean)
+            .join(' ');
+        const crossBlocked = crossVerticalFirewall({
+            instruction: body.prompt,
+            vertical: resolveSiteVertical({
+                composition,
+                sourceTemplateId: project.sourceTemplateId,
+                contextText,
+            }),
+            sectionCount: composition?.sections.length ?? 0,
+            hasContentPage: contentSchema.sections.length > 0,
+            contextText,
+        });
+        if (crossBlocked) {
+            throw new ApiError('validation_failed', crossBlocked);
+        }
 
         const budget = await checkGenerationBudget(userId, params.id, body.prompt);
         if (!budget.ok) throw new ApiError(budget.code, budget.message);

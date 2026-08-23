@@ -45,7 +45,7 @@ export interface RazorpayOrder {
 function credentials(): { keyId: string; keySecret: string } {
     if (!KEY_ID || !KEY_SECRET) {
         throw new ApiError(
-            "internal",
+            "payments_unavailable",
             "Payments are not set up on this server.",
             "RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required",
         );
@@ -88,11 +88,25 @@ export async function createOrder(
     const body = (await response.json()) as Record<string, unknown>;
 
     if (!response.ok) {
-        const error = body.error as { description?: string } | undefined;
+        const error = body.error as
+            | { description?: string; code?: string; reason?: string }
+            | undefined;
+        const detail = error?.description ?? `razorpay ${response.status}`;
+
+        // The description was only ever passed as ApiError's third argument, which nothing
+        // logs and nothing returns. So a wrong key, a live/test mismatch or a rejected
+        // amount all arrived on screen as the same sentence with the reason discarded.
+        console.error(
+            `[razorpay] order refused ${response.status}`,
+            error?.code ?? "",
+            error?.reason ?? "",
+            detail,
+        );
+
         throw new ApiError(
-            "internal",
-            "We could not start that payment. Please try again.",
-            error?.description ?? `razorpay ${response.status}`,
+            "payments_unavailable",
+            "We could not open Razorpay checkout. Please try again in a moment.",
+            detail,
         );
     }
 

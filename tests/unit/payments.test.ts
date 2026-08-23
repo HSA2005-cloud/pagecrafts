@@ -174,24 +174,13 @@ describe("the routes that open checkout", () => {
         expect(webhook).not.toContain("verified: true");
     });
 
-    it("wires Packages checkout like publish — confirm dialog, no paymentsReady hard-disable", () => {
-        const panel = readFileSync(
-            join(process.cwd(), "src", "components", "settings", "PackagesPanel.tsx"),
-            "utf8",
-        );
+    it("redirects the old Packages page to User Plans", () => {
         const page = readFileSync(
             join(process.cwd(), "src", "app", "packages", "page.tsx"),
             "utf8",
         );
 
-        expect(panel).toContain("confirmDialog");
-        expect(panel).toContain("openAdvancedCheckout");
-        expect(panel).toContain("openGenerationPassCheckout");
-        expect(panel).toContain("RAZORPAY_KEY_ID");
-        expect(panel).toContain("RAZORPAY_KEY_SECRET");
-        expect(panel).not.toContain("disabled={!billing.paymentsReady");
-        expect(page).toContain("paymentsConfigured");
-        expect(page).toContain("paymentsReady: paymentsConfigured()");
+        expect(page).toContain('redirect("/plans")');
     });
 
     it("opens Razorpay when a paid template or look is chosen, and does not grant from the browser", () => {
