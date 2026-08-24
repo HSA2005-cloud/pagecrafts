@@ -247,12 +247,20 @@ describe("each failure mode, end to end", () => {
         expect(summary!.failure).toBeNull();
     });
 
-    it("refuses an unpaid publish in the same words the dashboard would use", async () => {
+    // Not paying is no longer a way to fail. Going live on a PageCrafts address is free, so
+    // an unpaid project publishes like any other and the dashboard has nothing to explain.
+    // Custom domain registration is still paid, separately and later.
+    it("does not treat an unpaid publish as a failure at all", async () => {
         const { db, projectId } = seeded({ paid: false });
 
-        await expect(
-            publishProject(db.asUser(OWNER), OWNER, projectId, nextKey(), provider()),
-        ).rejects.toMatchObject({ code: "payment_required" });
+        const attempt = await publishProject(
+            db.asUser(OWNER), OWNER, projectId, nextKey(), provider(),
+        );
+
+        expect(attempt.deploymentId).toBeTruthy();
+
+        const [summary] = await listProjects(db.asUser(OWNER), OWNER);
+        expect(summary!.failure).toBeNull();
     });
 
     it("covers every failure mode the publish path can actually produce", () => {

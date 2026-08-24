@@ -33,6 +33,32 @@ async function projectExists(name: string): Promise<boolean> {
     }
 }
 
+/**
+ * The Cloudflare zone that owns our root domain, looked up once.
+ *
+ * The deploy token carries Zone:Read for exactly this call and Zone:DNS:Edit for the
+ * record it leads to -- both were scoped for it on D5 and neither was used until D20.
+ */
+let cachedZoneId: string | null = null;
+
+async function zoneId(): Promise<string> {
+    if (cachedZoneId) return cachedZoneId;
+
+    const root = deployConfig().rootDomain;
+    const zones = await cf<{ id: string; name: string }[]>('GET', `/zones?name=${root}`);
+    const zone = zones[0];
+
+    if (!zone) {
+        throw new Error(
+            `No Cloudflare zone for ${root}. The domain must be on Cloudflare and the ` +
+                'deploy token needs Zone:Read on it.',
+        );
+    }
+
+    cachedZoneId = zone.id;
+    return cachedZoneId;
+}
+
 export const cloudflarePagesAdapter: DeployProvider = {
     async provisionSite({ projectName }: ProvisionInput): Promise<ProvisionResult> {
         const subdomain = await uniqueSlug(projectName, projectExists);
@@ -104,12 +130,40 @@ export const cloudflarePagesAdapter: DeployProvider = {
     async enableHosting(siteId: string): Promise<void> {
         const domain = `${siteId}.${deployConfig().rootDomain}`;
 
+        // Step one: tell Pages to serve this hostname.
         try {
             await cf('POST', accountPath(`/pages/projects/${siteId}/domains`), {
                 name: domain,
             });
         } catch (error) {
             if (!(error instanceof HostingError && error.status === 409)) throw error;
+        }
+
+        // Step two, and it was missing: make the hostname resolve.
+        //
+        // Attaching a custom domain to a Pages project does not create a DNS record. The
+        // dashboard offers to -- that is the "Complete DNS setup" button -- but the API
+        // does not, and nothing in the response says so. The project shows the domain
+        // attached and sits in "Verifying" forever.
+        //
+        // The effect was that every publish reported success and no site was ever reachable:
+        // provision, upload and hosting all returned ok, verification quietly ran out its
+        // ninety seconds, and the address answered NXDOMAIN. Found on D20 by opening one.
+        //
+        // Proxied, because a Pages custom domain requires the record to go through
+        // Cloudflare rather than resolve straight to the origin.
+        try {
+            await cf('POST', `/zones/${await zoneId()}/dns_records`, {
+                type: 'CNAME',
+                name: siteId,
+                content: `${siteId}.pages.dev`,
+                proxied: true,
+                comment: 'PageCraft published site',
+            });
+        } catch (error) {
+            // 400 is what a duplicate record answers with. A republish must not fall over
+            // because the address it is already serving on is already pointed at it.
+            if (!(error instanceof HostingError && error.status === 400)) throw error;
         }
     },
 

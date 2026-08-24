@@ -157,17 +157,26 @@ describe("failure after payment", () => {
         expect(rows).toHaveLength(1);
     });
 
-    it("refuses a publish nobody paid for, before anything is recorded", async () => {
+    // Going live on a PageCrafts address is free (assertCanPublish, "Modified Publishing").
+    // The gate no longer refuses — it writes the grant so the host step can proceed, and the
+    // grant is recorded rather than assumed, so the row says why this publish was allowed.
+    it("lets somebody who has paid nothing go live, and records why", async () => {
         const db = createFakeDb({ users: [{ id: OWNER }] });
         const project = db.insert("projects", { user_id: OWNER, name: "Unpaid" });
         db.insert("project_files", { project_id: project.id, path: "index.html", content: "<p>hi</p>" });
 
-        await expect(
-            publishProject(db.asUser(OWNER), OWNER, project.id as string, nextKey()),
-        ).rejects.toMatchObject({ code: "payment_required" });
+        const attempt = await publishProject(
+            db.asUser(OWNER), OWNER, project.id as string, nextKey(),
+        );
 
-        // Nothing attempted means nothing to explain later, and no provider call to pay for.
-        expect(db.rows("deployments")).toHaveLength(0);
+        expect(attempt.deploymentId).toBeTruthy();
+        expect(db.rows("deployments")).toHaveLength(1);
+
+        const grants = db
+            .rows("entitlements")
+            .filter((r) => r.project_id === project.id && r.kind === "publish");
+        expect(grants).toHaveLength(1);
+        expect(grants[0]!.source).toBe("launch_offer");
     });
 });
 

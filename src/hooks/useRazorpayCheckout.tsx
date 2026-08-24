@@ -98,8 +98,8 @@ interface UseRazorpayCheckoutOptions {
     themeColor?: string;
     /** Called when the design is already paid for (no modal needed). */
     onAlreadyGranted?: () => void;
-    /** Called after the payment is verified server-side. */
-    onSuccess?: () => void;
+    /** Called after the payment is verified and granted server-side. */
+    onSuccess?: (result?: { kind?: string; granted?: boolean }) => void;
     /** Called when the user closes the modal without paying (or cancels confirm). */
     onDismiss?: () => void;
     /** Called on any failure (script load, order creation, verification). */
@@ -203,14 +203,15 @@ export function useRazorpayCheckout(
                         paintRazorpayBackdrop(false);
                         setStatus('verifying');
 
-                        const { error: verifyError } = await apiPost<{ verified: boolean }>(
-                            '/api/v1/payments/razorpay/verify',
-                            {
-                                razorpay_order_id: response.razorpay_order_id,
-                                razorpay_payment_id: response.razorpay_payment_id,
-                                razorpay_signature: response.razorpay_signature,
-                            },
-                        );
+                        const { data: verified, error: verifyError } = await apiPost<{
+                            verified: boolean;
+                            granted?: boolean;
+                            kind?: string;
+                        }>('/api/v1/payments/razorpay/verify', {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                        });
 
                         if (verifyError) {
                             setStatus('error');
@@ -220,12 +221,16 @@ export function useRazorpayCheckout(
                         }
 
                         setStatus('success');
-                        onSuccess?.();
+                        onSuccess?.({
+                            kind: verified?.kind,
+                            granted: verified?.granted ?? true,
+                        });
                     },
                     modal: {
                         ondismiss: () => {
                             paintRazorpayBackdrop(false);
                             setStatus('idle');
+                            setError(null);
                             onDismiss?.();
                         },
                     },
@@ -236,7 +241,11 @@ export function useRazorpayCheckout(
                 rzp.open();
             } catch (err) {
                 paintRazorpayBackdrop(false);
-                const message = err instanceof Error ? err.message : 'Payment failed.';
+                const message =
+                    err instanceof Error
+                        ? err.message
+                        : "We couldn't start the payment. Please try again.";
+                console.error('[payments] checkout failed', message);
                 setStatus('error');
                 setError(message);
                 onError?.(message);

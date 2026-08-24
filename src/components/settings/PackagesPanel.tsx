@@ -194,8 +194,8 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
                     <code className="font-mono text-xs">RAZORPAY_KEY_SECRET</code> in the server
                     environment (see <code className="font-mono text-xs">.env.example</code>), then
                     restart the app. Checkout will also need{" "}
-                    <code className="font-mono text-xs">RAZORPAY_WEBHOOK_SECRET</code> so purchases
-                    can be granted after payment.
+                    <code className="font-mono text-xs">RAZORPAY_WEBHOOK_SECRET</code> as a
+                    backup grant path after payment (browser verify also grants).
                 </p>
             ) : null}
 

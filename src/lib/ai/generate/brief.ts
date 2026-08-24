@@ -41,11 +41,49 @@ function sentence(value: string): string {
 }
 
 /** Missing required facts. Empty array means the brief is ready to generate. */
+/**
+ * The same caps createProjectSchema enforces, in one place so the form and the route cannot
+ * disagree. brief-limits.test.ts holds them to the Zod schema.
+ *
+ * Somebody pasted a 4,500-character specification into `offer` -- a real brief, with
+ * sections and sample classes and colour tokens. The box gave no hint of a limit, counted
+ * nothing, and the answer came back as "Something in that was not accepted", which named
+ * neither the field nor the reason. The rejection was right; everything around it was not.
+ */
+export const BRIEF_LIMITS = {
+    name: 80,
+    offer: 500,
+    place: 80,
+    phone: 20,
+    hours: 80,
+    extra: 200,
+} as const;
+
+const LABELS: Record<keyof typeof BRIEF_LIMITS, string> = {
+    name: 'The business name',
+    offer: 'What they do',
+    place: 'The city or area',
+    phone: 'The phone number',
+    hours: 'The opening hours',
+    extra: 'Anything else',
+};
+
 export function briefErrors(brief: SiteBrief): string[] {
     const errors: string[] = [];
     if (!clean(brief.name)) errors.push('What is the business called?');
     if (!clean(brief.offer)) errors.push('What do they do? A shop, a clinic, the services.');
     if (!clean(brief.place)) errors.push('Where is it — a city or neighbourhood?');
+
+    for (const [field, limit] of Object.entries(BRIEF_LIMITS)) {
+        const written = clean(brief[field as keyof typeof BRIEF_LIMITS]).length;
+        if (written <= limit) continue;
+
+        errors.push(
+            `${LABELS[field as keyof typeof BRIEF_LIMITS]} is ${written.toLocaleString()} characters. ` +
+                `The most it takes is ${limit.toLocaleString()} — shorten it by ${(written - limit).toLocaleString()}.`,
+        );
+    }
+
     return errors;
 }
 

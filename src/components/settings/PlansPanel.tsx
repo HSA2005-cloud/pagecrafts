@@ -1,18 +1,93 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { useRazorpayCheckout } from "@/hooks/useRazorpayCheckout";
-import { waitForPlanGrant } from "@/lib/payments/wait-for-pro";
 import type { AccountPlan, BillingSummary } from "@/lib/contracts";
 import { PLAN_COPY, PLAN_PRICE_INR } from "@/lib/payments/plans";
+import { FREE_GENERATIONS_PER_PROJECT } from "@/lib/limits/config";
 import { cn } from "@/lib/utils";
 
 const ORDER: AccountPlan[] = ["starter", "pro", "premium"];
+
+const CANCELLED_MESSAGE = "Payment cancelled. Your current plan has not changed.";
+
+function PlanCta({
+    id,
+    active,
+    covered,
+    busy,
+    pending,
+    paymentsReady,
+    onUpgrade,
+}: {
+    id: AccountPlan;
+    active: boolean;
+    covered: boolean;
+    busy: boolean;
+    pending: boolean;
+    paymentsReady: boolean;
+    onUpgrade: (plan: "pro" | "premium") => void;
+}) {
+    if (active) {
+        return (
+            <Button
+                type="button"
+                variant="outline"
+                disabled
+                className="min-h-11 w-full cursor-default rounded-xl border-border/80 bg-transparent font-semibold text-muted-foreground"
+            >
+                Current plan
+            </Button>
+        );
+    }
+
+    if (covered) {
+        return (
+            <p className="flex min-h-11 items-center justify-center text-sm font-medium text-muted-foreground">
+                Included
+            </p>
+        );
+    }
+
+    if (id === "pro") {
+        return (
+            <Button
+                type="button"
+                variant="brand"
+                className="min-h-11 w-full cursor-pointer rounded-xl font-semibold"
+                disabled={busy || !paymentsReady}
+                onClick={() => onUpgrade("pro")}
+            >
+                {busy && pending ? "Opening Razorpay…" : "Choose Pro"}
+            </Button>
+        );
+    }
+
+    if (id === "premium") {
+        return (
+            <Button
+                type="button"
+                variant="destructive"
+                className="min-h-11 w-full cursor-pointer rounded-xl font-semibold"
+                disabled={busy || !paymentsReady}
+                onClick={() => onUpgrade("premium")}
+            >
+                {busy && pending ? "Opening Razorpay…" : "Choose Premium"}
+            </Button>
+        );
+    }
+
+    return null;
+}
+
+function homeAfterUpgrade(plan: "pro" | "premium"): string {
+    return `/?upgraded=${plan}&slide=compare`;
+}
 
 export function PlansPanel({
     initial,
@@ -22,40 +97,43 @@ export function PlansPanel({
     signedIn: boolean;
 }) {
     const router = useRouter();
-    const [billing, setBilling] = useState(initial);
+    const [billing] = useState(initial);
     const [message, setMessage] = useState<string | null>(null);
     const [pending, setPending] = useState<"pro" | "premium" | null>(null);
-
-    const refresh = useCallback(async () => {
-        const { apiGet } = await import("@/lib/api/client");
-        const { data } = await apiGet<BillingSummary>("/api/v1/account/billing");
-        if (data) setBilling(data);
-        router.refresh();
-    }, [router]);
+    const pendingRef = useRef<"pro" | "premium" | null>(null);
 
     const { openPlanCheckout, status, error, confirmDialog } = useRazorpayCheckout({
         onAlreadyGranted: () => {
+            const plan = pendingRef.current ?? "pro";
+            pendingRef.current = null;
             setPending(null);
-            setMessage("That plan is already on this account.");
-            void refresh();
+            setMessage(
+                `${plan === "premium" ? "Premium" : "Pro"} is already on this account — taking you home…`,
+            );
+            window.location.assign(homeAfterUpgrade(plan));
         },
-        onSuccess: () => {
-            const plan = pending;
+        onSuccess: (result) => {
+            const plan =
+                result?.kind === "premium" || result?.kind === "pro"
+                    ? result.kind
+                    : (pendingRef.current ?? "pro");
+            pendingRef.current = null;
             setPending(null);
-            if (!plan) return;
-            setMessage("Payment received. Unlocking…");
-            void (async () => {
-                const ok = await waitForPlanGrant(plan);
-                setMessage(
-                    ok
-                        ? `${plan === "premium" ? "Premium" : "Pro"} is active — every matching design is unlocked.`
-                        : "Payment went through. If the plan is not showing yet, refresh in a moment.",
-                );
-                await refresh();
-            })();
+            setMessage(
+                plan === "premium"
+                    ? "Premium is active — taking you home…"
+                    : "Pro is active — taking you home…",
+            );
+            // Full reload so homepage billing, locks, and Free labels refresh.
+            window.location.assign(homeAfterUpgrade(plan));
         },
-        onDismiss: () => setPending(null),
+        onDismiss: () => {
+            pendingRef.current = null;
+            setPending(null);
+            setMessage(CANCELLED_MESSAGE);
+        },
         onError: (err) => {
+            pendingRef.current = null;
             setPending(null);
             setMessage(err);
         },
@@ -66,7 +144,14 @@ export function PlansPanel({
             router.push(`/signin?next=${encodeURIComponent("/plans")}`);
             return;
         }
+        if (!billing.paymentsReady) {
+            setMessage(
+                "Checkout is not set up on this server yet. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to the server environment, then restart the app.",
+            );
+            return;
+        }
         setMessage(null);
+        pendingRef.current = plan;
         setPending(plan);
         await openPlanCheckout(plan);
     }
@@ -75,8 +160,9 @@ export function PlansPanel({
     const busy = status === "loading" || status === "open" || status === "verifying";
 
     return (
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
             {confirmDialog}
+
             <header className="space-y-3">
                 <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-muted-foreground">
                     User Plans
@@ -95,6 +181,9 @@ export function PlansPanel({
                         <span className="font-medium text-foreground">
                             {PLAN_COPY[current].name}
                         </span>
+                        {billing.paymentsReady ? (
+                            <span className="text-muted-foreground"> · Razorpay checkout ready</span>
+                        ) : null}
                     </p>
                 ) : (
                     <p className="text-sm text-muted-foreground">
@@ -109,7 +198,7 @@ export function PlansPanel({
                 )}
             </header>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-5 lg:grid-cols-3">
                 {ORDER.map((id) => {
                     const copy = PLAN_COPY[id];
                     const active = current === id;
@@ -117,53 +206,66 @@ export function PlansPanel({
                         id === "starter"
                         || (id === "pro" && (current === "pro" || current === "premium"))
                         || (id === "premium" && current === "premium");
-                    const price =
-                        id === "starter"
-                            ? "Free"
-                            : `Rs ${PLAN_PRICE_INR[id]}`;
+                    const popular = id === "pro" && !active;
+                    const paid = id === "pro" || id === "premium";
 
                     return (
                         <article
                             key={id}
                             className={cn(
-                                "flex flex-col rounded-2xl border border-border p-5",
-                                active && "ring-2 ring-primary/40",
+                                "flex flex-col rounded-2xl border bg-card/90 p-7",
+                                active
+                                    ? "border-gold/65 ring-2 ring-gold/45 shadow-[0_0_0_1px_color-mix(in_srgb,var(--gold)_40%,transparent),0_0_28px_color-mix(in_srgb,var(--gold)_32%,transparent),0_0_56px_color-mix(in_srgb,var(--gold)_16%,transparent)]"
+                                    : "border-border/70 shadow-sm",
                             )}
                         >
-                            <p className="text-sm font-medium text-muted-foreground">{copy.name}</p>
-                            <p className="mt-1 text-2xl font-bold text-foreground">{price}</p>
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                            <div className="flex items-start justify-between gap-3">
+                                <p className="text-base font-semibold text-foreground">{copy.name}</p>
+                                {popular ? (
+                                    <span className="rounded-full border border-gold/70 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gold">
+                                        Popular
+                                    </span>
+                                ) : null}
+                            </div>
+
+                            <p className="mt-3 flex items-baseline gap-2">
+                                <span className="text-3xl font-bold tracking-tight text-foreground">
+                                    {id === "starter" ? "Free" : `Rs ${PLAN_PRICE_INR[id]}`}
+                                </span>
+                                {paid ? (
+                                    <span className="text-sm font-normal text-muted-foreground">
+                                        once
+                                    </span>
+                                ) : null}
+                            </p>
+
+                            <p className="mt-3 text-sm leading-6 text-muted-foreground">
                                 {copy.description}
                             </p>
-                            <ul className="mt-4 flex flex-1 flex-col gap-2 text-sm text-foreground">
+
+                            <ul className="mt-5 flex flex-1 flex-col gap-2.5 text-sm text-foreground">
                                 {copy.points.map((point) => (
-                                    <li key={point} className="flex gap-2">
+                                    <li key={point} className="flex gap-2.5">
                                         <Check
-                                            className="mt-0.5 size-4 shrink-0 text-primary"
+                                            className="mt-0.5 size-4 shrink-0 text-gold"
+                                            strokeWidth={2.25}
                                             aria-hidden
                                         />
                                         <span>{point}</span>
                                     </li>
                                 ))}
                             </ul>
-                            <div className="mt-5">
-                                {covered ? (
-                                    <p className="text-sm font-medium text-muted-foreground">
-                                        {active ? "Your plan" : "Included"}
-                                    </p>
-                                ) : id === "pro" || id === "premium" ? (
-                                    <Button
-                                        type="button"
-                                        variant="brand"
-                                        className="min-h-11 w-full cursor-pointer font-semibold"
-                                        disabled={busy}
-                                        onClick={() => void upgrade(id)}
-                                    >
-                                        {busy && pending === id
-                                            ? "Opening Razorpay…"
-                                            : `Upgrade to ${copy.name}`}
-                                    </Button>
-                                ) : null}
+
+                            <div className="mt-6">
+                                <PlanCta
+                                    id={id}
+                                    active={active}
+                                    covered={covered && !active}
+                                    busy={busy}
+                                    pending={pending === id}
+                                    paymentsReady={billing.paymentsReady}
+                                    onUpgrade={(plan) => void upgrade(plan)}
+                                />
                             </div>
                         </article>
                     );
@@ -175,22 +277,29 @@ export function PlansPanel({
                     role="status"
                     className={cn(
                         "text-sm",
-                        error ? "text-destructive" : "text-muted-foreground",
+                        error || (message && message !== CANCELLED_MESSAGE && /couldn|failed|not set up|try again/i.test(message))
+                            ? "text-destructive"
+                            : "text-muted-foreground",
                     )}
                 >
                     {error ?? message}
                 </p>
             )}
 
+            {!billing.paymentsReady ? (
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                    Payments are not configured on this server yet. In production, set{" "}
+                    <code className="font-mono text-xs">RAZORPAY_KEY_ID</code> and{" "}
+                    <code className="font-mono text-xs">RAZORPAY_KEY_SECRET</code> in the Vercel
+                    Production environment (see{" "}
+                    <code className="font-mono text-xs">docs/production-payments-setup.md</code>
+                    ), then redeploy.
+                </p>
+            ) : null}
+
             <p className="text-sm text-muted-foreground">
-                Need more AI rebuilds on a site? That is separate —{" "}
-                <Link
-                    href="/packages"
-                    className="font-medium text-foreground underline-offset-4 hover:underline"
-                >
-                    manage AI usage
-                </Link>
-                .
+                AI rebuild limits follow your plan — Starter gets {FREE_GENERATIONS_PER_PROJECT}{" "}
+                generations per site, Pro gets 5× that, Premium gets 15×.
             </p>
         </div>
     );

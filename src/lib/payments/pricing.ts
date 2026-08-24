@@ -72,18 +72,36 @@ export function requiredPlanForStyle(tier: string | null | undefined): PaidPlan 
     return null;
 }
 
-/** Word on the tile. Paid catalogue designs stay labelled after unlock. */
+/** Plan badge before unlock — Pro or Premium on the tile. */
 export function templateBadge(tier: string | null | undefined): PaidBadge | null {
     if (tier === "premium") return "Pro";
     if (tier === "signature") return "Premium";
     return null;
 }
 
-/** Word on a generated look. Paid looks stay labelled after unlock. */
+/** Plan badge before unlock — Pro or Premium on a generated look. */
 export function styleBadge(tier: string | null | undefined): PaidBadge | null {
     if (tier === "pro") return "Pro";
     if (tier === "premium") return "Premium";
     return null;
+}
+
+/** Word on the tile once account access is known — covered designs read "Free". */
+export function templateTileLabel(
+    tier: string | null | undefined,
+    options?: { unlocked?: boolean },
+): string {
+    if (tier === "free" || options?.unlocked) return "Free";
+    return templateBadge(tier) ?? `Rs ${templatePriceInr(tier)}`;
+}
+
+/** Word on a look tile once account access is known — covered looks read "Free". */
+export function styleTileLabel(
+    tier: string | null | undefined,
+    options?: { unlocked?: boolean },
+): string {
+    if (!tier || tier === "free" || options?.unlocked) return "Free";
+    return styleBadge(tier) ?? "Free";
 }
 
 export function templatePriceInr(tier: string | null | undefined): number {
