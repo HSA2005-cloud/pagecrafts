@@ -134,7 +134,8 @@ describe("the prompt bar is shared", () => {
         expect(welcome).not.toContain("no templates");
         expect(welcome).toContain("Pick a design");
         expect(welcome).toContain("edit in place");
-        expect(welcome).toContain("Rs 249");
+        expect(welcome).toContain("go live free");
+        expect(welcome).not.toContain("Rs 249");
         expect(welcome).toContain("text-[3.5rem]");
         expect(welcome).toContain("text-lg");
     });

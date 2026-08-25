@@ -28,6 +28,7 @@ AI_PROMPT_PLAN=plan.v2 AI_PROMPT_FILL=fill-section.v2 npm run grade -- --label=v
 
 | File | Id | Version | Tier | Digest | Purpose |
 |---|---|---|---|---|---|
+| `clarity.v1.md` | clarity | v1 | fast | `8444d8d6e7c3` | — |
 | `classify.v1.md` ← | classify | v1 | fast | `363031886f11` | free text → category, vertical, tone, palette, sections |
 | `compose-site.v1.md` | compose-site | v1 | strong | `fdae85f2e854` | — |
 | `edit.v1.md` ← | edit | v1 | strong | `20f46ad7214a` | one section + instruction → changed fields |
@@ -48,6 +49,7 @@ prompt. A placeholder that is neither is a typo, and a test fails on it.
 
 | Prompt | Registry lists | Per-call values |
 |---|---|---|
+| `clarity.v1.md` | — | `text` |
 | `classify.v1.md` | `categories`, `palettes`, `sectionKeys`, `tones` | `text` |
 | `compose-site.v1.md` | — | `prompt`, `tone`, `vertical` |
 | `edit.v1.md` | — | `content`, `instruction`, `sectionKey`, `variant` |
@@ -119,7 +121,7 @@ be empty — dummy placeholders are scrubbed, not published.
 |---|---|---|
 | hero | centred, split-image, image-bg, minimal | `eyebrow` (text), `heading` (text), `sub` (richtext), `ctaLabel` (text), `image` (image) |
 | about | text, media-split | `heading` (text), `body` (richtext), `image` (image) |
-| services | cards, grid, timeline | `heading` (text), `items` (list) |
+| services | cards, grid, timeline, tabs | `heading` (text), `items` (list) |
 | menu | grouped, simple | `heading` (text), `items` (list) |
 | gallery | masonry, grid, carousel | `heading` (text), `images` (list) |
 | team | cards, grid | `heading` (text), `members` (list) |

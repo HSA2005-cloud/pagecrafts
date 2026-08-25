@@ -45,6 +45,7 @@ describe('FR-110 — every call site goes through containment', () => {
 
     it('finds the call sites it expects to find', () => {
         expect(callSites.map(([f]) => f).sort()).toEqual([
+            'src/lib/ai/assess-clarity.ts',
             'src/lib/ai/classify.ts',
             'src/lib/ai/edit/propose.ts',
             'src/lib/ai/edit/rewrite-copy.ts',

@@ -14,13 +14,16 @@ export function UseDesignButton({
     name,
     tier,
     showPayNote = true,
+    unlocked = false,
 }: {
     forkId: string;
     name: string;
     tier: TemplateTier;
     showPayNote?: boolean;
+    unlocked?: boolean;
 }) {
     const href = `/new?template=${encodeURIComponent(forkId)}`;
+    const needsPlan = tier !== "free" && !unlocked;
 
     return (
         <div className="flex flex-col items-end gap-1.5">
@@ -31,7 +34,7 @@ export function UseDesignButton({
             >
                 Use this design
             </Link>
-            {showPayNote && tier !== "free" ? (
+            {showPayNote && needsPlan ? (
                 <span className="text-xs text-muted-foreground">
                     {tier === "signature"
                         ? "Needs Premium on User Plans."

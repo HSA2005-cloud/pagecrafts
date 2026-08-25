@@ -152,6 +152,21 @@ export class MockGateway {
             }));
         }
 
+        // Clarity gate — refuse gibberish so generate does not invent a site.
+        if (typeof req.system === 'string' && /clear enough to build/i.test(req.system)) {
+            const lower = p.toLowerCase();
+            const junk =
+                /asdf|qwer|zxcv|xxxxxx|aaaaaa|gibberish|lorem ipsum/.test(lower) ||
+                lower.replace(/[^a-z]/g, '').length < 8;
+            return this.reply(
+                JSON.stringify(
+                    junk
+                        ? { usable: false, confidence: 'low' }
+                        : { usable: true, confidence: 'high' },
+                ),
+            );
+        }
+
         return this.reply(JSON.stringify(matchClassification(p)));
     }
 }

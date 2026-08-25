@@ -20,7 +20,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { BriefFields } from "@/components/discovery/BriefFields";
 import { LockedPlanNotice } from "@/components/discovery/LockedPlanNotice";
+import { AiCreditsNotice } from "@/components/discovery/AiCreditsNotice";
 import { cn } from "@/lib/utils";
+import { isOutOfAiCredits } from "@/lib/ai/jobs/credits";
 
 const PENDING_PROMPT_KEY = "pagecrafts:pending-generate";
 const PENDING_BRIEF_KEY = "pagecrafts:pending-brief";
@@ -64,6 +66,7 @@ export function IntentCapture({
     const [brief, setBrief] = useState<SiteBrief>(() => briefFromQuery(initialDescribe));
     const [busy, setBusy] = useState<"generate" | Category | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [outOfCredits, setOutOfCredits] = useState(false);
     const fromDesign = Boolean(sourceTemplateId);
 
     function rememberAndSignIn(next: SiteBrief, text: string, templateId: string | null) {
@@ -141,6 +144,7 @@ export function IntentCapture({
     async function startGeneration(next: SiteBrief) {
         setBusy("generate");
         setError(null);
+        setOutOfCredits(false);
 
         const text = composeBrief(next);
         const created = await apiPost<CreateProjectResponse>("/api/v1/projects", {
@@ -166,7 +170,12 @@ export function IntentCapture({
         );
 
         if (started.error || !started.data) {
-            setError(started.error ?? "The site could not be generated.");
+            if (isOutOfAiCredits(started.code, started.error)) {
+                setOutOfCredits(true);
+                setError(null);
+            } else {
+                setError(started.error ?? "The site could not be generated.");
+            }
             setBusy(null);
             return;
         }
@@ -235,8 +244,14 @@ export function IntentCapture({
                     onChange={(next) => {
                         setBrief(next);
                         if (error) setError(null);
+                        if (outOfCredits) setOutOfCredits(false);
                     }}
                 />
+                {outOfCredits ? (
+                    <div className="mt-5 border-t border-border/70 pt-4">
+                        <AiCreditsNotice />
+                    </div>
+                ) : null}
                 {paidPlan ? (
                     <div className="mt-5 border-t border-border/70 pt-4">
                         <LockedPlanNotice
@@ -257,7 +272,7 @@ export function IntentCapture({
                     )}
                     <Button
                         onClick={() => void generate()}
-                        disabled={busy !== null || Boolean(paidPlan)}
+                        disabled={busy !== null || Boolean(paidPlan) || outOfCredits}
                         variant="brand"
                         className="cursor-pointer rounded-lg font-semibold sm:ml-auto"
                     >
