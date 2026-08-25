@@ -68,7 +68,7 @@ export function explainCreationIssue(
             title: 'This site did not finish building',
             what: 'The website started, but a page or section did not complete.',
             instruction:
-                'Generate this website again from my description and make sure every page works.',
+                'Rebuild this site from the same business brief and finish every page cleanly.',
         };
     }
 

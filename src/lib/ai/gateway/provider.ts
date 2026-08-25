@@ -12,6 +12,11 @@ export interface CompleteRequest {
     schema?: Schema;
     /** An external deadline from the fallback chain; combined with the per-attempt timeout. */
     signal?: AbortSignal;
+    /**
+     * Prefer this provider first when it is configured — used so Gemini can expand a brief
+     * while Groq still builds the site, without flipping the global provider order.
+     */
+    prefer?: Provider;
 }
 
 export interface CompleteReply {

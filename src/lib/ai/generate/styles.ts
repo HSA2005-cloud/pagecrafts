@@ -100,7 +100,11 @@ export const STYLE_SPECS: Record<StyleId, StyleSpec> = {
             contact: 'form',
             footer: 'columns',
         },
-        photos: false,
+        // 'hero', not false. False meant the premium tier never fetched a photograph at
+        // all, so it sold a glowing SVG while the free tier showed a real room. The hero
+        // photo is the whole composition now; the rest of the page stays type and motion,
+        // which is what separates this from Photo-rich.
+        photos: 'hero',
     },
 };
 

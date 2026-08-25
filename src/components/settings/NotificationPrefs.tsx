@@ -32,10 +32,10 @@ const ROWS: { key: keyof NotifyPrefs; id: string; label: string; hint: string }[
     hint: "When a payment lands or a receipt is ready.",
   },
   {
-    key: "product",
-    id: "notify-product",
-    label: "Product announcements",
-    hint: "Occasional news about PageCrafts itself. Off unless you turn it on.",
+    key: "security",
+    id: "notify-security",
+    label: "Security alerts",
+    hint: "Sign-in and account security notices.",
   },
 ];
 
@@ -65,8 +65,7 @@ export function NotificationPrefs({ initial }: { initial: NotifyPrefs }) {
     <div className="rounded-2xl glass-panel p-5">
       <p className="text-base font-semibold text-foreground">Notifications</p>
       <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-        Choose which emails we send. We will not write to you about a site you have not asked
-        us to watch.
+        Choose which emails we send.
       </p>
 
       <ul className="mt-4 divide-y divide-border/60">

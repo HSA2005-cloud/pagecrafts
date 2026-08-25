@@ -37,9 +37,21 @@ export function chainFor(cfg: AiConfig): NamedGateway[] {
     return cfg.order.map((p) => make[p]()).filter((gw) => gw.configured);
 }
 
+/** Every provider that has credentials, in a stable order (gemini → groq → cerebras). */
+export function rosterFor(cfg: AiConfig): NamedGateway[] {
+    const make: Record<Provider, () => NamedGateway> = {
+        gemini: () => new GeminiGateway(cfg.providers.gemini),
+        groq: () => new OpenAICompatGateway('groq', cfg.providers.groq),
+        cerebras: () => new OpenAICompatGateway('cerebras', cfg.providers.cerebras),
+    };
+    const names: Provider[] = ['gemini', 'groq', 'cerebras'];
+    return names.map((p) => make[p]()).filter((gw) => gw.configured);
+}
+
 /** Build the live gateway from a config: the priority chain, or a single provider unwrapped. */
 export function buildGateway(cfg: AiConfig = aiConfig()): Gateway {
     const chain = chainFor(cfg);
+    const roster = rosterFor(cfg);
 
     if (chain.length === 0) {
         throw new Error(
@@ -48,7 +60,8 @@ export function buildGateway(cfg: AiConfig = aiConfig()): Gateway {
         );
     }
 
-    return chain.length === 1 ? chain[0] : new FallbackGateway(chain);
+    // Always wrap so prefer: can reach a configured provider that is not in the order.
+    return new FallbackGateway(chain, undefined, roster.length ? roster : chain);
 }
 
 export function gateway(): Gateway {
@@ -66,6 +79,7 @@ export interface CallOptions {
     system?: string;
     user: string;
     schema?: Schema;
+    prefer?: Provider;
 }
 
 const call = (tier: Tier) => (options: CallOptions): Promise<CompleteReply> =>
