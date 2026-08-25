@@ -1,3 +1,5 @@
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Has the shared database actually had the migrations run against it? (R3)
@@ -111,6 +113,82 @@ const PROBES: Probe[] = [
   ),
 ];
 
+const MIGRATIONS_DIR = join(process.cwd(), "supabase", "migrations");
+
+function migrationsOnDisk(): string[] {
+  return readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .map((f) => f.slice(0, 14))
+    .sort();
+}
+
+/**
+ * The whole ledger, compared file-by-file. This is the check the probe list below cannot be:
+ * probes only find what somebody remembered to add, and every one of the four faults this
+ * script exists for was something nobody had added yet.
+ *
+ * Three answers, not two. "behind" and "unknown" are different facts and the first version
+ * of this returned "behind" for both -- so a run without VERIFY_EMAIL said migrations were
+ * pending when the ledger was perfectly up to date. Claiming a fault that is not there is
+ * the same disease as the generic sentences this script was written to cure.
+ */
+type Ledger = "ok" | "behind" | "unknown";
+
+async function reportLedger(db: SupabaseClient): Promise<Ledger> {
+  const { data, error } = await db.rpc("applied_migration_versions");
+
+  if (error) {
+    // The reader is granted to `authenticated` only: the deploy history is not for strangers.
+    // Signed out, "permission denied" means exactly that and nothing about drift.
+    if (/permission denied/i.test(error.message)) {
+      console.log("\n  Migration ledger: not readable signed out.");
+      console.log("    Set VERIFY_EMAIL and VERIFY_PASSWORD in .env.local to compare it.");
+      return "unknown";
+    }
+
+    if (isMissing(error.message)) {
+      console.log("\n  Migration ledger: the reader itself is not applied.");
+      console.log("    This database predates the check, so it is behind by at least that.");
+      console.log("    Fix: npx supabase@latest db push");
+      return "behind";
+    }
+
+    console.log("\n  Migration ledger: could not read it.");
+    console.log(`    ${error.message}`);
+    return "unknown";
+  }
+
+  const applied = new Set((data as string[] | null) ?? []);
+  const onDisk = migrationsOnDisk();
+  const pending = onDisk.filter((v) => !applied.has(v));
+  const unknown = [...applied].filter((v) => !onDisk.includes(v)).sort();
+
+  if (pending.length === 0 && unknown.length === 0) {
+    console.log(`\n  Migration ledger: up to date — all ${onDisk.length} applied.`);
+    return "ok";
+  }
+
+  if (pending.length > 0) {
+    console.log(`\n  Migration ledger: ${pending.length} on disk that this database has never run.`);
+    for (const version of pending) {
+      const file = readdirSync(MIGRATIONS_DIR).find((f) => f.startsWith(version));
+      console.log(`    pending  ${file ?? version}`);
+    }
+    console.log("\n    Fix: npx supabase@latest db push");
+  }
+
+  // A version recorded remotely with no file is the shape that stopped `db push` dead for an
+  // hour: a migration renamed in the repo while the database kept the old name.
+  if (unknown.length > 0) {
+    console.log(`\n  Migration ledger: ${unknown.length} recorded here with no file in the repo.`);
+    for (const version of unknown) console.log(`    orphan   ${version}`);
+    console.log("\n    Someone renamed or deleted a migration that had already been applied.");
+    console.log("    Fix, per orphan: npx supabase@latest migration repair --status reverted <version>");
+  }
+
+  return pending.length > 0 ? "behind" : "ok";
+}
+
 async function main() {
   if (!SUPABASE_URL || !ANON) {
     console.error("\n  NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be set\n");
@@ -138,6 +216,9 @@ async function main() {
   }
 
   const host = new URL(SUPABASE_URL).host;
+
+  const ledger = await reportLedger(db);
+
   console.log(`\n  Checking ${host} ${as}, against ${PROBES.length} things the code expects.\n`);
 
   const missing: Probe[] = [];
@@ -168,6 +249,19 @@ async function main() {
   }
 
   if (missing.length === 0) {
+    if (ledger === "behind") {
+      console.log("\n  Every probe passed, but the ledger above says migrations are pending.");
+      console.log("  Trust the ledger: the probes only cover what somebody remembered to add.\n");
+      process.exitCode = 1;
+      return;
+    }
+
+    if (ledger === "unknown") {
+      console.log("\n  Probes found no drift, but the ledger could not be read, so this is");
+      console.log("  not a clean bill of health. See the note above it.\n");
+      return;
+    }
+
     console.log("\n  No drift. The shared database matches what the code expects.\n");
     return;
   }

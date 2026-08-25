@@ -119,7 +119,7 @@ be empty — dummy placeholders are scrubbed, not published.
 |---|---|---|
 | hero | centred, split-image, image-bg, minimal | `eyebrow` (text), `heading` (text), `sub` (richtext), `ctaLabel` (text), `image` (image) |
 | about | text, media-split | `heading` (text), `body` (richtext), `image` (image) |
-| services | cards, grid, timeline | `heading` (text), `items` (list) |
+| services | cards, grid, timeline, tabs | `heading` (text), `items` (list) |
 | menu | grouped, simple | `heading` (text), `items` (list) |
 | gallery | masonry, grid, carousel | `heading` (text), `images` (list) |
 | team | cards, grid | `heading` (text), `members` (list) |
