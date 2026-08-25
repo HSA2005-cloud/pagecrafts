@@ -17,6 +17,7 @@ import { BuildSlide } from "@/components/deck/BuildSlide";
 import { SitesSlide } from "@/components/deck/SitesSlide";
 import { SettingsSlide } from "@/components/deck/SettingsSlide";
 import { SlideTo } from "@/components/deck/SlideTo";
+import { PlanUpgradedBanner } from "@/components/payments/PlanUpgradedBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -98,13 +99,16 @@ function Home({
             <Suspense fallback={null}>
                 <SlideTo />
             </Suspense>
+            <Suspense fallback={null}>
+                <PlanUpgradedBanner />
+            </Suspense>
 
             <div className="page-deck">
                 <main>
                     <WelcomeSlide name={user.name} templates={templates} />
                     <ValueProps />
                     <PricingSlide />
-                    <CompareSlide />
+                    <CompareSlide plan={billing?.plan ?? "starter"} />
                     <BuildSlide
                         templates={templates}
                         unlockedTemplateIds={billing?.unlockedTemplateIds ?? []}

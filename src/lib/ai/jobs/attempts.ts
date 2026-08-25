@@ -17,6 +17,39 @@ export interface GenerationAttempt {
     variants: PublicVariant[];
 }
 
+const LINK_TO_STYLES = /<link\b[^>]*href\s*=\s*["']?\.?\/?styles\.css["']?[^>]*>/gi;
+
+/**
+ * One self-contained page for the picker to render.
+ *
+ * Only index.html was sent, and a custom build keeps its CSS in a separate styles.css that
+ * index.html links to by relative path. A preview card has no server to resolve that
+ * against, so all three looks arrived as raw HTML -- Times New Roman, blue underlined
+ * links -- and identical to each other, because the stylesheet was the only thing that
+ * differed between them.
+ *
+ * The recipe path never showed this: compositionToFiles writes its CSS into a <style> tag
+ * in the same file. This does the same thing for the custom path, for the preview only. The
+ * files that get saved to the project are untouched.
+ */
+function inlineStyles(files: StyleOption['files']): string {
+    const html = files['index.html'] ?? '';
+    const css = files['styles.css'];
+
+    if (!html || !css) return html;
+
+    const style = `<style>\n${css}\n</style>`;
+    const withoutLink = html.replace(LINK_TO_STYLES, '');
+
+    if (/<\/head>/i.test(withoutLink)) {
+        return withoutLink.replace(/<\/head>/i, `${style}</head>`);
+    }
+
+    // A fragment with no head of its own; the picker renders it as-is, so the style has to
+    // ride in front of the markup rather than nowhere at all.
+    return `${style}\n${withoutLink}`;
+}
+
 export function publicVariant(option: StyleOption): PublicVariant {
     return {
         id: option.id,
@@ -24,7 +57,7 @@ export function publicVariant(option: StyleOption): PublicVariant {
         blurb: option.blurb,
         tier: option.tier,
         price_inr: option.priceInr,
-        html: option.files['index.html'] ?? '',
+        html: inlineStyles(option.files),
     };
 }
 

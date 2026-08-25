@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { DiscountCodeField } from "@/components/payments/DiscountCodeField";
 import { useRazorpayCheckout } from "@/hooks/useRazorpayCheckout";
 import { waitForAdvancedGrant, waitForGenerationPass } from "@/lib/payments/wait-for-pro";
 import type { BillingSummary } from "@/lib/contracts";
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 export function PackagesPanel({ initial }: { initial: BillingSummary }) {
     const [billing, setBilling] = useState(initial);
     const [message, setMessage] = useState<string | null>(null);
+    const [discountCode, setDiscountCode] = useState("");
     const pendingBuyRef = useRef<"advanced" | "pass" | null>(null);
     const passBaselineRef = useRef(0);
 
@@ -65,14 +67,14 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
     async function buyAdvanced() {
         setMessage(null);
         pendingBuyRef.current = "advanced";
-        await openAdvancedCheckout();
+        await openAdvancedCheckout(discountCode.trim() || undefined);
     }
 
     async function buyPass() {
         setMessage(null);
         passBaselineRef.current = billing.generationPasses;
         pendingBuyRef.current = "pass";
-        await openGenerationPassCheckout();
+        await openGenerationPassCheckout(discountCode.trim() || undefined);
     }
 
     const free = AI_PACKAGES.free;
@@ -102,6 +104,13 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
                     .
                 </p>
             </header>
+
+            <DiscountCodeField
+                kind={billing.aiPackage === "advanced" ? "generation_pass" : "advanced"}
+                value={discountCode}
+                onChange={setDiscountCode}
+                className="max-w-md"
+            />
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <article
@@ -194,8 +203,8 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
                     <code className="font-mono text-xs">RAZORPAY_KEY_SECRET</code> in the server
                     environment (see <code className="font-mono text-xs">.env.example</code>), then
                     restart the app. Checkout will also need{" "}
-                    <code className="font-mono text-xs">RAZORPAY_WEBHOOK_SECRET</code> so purchases
-                    can be granted after payment.
+                    <code className="font-mono text-xs">RAZORPAY_WEBHOOK_SECRET</code> as a
+                    backup grant path after payment (browser verify also grants).
                 </p>
             ) : null}
 
