@@ -49,8 +49,8 @@ export function BillingPlans({
       <p className="text-base font-semibold text-foreground">User Plans</p>
       <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
         You are on <span className="font-medium text-foreground">{plan.name}</span>. Upgrade on
-        User Plans to unlock every Pro or Premium design — not one template at a time. Cards
-        stay with Razorpay.
+        User Plans to unlock every Pro or Premium design — not one template at a time. AI builds
+        per site are listed under AI credits above. Cards stay with Razorpay.
       </p>
 
       <div className="mt-4">

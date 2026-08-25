@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ResendVerification } from "@/components/auth/ResendVerification";
+import { VerifyWatcher } from "@/components/auth/VerifyWatcher";
 
 export default async function VerifyPage({
     searchParams,
@@ -21,6 +22,7 @@ export default async function VerifyPage({
                     If you already used Continue with Google with this address, you will not get this email. Sign in with Google instead.
                 </p>
                 {email && <ResendVerification email={email} />}
+                <VerifyWatcher />
                 <div className="mt-5 flex flex-col gap-2 text-sm">
                     <a
                         href="/api/v1/auth/google"

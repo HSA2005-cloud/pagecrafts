@@ -60,6 +60,7 @@ export function withRoute<
           console.warn("[api] rejected body", {
             path: new URL(req.url).pathname,
             issues: parsed.error.issues.map((i) => i.path.join(".")),
+            reasons: parsed.error.issues.map((i) => i.message),
           });
           return fail("validation_failed", "Some fields were invalid.");
         }

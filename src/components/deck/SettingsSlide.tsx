@@ -1,5 +1,6 @@
 import type { AccountResponse, BillingSummary } from "@/lib/contracts";
 import { DEFAULT_BILLING } from "@/lib/contracts";
+import { AiCreditsPanel } from "@/components/settings/AiCreditsPanel";
 import { BillingPlans } from "@/components/settings/BillingPlans";
 import { BillingProfile } from "@/components/settings/BillingProfile";
 import { NotificationPrefs } from "@/components/settings/NotificationPrefs";
@@ -75,6 +76,7 @@ export function SettingsSlide({
                         </div>
 
                         <NotificationPrefs initial={account.notifyPrefs} />
+                        <AiCreditsPanel billing={billing ?? DEFAULT_BILLING} />
                         <BillingPlans account={account} initial={billing ?? DEFAULT_BILLING} />
                         <BillingProfile initial={account} />
                         <PrivacyAndData initial={account} />

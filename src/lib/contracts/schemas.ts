@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { MAX_CLASSIFY_CHARS } from "./ai";
+
 // Runtime request validators for the persistence routes. Kept aligned with the
 // TypeScript contracts in this folder; Zod guards the HTTP boundary (M0.2).
 
@@ -7,7 +9,11 @@ export const createProjectSchema = z.object({
   name: z.string().min(1).max(80),
   sourceTemplateId: z.string().uuid().optional(),
   mode: z.literal("generate").optional(),
-  prompt: z.string().max(500).optional(),
+  // The same constant composeBrief truncates to and the generate route accepts. It was a
+  // hardcoded 500 while MAX_CLASSIFY_CHARS moved to 2000 for the custom path, so a brief
+  // that composed past 500 was built, sent, accepted by /generate -- and refused here, at
+  // the first step, with nothing on screen naming the field.
+  prompt: z.string().max(MAX_CLASSIFY_CHARS).optional(),
   brief: z
     .object({
       name: z.string().trim().min(1).max(80),

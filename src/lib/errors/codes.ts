@@ -11,6 +11,7 @@ export const ERROR_STATUS: Record<ErrorCode, number> = {
     payload_too_large: 413,
     generation_failed: 502,
     payment_required: 402,
+    payments_unavailable: 503,
     hosting_error: 502,
     service_unavailable: 503,
     internal: 500,

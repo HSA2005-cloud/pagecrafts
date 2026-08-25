@@ -52,6 +52,22 @@ const composition: Composition = {
     ],
 };
 
+const fallbackTemplate = {
+    id: 'gym',
+    name: 'Pulse Gym',
+    description: 'A gym site',
+    category: 'fitness',
+    vertical: 'gym',
+    tags: ['gym'],
+    thumbnailUrl: '',
+    files: { 'index.html': '<h1>Pulse Gym</h1>' },
+    contentSchema: { sections: [{ key: 'hero', label: 'Hero', fields: [] }] },
+    license: 'MIT',
+    sourceUrl: 'https://example.com',
+    tier: 'free',
+    priceInr: 0,
+} satisfies Template;
+
 function jobOf(projectId: string, patch: Partial<Job> = {}): Job {
     return {
         id: 'job_1',
@@ -140,36 +156,70 @@ describe('persistGeneratedSite', () => {
 
     it('copies the nearest template when generation fell back', async () => {
         const db = createFakeDb({ users: [{ id: 'u1' }] });
-        const project = db.insert('projects', { user_id: 'u1', name: 'Draft' });
+        const project = db.insert('projects', { user_id: 'u1', name: '1947 Restaurant' });
         const id = project.id as string;
-        const template = {
-            id: 'gym',
-            name: 'Pulse Gym',
-            description: 'A gym site',
-            category: 'fitness',
-            vertical: 'gym',
-            tags: ['gym'],
-            thumbnailUrl: '',
-            files: { 'index.html': '<h1>Pulse Gym</h1>' },
-            contentSchema: { sections: [{ key: 'hero', label: 'Hero', fields: [] }] },
-            license: 'MIT',
-            sourceUrl: 'https://example.com',
-            tier: 'free',
-            priceInr: 0,
-        } satisfies Template;
 
         await persistGeneratedSite(
             db.asUser('u1'),
             id,
             jobOf(id, { fallbackTemplateId: 'gym' }),
-            [template],
+            [fallbackTemplate],
         );
 
         const files = db.rows('project_files').filter((f) => f.project_id === id);
         expect(files).toEqual(expect.arrayContaining([
             expect.objectContaining({ path: 'index.html', content: '<h1>Pulse Gym</h1>' }),
         ]));
-        expect(db.rows('commits')[0]?.message).toBe('Started from Pulse Gym');
+    });
+
+    it('does not rename the project after a design the person never chose', async () => {
+        const db = createFakeDb({ users: [{ id: 'u1' }] });
+        const project = db.insert('projects', { user_id: 'u1', name: '1947 Restaurant' });
+        const id = project.id as string;
+
+        await persistGeneratedSite(
+            db.asUser('u1'),
+            id,
+            jobOf(id, { fallbackTemplateId: 'gym' }),
+            [fallbackTemplate],
+        );
+
+        const row = db.rows('projects').find((p) => p.id === id)!;
+
+        expect(row.name).toBe('1947 Restaurant');
+        expect(row.name).not.toBe('Pulse Gym');
+        expect((row.site_meta as { title?: string }).title).toBe('1947 Restaurant');
+    });
+
+    it('records in history that it could not generate, rather than claiming a start', async () => {
+        const db = createFakeDb({ users: [{ id: 'u1' }] });
+        const project = db.insert('projects', { user_id: 'u1', name: '1947 Restaurant' });
+        const id = project.id as string;
+
+        await persistGeneratedSite(
+            db.asUser('u1'),
+            id,
+            jobOf(id, { fallbackTemplateId: 'gym' }),
+            [fallbackTemplate],
+        );
+
+        const message = String(db.rows('commits')[0]?.message);
+
+        expect(message).toMatch(/could not generate/i);
+        expect(message).toContain('Pulse Gym');
+    });
+
+    it('still renames the project when the site really was generated', async () => {
+        const db = createFakeDb({ users: [{ id: 'u1' }] });
+        const project = db.insert('projects', { user_id: 'u1', name: 'Draft' });
+        const id = project.id as string;
+
+        await persistGeneratedSite(db.asUser('u1'), id, jobOf(id, {
+            composition,
+            files: compositionToFiles(composition),
+        }));
+
+        expect(db.rows('projects').find((p) => p.id === id)!.name).toBe('Smile Dental');
     });
 
     it('is a no-op when the client cannot write', async () => {

@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useEditorStore } from '@/lib/editor-store';
-import PublishCheckoutButton from './PublishCheckoutButton';
+import GoLiveButton from './GoLiveButton';
 
 function statusLine(saving: boolean, saveError: string | null, unsaved: number, savedAt: string | null) {
     if (saving) return { text: 'Saving…', tone: 'muted' as const };
@@ -108,7 +108,7 @@ export default function TopBar({
                 >
                     {saving ? 'Saving…' : 'Save'}
                 </button>
-                <PublishCheckoutButton projectId={projectId} />
+                <GoLiveButton projectId={projectId} projectName={projectName} />
             </div>
         </header>
     );

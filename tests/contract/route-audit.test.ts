@@ -52,6 +52,9 @@ const NOT_WITH_ROUTE: Record<string, string> = {
     "/v1/auth/password/reset": "Pre-session; uses guard().",
     "/v1/auth/password/update": "Pre-session; uses guard().",
     "/v1/auth/signup": "Pre-session by definition; uses guard().",
+    "/v1/auth/pending":
+        "Pre-session by definition -- it exists to answer somebody who has no session "
+        + "yet. Uses guard() for the envelope.",
     "/v1/auth/verify/resend": "Pre-session; uses guard().",
     "/v1/health": "A liveness probe. Its shape is for a monitor, not a person.",
     "/v1/payments/razorpay/webhook":
@@ -77,10 +80,18 @@ const NO_SCHEMA: Record<string, string> = {
         "in the handler (same as deleting a site) rather than a withRoute Zod schema — a stolen " +
         "cookie alone must not wipe the account. The UI still shows what they lose and asks them " +
         "to type the words. PATCH /account/consent, which does carry a body, has its schema.",
+    "/v1/payments/razorpay/verify":
+        "Handled directly by verifying razorpay_order_id, razorpay_payment_id and razorpay_signature in handler.",
 };
 
 /** Routes allowed to reach past RLS with the service role, and why. */
 const ADMIN_CLIENT = {
+    "/v1/auth/pending":
+        "Reads one auth user to ask whether their email is confirmed, then mints a one-time " +
+        "link for that same user. There is no session yet, so there is no user-scoped client " +
+        "to use instead. Which user is not taken from the request: it comes from an httpOnly " +
+        "HMAC-signed ticket set at signup, so the route can only ever act on the account the " +
+        "holder of that cookie created.",
     "/v1/health": "Checks the database is reachable at all, which is not a per-user question.",
     "/v1/projects/[id]/generate":
         "Only to hand the vertical-profile cache a writer. Profiles are shared reference " +
