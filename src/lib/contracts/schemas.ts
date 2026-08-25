@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "@/lib/auth/credentials";
+import { MAX_CLASSIFY_CHARS } from "./ai";
+
 // Runtime request validators for the persistence routes. Kept aligned with the
 // TypeScript contracts in this folder; Zod guards the HTTP boundary (M0.2).
 
@@ -7,7 +10,11 @@ export const createProjectSchema = z.object({
   name: z.string().min(1).max(80),
   sourceTemplateId: z.string().uuid().optional(),
   mode: z.literal("generate").optional(),
-  prompt: z.string().max(500).optional(),
+  // The same constant composeBrief truncates to and the generate route accepts. It was a
+  // hardcoded 500 while MAX_CLASSIFY_CHARS moved to 2000 for the custom path, so a brief
+  // that composed past 500 was built, sent, accepted by /generate -- and refused here, at
+  // the first step, with nothing on screen naming the field.
+  prompt: z.string().max(MAX_CLASSIFY_CHARS).optional(),
   brief: z
     .object({
       name: z.string().trim().min(1).max(80),
@@ -112,6 +119,9 @@ export const billingProfileSchema = z.object({
   phone: z.string().trim().max(20),
   billingLine: z.string().trim().max(120),
   billingCity: z.string().trim().max(80),
+  billingState: z.string().trim().max(80),
+  billingPostal: z.string().trim().max(20),
+  billingCountry: z.string().trim().max(80),
   gstin: z.string().trim().max(15),
 });
 
@@ -120,8 +130,19 @@ export const notifyPrefsSchema = z.object({
   published: z.boolean(),
   updated: z.boolean(),
   payments: z.boolean(),
-  product: z.boolean(),
+  security: z.boolean(),
 });
+
+export const passwordChangeSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH),
+    password: z.string().min(MIN_PASSWORD_LENGTH).max(MAX_PASSWORD_LENGTH),
+    confirmPassword: z.string().min(1).max(MAX_PASSWORD_LENGTH),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Both passwords need to match.",
+  });
 
 export const notifyPrefsRequestSchema = z.object({
   notifyPrefs: notifyPrefsSchema,

@@ -59,6 +59,13 @@ export function apiPut<T>(path: string, payload: unknown): Promise<CallResult<T>
 export function apiPost<T>(path: string, payload: unknown): Promise<CallResult<T>> {
     return call<T>(path, { method: 'POST', body: JSON.stringify(payload) });
 }
+
+export function apiPostHeaders<T>(
+    path: string,
+    headers: Record<string, string>,
+): Promise<CallResult<T>> {
+    return call<T>(path, { method: 'POST', headers });
+}
 export function apiPatch<T>(path: string, payload: unknown): Promise<CallResult<T>> {
     return call<T>(path, { method: 'PATCH', body: JSON.stringify(payload) });
 }

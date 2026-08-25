@@ -250,18 +250,21 @@ describe("what the events are allowed to carry", () => {
     });
 });
 
-describe("a publish refused before it starts", () => {
-    it("counts nothing, because nothing was attempted", async () => {
-        // An unpaid publish is turned away at the gate. Counting it as a started publish
-        // would put a permanent failure rate into the funnel for a case that is working
-        // exactly as designed.
+describe("a publish by somebody who has paid nothing", () => {
+    it("counts as an ordinary publish, because that is what it now is", async () => {
+        // Going live on a PageCrafts address is free, so this is no longer turned away at
+        // the gate. It has to appear in the funnel like any other publish — leaving it out
+        // would hide most of the traffic during the launch offer.
         const { db, projectId } = seeded({ paid: false });
 
-        await expect(
-            publishProject(db.asUser(OWNER), OWNER, projectId, nextKey(), provider()),
-        ).rejects.toMatchObject({ code: "payment_required" });
+        const attempt = await publishProject(
+            db.asUser(OWNER), OWNER, projectId, nextKey(), provider(),
+        );
+        await settled(db, attempt.deploymentId);
 
-        expect(captured.events).toEqual([]);
+        const ids = captured.events.map((e) => e.id);
+        expect(ids).toContain("EV-06");
+        expect(ids).toContain("EV-07");
         expect(sentry.errors).toEqual([]);
     });
 });

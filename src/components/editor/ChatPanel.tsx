@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '@/lib/editor-store';
 import { chatSuggestions } from '@/lib/editor/chat-suggestions';
 import {
@@ -8,14 +8,32 @@ import {
     generationThought,
 } from '@/lib/editor/generation-steps';
 import { explainCreationIssue } from '@/lib/editor/ai-fix';
+import { uploadProjectImage } from '@/lib/project-source';
 import ChangeSummary from './ChangeSummary';
-import ChatComposer from './ChatComposer';
+import ChatComposer, { type ChatAttachment } from './ChatComposer';
 import { GenerationTimeline } from './GenerationTimeline';
 import { AskAiFixDialog } from './AskAiFixDialog';
+
+function messageWithAttachments(text: string, attachments: ChatAttachment[]): string {
+    const trimmed = text.trim();
+    if (attachments.length === 0) return trimmed;
+
+    const refs = attachments
+        .map((item) => `[Attached image "${item.name}": ${item.url}]`)
+        .join('\n');
+
+    if (!trimmed) {
+        return attachments.length === 1
+            ? `Use the attached image: ${attachments[0].url}`
+            : `Use these attached images:\n${refs}`;
+    }
+    return `${trimmed}\n\n${refs}`;
+}
 
 export default function ChatPanel({ autoFocus = false }: { autoFocus?: boolean }) {
     const composition = useEditorStore((s) => s.composition);
     const contentSchema = useEditorStore((s) => s.contentSchema);
+    const projectId = useEditorStore((s) => s.projectId);
     const requestAiEdit = useEditorStore((s) => s.requestAiEdit);
     const cancelAiEdit = useEditorStore((s) => s.cancelAiEdit);
     const messages = useEditorStore((s) => s.chatMessages);
@@ -27,6 +45,9 @@ export default function ChatPanel({ autoFocus = false }: { autoFocus?: boolean }
     const hasSections = (composition?.sections.length ?? 0) > 0;
 
     const [draft, setDraft] = useState('');
+    const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+    const [uploadingFiles, setUploadingFiles] = useState(false);
+    const [fileError, setFileError] = useState<string | null>(null);
     const [askOpen, setAskOpen] = useState(false);
     const endRef = useRef<HTMLDivElement>(null);
 
@@ -41,11 +62,38 @@ export default function ChatPanel({ autoFocus = false }: { autoFocus?: boolean }
     }, [messages, busy, pendingChange, error]);
 
     async function send(text: string) {
-        const next = text.trim();
+        const next = messageWithAttachments(text, attachments).trim();
         if (!next || busy) return;
         setDraft('');
+        setAttachments([]);
+        setFileError(null);
         await requestAiEdit(next);
     }
+
+    const pickFiles = useCallback(
+        async (files: FileList) => {
+            if (!projectId || busy || pendingChange || uploadingFiles) return;
+
+            setFileError(null);
+            setUploadingFiles(true);
+
+            for (const file of Array.from(files)) {
+                const { asset, error } = await uploadProjectImage(projectId, file);
+                const url = asset?.url;
+                if (error || !url) {
+                    setFileError(error ?? 'That image could not be uploaded.');
+                    continue;
+                }
+                setAttachments((current) => [
+                    ...current,
+                    { id: asset.id, name: file.name, url },
+                ]);
+            }
+
+            setUploadingFiles(false);
+        },
+        [projectId, busy, pendingChange, uploadingFiles],
+    );
 
     return (
         <section aria-label="Ask for a change" className="relative flex h-full min-h-0 flex-col">
@@ -126,6 +174,12 @@ export default function ChatPanel({ autoFocus = false }: { autoFocus?: boolean }
                     </div>
                 ) : null}
 
+                {fileError ? (
+                    <p role="alert" className="mt-4 text-sm text-destructive">
+                        {fileError}
+                    </p>
+                ) : null}
+
                 {showChoices && suggestions.length > 0 ? (
                     <ul className="mt-6 flex flex-wrap gap-2" aria-label="Suggested next steps">
                         {suggestions.map((item) => (
@@ -161,6 +215,12 @@ export default function ChatPanel({ autoFocus = false }: { autoFocus?: boolean }
                         onDraftChange={setDraft}
                         onSubmit={() => void send(draft)}
                         onStop={cancelAiEdit}
+                        onPickFiles={(files) => void pickFiles(files)}
+                        attachments={attachments}
+                        onRemoveAttachment={(id) =>
+                            setAttachments((current) => current.filter((item) => item.id !== id))
+                        }
+                        uploadingFiles={uploadingFiles}
                         busy={busy}
                         locked={!!pendingChange}
                         autoFocus={autoFocus}
