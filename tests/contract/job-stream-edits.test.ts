@@ -14,7 +14,7 @@ vi.mock('@/lib/ai/cost/persist', () => ({
 
 vi.mock('@/lib/limits/redis', async () => {
     const support = await import('../support/redis-mock');
-    return { redis: () => support.redisStub, isRedisConfigured: () => true };
+    return { redis: () => support.redisStub, isRedisConfigured: () => false };
 });
 
 import { redisMock as limits, resetRedisMock } from '../support/redis-mock';

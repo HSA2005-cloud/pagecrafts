@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { scrollToDeckSlide } from "@/lib/deck/scroll-to-slide";
+
 const APP_SLIDES = [
     { id: "welcome", label: "Welcome" },
     { id: "how-it-works", label: "How it works" },
@@ -57,17 +59,7 @@ export function SlideNav({
     }, [introOnly, slides]);
 
     function go(id: string) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        // Temporarily ease snap so smooth scrollIntoView is not fighting the deck.
-        const html = document.documentElement;
-        const hadSnap = html.classList.contains("deck-snap");
-        if (hadSnap) html.classList.remove("deck-snap");
-        el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
-        if (hadSnap) {
-            window.setTimeout(() => html.classList.add("deck-snap"), reduce ? 0 : 700);
-        }
+        scrollToDeckSlide(id, { updateUrl: false });
     }
 
     const current = catalog.find((slide) => slide.id === active) ?? catalog[0];

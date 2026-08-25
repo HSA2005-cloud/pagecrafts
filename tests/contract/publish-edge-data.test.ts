@@ -87,12 +87,8 @@ function provider(
     } as DeployProvider & { log: Log };
 }
 
-// publishProject hands the provider work to a floating promise so the request can answer
-// 202. Nothing to await, so the assertions have to wait for the row instead.
-//
-// The states it may come to rest in. `verifying` is one of them as of D17 — that is the
-// whole point of the propagation case — so waiting for "anything but pending" would return
-// while the attempt was still walking through provisioning and pushing.
+// publishProject awaits host work, so the row is usually already at rest when it returns.
+// settled() still covers any finish() write that lands a tick later.
 const AT_REST = new Set(["live", "failed", "verifying"]);
 
 async function settled(db: FakeDb, deploymentId: string) {
@@ -105,6 +101,19 @@ async function settled(db: FakeDb, deploymentId: string) {
     throw new Error(`deployment ${deploymentId} never came to rest (stuck at ${last?.status})`);
 }
 
+/** Legacy / poll path: an attempt that finished push+DNS but never got an origin answer. */
+function seedVerifying(db: FakeDb, projectId: string) {
+    const project = db.rows("projects").find((p) => p.id === projectId)!;
+    project.repo_full_name = "meeras-cafe";
+    return db.insert("deployments", {
+        project_id: projectId,
+        status: "verifying",
+        live_url: null,
+        failure_reason: "not_answering_yet",
+        commit_sha: "abc1234",
+    });
+}
+
 let key = 0;
 const nextKey = () => `edge-${(key += 1)}`;
 
@@ -115,7 +124,9 @@ describe("failure after payment", () => {
         const { db, projectId } = seeded();
         const client = db.asUser(OWNER);
 
-        const started = await publishProject(client, OWNER, projectId, nextKey());
+        const started = await publishProject(
+            client, OWNER, projectId, nextKey(), provider({ failAt: "pushing" }),
+        );
         await settled(db, started.deploymentId);
 
         const after = await checkEntitlement(client, OWNER, projectId, "publish");
@@ -127,7 +138,9 @@ describe("failure after payment", () => {
         const { db, projectId } = seeded();
         const client = db.asUser(OWNER);
 
-        const failed = await publishProject(client, OWNER, projectId, nextKey());
+        const failed = await publishProject(
+            client, OWNER, projectId, nextKey(), provider({ failAt: "pushing" }),
+        );
         await settled(db, failed.deploymentId);
 
         // The gate throws payment_required when it is not satisfied, so simply returning is
@@ -136,8 +149,8 @@ describe("failure after payment", () => {
             granted: true,
         });
 
-        const retry = await publishProject(client, OWNER, projectId, nextKey());
-        expect(retry.status).toBe("pending");
+        const retry = await publishProject(client, OWNER, projectId, nextKey(), provider());
+        expect(retry.status).toBe("live");
     });
 
     it("still holds exactly one entitlement row after several attempts", async () => {
@@ -147,7 +160,9 @@ describe("failure after payment", () => {
         const client = db.asUser(OWNER);
 
         for (let i = 0; i < 3; i += 1) {
-            const attempt = await publishProject(client, OWNER, projectId, nextKey());
+            const attempt = await publishProject(
+                client, OWNER, projectId, nextKey(), provider({ failAt: "pushing" }),
+            );
             await settled(db, attempt.deploymentId);
         }
 
@@ -157,17 +172,26 @@ describe("failure after payment", () => {
         expect(rows).toHaveLength(1);
     });
 
-    it("refuses a publish nobody paid for, before anything is recorded", async () => {
+    // Going live on a PageCrafts address is free (assertCanPublish, "Modified Publishing").
+    // The gate no longer refuses — it writes the grant so the host step can proceed, and the
+    // grant is recorded rather than assumed, so the row says why this publish was allowed.
+    it("lets somebody who has paid nothing go live, and records why", async () => {
         const db = createFakeDb({ users: [{ id: OWNER }] });
         const project = db.insert("projects", { user_id: OWNER, name: "Unpaid" });
         db.insert("project_files", { project_id: project.id, path: "index.html", content: "<p>hi</p>" });
 
-        await expect(
-            publishProject(db.asUser(OWNER), OWNER, project.id as string, nextKey()),
-        ).rejects.toMatchObject({ code: "payment_required" });
+        const attempt = await publishProject(
+            db.asUser(OWNER), OWNER, project.id as string, nextKey(),
+        );
 
-        // Nothing attempted means nothing to explain later, and no provider call to pay for.
-        expect(db.rows("deployments")).toHaveLength(0);
+        expect(attempt.deploymentId).toBeTruthy();
+        expect(db.rows("deployments")).toHaveLength(1);
+
+        const grants = db
+            .rows("entitlements")
+            .filter((r) => r.project_id === project.id && r.kind === "publish");
+        expect(grants).toHaveLength(1);
+        expect(grants[0]!.source).toBe("launch_offer");
     });
 });
 
@@ -213,29 +237,33 @@ describe("a publish that fails after the site was claimed", () => {
     });
 });
 
-describe("a publish waiting on DNS", () => {
-    it("rests in verifying rather than pending or failed", async () => {
+describe("a publish after push (no origin wait)", () => {
+    it("marks live immediately without a second origin poll", async () => {
+        // pushBuild already confirmed Pages; re-probing the custom domain burned 5–8s.
         const { db, projectId } = seeded();
-        const slow = provider({ live: false });
-
-        const attempt = await publishProject(db.asUser(OWNER), OWNER, projectId, nextKey(), slow);
+        const attempt = await publishProject(
+            db.asUser(OWNER), OWNER, projectId, nextKey(), provider({ live: false }),
+        );
         const row = await settled(db, attempt.deploymentId);
 
-        expect(row.status).toBe("verifying");
-        expect(row.live_url).toBeNull();
+        expect(attempt.status).toBe("live");
+        expect(row.status).toBe("live");
+        expect(row.live_url).toBe("https://meeras-cafe.pagecrafts.in");
     });
+});
+
+describe("resuming a verifying attempt", () => {
+    // Older rows (and the poll route) can still rest in verifying. resumeVerification
+    // remains the cheap path that promotes them without re-provisioning.
 
     it("does not hand out a URL for a site that is not answering yet", async () => {
         // C-05. A verifying attempt has a predicted address, and showing it would send
         // somebody to a page that is not there.
         const { db, projectId } = seeded();
         const client = db.asUser(OWNER);
-        const slow = provider({ live: false });
+        const row = seedVerifying(db, projectId);
 
-        const attempt = await publishProject(client, OWNER, projectId, nextKey(), slow);
-        await settled(db, attempt.deploymentId);
-
-        const view = await getDeployment(client, attempt.deploymentId);
+        const view = await getDeployment(client, row.id as string);
         expect(view?.state).toBe("verifying");
         expect(view?.liveUrl).toBeNull();
     });
@@ -243,36 +271,31 @@ describe("a publish waiting on DNS", () => {
     it("goes live on a later check, without provisioning or pushing again", async () => {
         const { db, projectId } = seeded();
         const client = db.asUser(OWNER);
-        const slow = provider({ live: false });
+        const row = seedVerifying(db, projectId);
+        const log = { provisions: 0, pushes: 0, verifies: [] as string[] };
 
-        const attempt = await publishProject(client, OWNER, projectId, nextKey(), slow);
-        await settled(db, attempt.deploymentId);
-
-        const now = provider({ live: true, log: slow.log });
-        const state = await resumeVerification(client, attempt.deploymentId, now);
+        const state = await resumeVerification(
+            client, row.id as string, provider({ live: true, log }),
+        );
 
         expect(state).toBe("live");
-        expect(slow.log.provisions).toBe(1);
-        expect(slow.log.pushes).toBe(1);
+        expect(log.provisions).toBe(0);
+        expect(log.pushes).toBe(0);
+        expect(log.verifies).toEqual(["https://meeras-cafe.pagecrafts.in"]);
 
-        const view = await getDeployment(client, attempt.deploymentId);
+        const view = await getDeployment(client, row.id as string);
         expect(view?.liveUrl).toBe("https://meeras-cafe.pagecrafts.in");
     });
 
     it("leaves the attempt alone when the site is still not there", async () => {
         const { db, projectId } = seeded();
         const client = db.asUser(OWNER);
-        const slow = provider({ live: false });
+        const row = seedVerifying(db, projectId);
+        const again = provider({ live: false });
 
-        const attempt = await publishProject(client, OWNER, projectId, nextKey(), slow);
-        await settled(db, attempt.deploymentId);
-
-        const again = provider({ live: false, log: slow.log });
-        expect(await resumeVerification(client, attempt.deploymentId, again)).toBe("verifying");
-        expect(await resumeVerification(client, attempt.deploymentId, again)).toBe("verifying");
-
-        // Repeatable and free: the client polls, so this runs often.
-        expect(slow.log.provisions).toBe(1);
+        expect(await resumeVerification(client, row.id as string, again)).toBe("verifying");
+        expect(await resumeVerification(client, row.id as string, again)).toBe("verifying");
+        expect(again.log.provisions).toBe(0);
     });
 
     it("does not fail the attempt when the check itself errors", async () => {
@@ -280,15 +303,12 @@ describe("a publish waiting on DNS", () => {
         // would throw away a publish that had done everything but get an answer.
         const { db, projectId } = seeded();
         const client = db.asUser(OWNER);
-        const slow = provider({ live: false });
+        const row = seedVerifying(db, projectId);
 
-        const attempt = await publishProject(client, OWNER, projectId, nextKey(), slow);
-        await settled(db, attempt.deploymentId);
-
-        const broken = provider({ log: slow.log });
+        const broken = provider();
         vi.spyOn(broken, "verifyLive").mockRejectedValue(new Error("ECONNRESET"));
 
-        expect(await resumeVerification(client, attempt.deploymentId, broken)).toBe("verifying");
+        expect(await resumeVerification(client, row.id as string, broken)).toBe("verifying");
     });
 
     it("does nothing to an attempt that already finished", async () => {
@@ -309,13 +329,10 @@ describe("a publish waiting on DNS", () => {
         const stranger = "22222222-2222-2222-2222-222222222222";
         db.insert("users", { id: stranger });
 
-        const attempt = await publishProject(
-            db.asUser(OWNER), OWNER, projectId, nextKey(), provider({ live: false }),
-        );
-        await settled(db, attempt.deploymentId);
+        const row = seedVerifying(db, projectId);
 
         await expect(
-            resumeVerification(db.asUser(stranger), attempt.deploymentId, provider()),
+            resumeVerification(db.asUser(stranger), row.id as string, provider()),
         ).rejects.toMatchObject({ code: "not_found" });
     });
 });

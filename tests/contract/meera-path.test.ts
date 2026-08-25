@@ -108,9 +108,10 @@ describe("Meera's path", () => {
             formEndpoint: "https://forms.example/kettle",
         });
 
-        // 5. The gate. Nothing is live until it clears — and it refuses first.
-        await expect(assertCanPublish(meera, MEERA, id)).rejects.toMatchObject({
-            code: "payment_required",
+        // 5. The gate. PageCrafts hosting is free — publish is granted on first attempt.
+        await expect(assertCanPublish(meera, MEERA, id)).resolves.toMatchObject({
+            granted: true,
+            source: "launch_offer",
         });
 
         db.insert("entitlements", {
@@ -143,7 +144,7 @@ describe("Meera's path", () => {
         expect(html, "the photographer's credit (S-1)").toContain("Ada Lovelace");
     });
 
-    it("keeps every edit if she never pays — the work is not held hostage", async () => {
+    it("keeps every edit if she never publishes — the work is not held hostage", async () => {
         const db = freshWorld();
         const meera = db.asUser(MEERA);
 
@@ -153,12 +154,11 @@ describe("Meera's path", () => {
         });
         await patchProjectContent(meera, id, [{ path: "hero.headline", value: "Kettle & Co." }]);
 
-        await expect(assertCanPublish(meera, MEERA, id)).rejects.toMatchObject({
-            code: "payment_required",
+        await expect(assertCanPublish(meera, MEERA, id)).resolves.toMatchObject({
+            granted: true,
         });
 
-        // Abandoning the payment must leave the project exactly as she left it (UI Spec
-        // §7.13: "if they don't pay, the site and every edit stay exactly as they were").
+        // Skipping publish must leave the project exactly as she left it.
         const project = db.rows("projects").find((p) => p.id === id)!;
         expect(project.content_json).toMatchObject({ hero: { headline: "Kettle & Co." } });
     });

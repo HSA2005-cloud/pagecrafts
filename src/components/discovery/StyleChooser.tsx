@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Lock, RefreshCw } from "lucide-react";
 
 import { apiGet, apiPost } from "@/lib/api/client";
@@ -14,11 +13,13 @@ import { GeneratingOverlay } from "@/components/editor/GeneratingOverlay";
 import { cn } from "@/lib/utils";
 import { useUpiPrompt } from "@/hooks/useUpiPrompt";
 import { LockedPlanNotice } from "@/components/discovery/LockedPlanNotice";
+import { AiCreditsNotice } from "@/components/discovery/AiCreditsNotice";
 import { AskAiFixDialog } from "@/components/editor/AskAiFixDialog";
 import { NeedUpiDialog } from "@/components/editor/NeedUpiDialog";
 import { explainCreationIssue } from "@/lib/editor/ai-fix";
-import { styleBadge } from "@/lib/payments/pricing";
-import type { BillingSummary } from "@/lib/contracts";
+import { styleBadge, styleTileLabel } from "@/lib/payments/pricing";
+import type { AccountPlan, BillingSummary } from "@/lib/contracts";
+import { isOutOfAiCredits } from "@/lib/ai/jobs/credits";
 
 interface VariantCard {
     id: StyleId;
@@ -40,7 +41,7 @@ interface Quota {
     limit: number;
     remaining: number;
     unlimited: boolean;
-    package?: "free" | "advanced";
+    plan?: AccountPlan;
     passes?: number;
     canGenerate?: boolean;
 }
@@ -64,17 +65,16 @@ interface GenerateJobResponse {
     job_id: string;
 }
 
-const TIER_LABEL: Record<StyleTier, string> = {
-    free: "Free",
-    pro: "Pro",
-    premium: "Premium",
-};
-
 const TIER_BADGE: Record<StyleTier, string> = {
     free: "border border-border bg-background text-foreground",
     pro: "bg-primary text-primary-foreground",
     premium: "brand-gradient text-primary-foreground",
 };
+
+function badgeClass(tier: StyleTier, unlocked: boolean): string {
+    if (unlocked && tier !== "free") return TIER_BADGE.free;
+    return TIER_BADGE[tier];
+}
 
 function canGenerateAgain(quota: Quota | null): boolean {
     if (!quota) return true;
@@ -100,7 +100,9 @@ export function StyleChooser({
     const [picking, setPicking] = useState<{ jobId: string; variantId: StyleId } | null>(null);
     const [regenerating, setRegenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [outOfCredits, setOutOfCredits] = useState(false);
     const [unlockedStyles, setUnlockedStyles] = useState<string[]>([]);
+    const [accountPlan, setAccountPlan] = useState<AccountPlan>("starter");
     const [askOpen, setAskOpen] = useState(false);
     const upi = useUpiPrompt({
         projectId,
@@ -113,7 +115,10 @@ export function StyleChooser({
     useEffect(() => {
         let cancelled = false;
         void apiGet<BillingSummary>("/api/v1/account/billing").then(({ data }) => {
-            if (!cancelled && data) setUnlockedStyles(data.unlockedStyleIds);
+            if (!cancelled && data) {
+                setUnlockedStyles(data.unlockedStyleIds);
+                setAccountPlan(data.plan);
+            }
         });
         return () => {
             cancelled = true;
@@ -152,13 +157,15 @@ export function StyleChooser({
             }
 
             if (data.status !== "done") {
-                timer = setTimeout(poll, 400);
+                timer = setTimeout(poll, 1500);
                 return;
             }
 
             const hasLooks = (data.attempts?.length ?? 0) > 0 || (data.variants?.length ?? 0) > 0;
             if (!hasLooks && data.fallback_template_id) {
-                router.replace(`/editor/${encodeURIComponent(projectId)}`);
+                router.replace(
+                    `/editor/${encodeURIComponent(projectId)}`,
+                );
             }
         };
 
@@ -221,12 +228,23 @@ export function StyleChooser({
         }
     }
 
-    async function generateAgain(nextPrompt?: string) {
-        const text = (nextPrompt ?? prompt).trim();
-        if (!text || regenerating || !canGenerateAgain(quota)) return;
+    /**
+     * Start another generation.
+     * Always keep the person's original site description as the prompt.
+     * "Fix with AI" used to pass a repair sentence as the prompt, which replaced
+     * the brief and made retries fail or build the wrong site.
+     */
+    async function generateAgain(_repairNote?: string) {
+        const text = prompt.trim();
+        if (!text || regenerating) return;
+        if (!canGenerateAgain(quota)) {
+            setOutOfCredits(true);
+            setError(null);
+            return;
+        }
         setRegenerating(true);
         setError(null);
-        if (nextPrompt) setPrompt(text);
+        setOutOfCredits(false);
 
         const started = await apiPost<GenerateJobResponse>(
             `/api/v1/projects/${encodeURIComponent(projectId)}/generate`,
@@ -234,15 +252,12 @@ export function StyleChooser({
         );
 
         if (started.error || !started.data) {
-            const upgrade = /Advanced|generation pass|free generations|AI generations/i.test(
-                started.error ?? "",
-            );
-            setError(
-                upgrade
-                    ? started.error ??
-                          "You have used your AI generations. Open Packages to unlock more."
-                    : (started.error ?? "The site could not be generated."),
-            );
+            if (isOutOfAiCredits(started.code, started.error)) {
+                setOutOfCredits(true);
+                setError(null);
+            } else {
+                setError(started.error ?? "The site could not be generated.");
+            }
             setRegenerating(false);
             return;
         }
@@ -274,6 +289,7 @@ export function StyleChooser({
             : [];
     const remaining = quota?.remaining ?? 0;
     const retryAllowed = canGenerateAgain(quota) && Boolean(prompt) && !live && !regenerating;
+    const creditsSpent = outOfCredits || Boolean(quota && !canGenerateAgain(quota));
     const overlay = holdingLive && progress;
 
     return (
@@ -299,10 +315,17 @@ export function StyleChooser({
                             html: look.html,
                         }))}
                         prompt={progress.prompt ?? prompt}
-                        error={error ?? progress.error}
-                        onAskAiFix={(instruction) => {
-                            void generateAgain(instruction);
+                        error={
+                            outOfCredits
+                                ? "You have used your AI generations on this site."
+                                : (error ?? progress.error)
+                        }
+                        onAskAiFix={() => {
+                            // Retry from the original brief. Passing the fix instruction as
+                            // the prompt erased the business facts and rebuilt a generic site.
+                            void generateAgain();
                         }}
+                        showCreditsNotice={creditsSpent}
                     />
                 </div>
             ) : null}
@@ -323,24 +346,42 @@ export function StyleChooser({
                     Pick a <span className="hero-mix">look</span>
                 </h1>
                 <p className="max-w-xl text-sm text-muted-foreground">
-                    Same business, three different sites. Casual is Free. Photo-rich is Pro
-                    (Rs 499). Animated is Premium (Rs 999) — Razorpay opens when you pick a paid
-                    look.
+                    {accountPlan === "premium"
+                        ? "Same business, three different sites. Premium is active — every look is unlocked."
+                        : accountPlan === "pro"
+                          ? "Same business, three different sites. Pro is active — Casual is Free, Photo-rich is Pro unlocked. Animated needs Premium."
+                          : "Same business, three different sites. Casual is Free. Photo-rich is Pro (Rs 499). Animated is Premium (Rs 999) — upgrade on User Plans to unlock paid looks."}
                 </p>
             </header>
 
-            {fix ? (
+            {fix && !creditsSpent ? (
                 <div className="mx-auto max-w-lg rounded-2xl border border-border/70 bg-card/80 p-4 text-center">
                     <p className="text-sm font-medium text-foreground">{fix.title}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{fix.what}</p>
+                    {quota ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                            {canGenerateAgain(quota)
+                                ? `AI credits left on this site: ${quota.remaining}${
+                                      (quota.passes ?? 0) > 0
+                                          ? ` (+ ${quota.passes} pass${quota.passes === 1 ? "" : "es"})`
+                                          : ""
+                                  }. See Settings → AI credits.`
+                                : "No AI builds left on this site. See Settings → AI credits or upgrade on User Plans."}
+                        </p>
+                    ) : null}
                     <button
                         type="button"
                         onClick={() => setAskOpen(true)}
                         className="mt-3 h-11 cursor-pointer rounded-full border border-gold bg-gold px-4 text-sm font-semibold text-gold-foreground hover:opacity-90"
+                        disabled={!prompt.trim() || regenerating}
                     >
-                        Fix with AI
+                        {regenerating ? "Starting again…" : "Fix with AI"}
                     </button>
                 </div>
+            ) : null}
+
+            {creditsSpent ? (
+                <AiCreditsNotice className="mx-auto max-w-lg" />
             ) : null}
 
             {lookSets.map((attempt) => (
@@ -352,8 +393,10 @@ export function StyleChooser({
                     )}
                     <ul className="look-chunk-grid grid grid-cols-1 gap-5 lg:grid-cols-3">
                         {attempt.variants.map((option, i) => {
-                            const locked = !lookUnlocked(option.tier, option.id);
+                            const unlocked = lookUnlocked(option.tier, option.id);
+                            const locked = !unlocked;
                             const badge = styleBadge(option.tier);
+                            const tileLabel = styleTileLabel(option.tier, { unlocked });
                             return (
                             <li
                                 key={`${attempt.job_id}-${option.id}`}
@@ -382,13 +425,13 @@ export function StyleChooser({
                                         <span
                                             className={cn(
                                                 "absolute right-2 top-2 z-[2] inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold shadow-sm",
-                                                TIER_BADGE[option.tier],
+                                                badgeClass(option.tier, unlocked),
                                             )}
                                         >
                                             {locked ? (
                                                 <Lock className="size-3" strokeWidth={2} aria-hidden />
                                             ) : null}
-                                            {badge ?? TIER_LABEL[option.tier]}
+                                            {tileLabel}
                                         </span>
                                     </div>
                                     <div className="relative z-[1] flex flex-1 flex-col gap-3 p-4">
@@ -451,21 +494,8 @@ export function StyleChooser({
                                 {regenerating ? "Starting another look…" : "Generate another look"}
                             </Button>
                         </>
-                    ) : quota && !canGenerateAgain(quota) ? (
-                        <div className="flex max-w-lg flex-col items-center gap-3">
-                            <p className="text-sm text-muted-foreground">
-                                You have used your {quota.limit}{" "}
-                                {quota.package === "advanced" ? "Advanced" : "Free"} AI generations
-                                on this site. Pick a look above, or open Packages for more AI
-                                usage.
-                            </p>
-                            <Link
-                                href="/packages"
-                                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-                            >
-                                Open Packages
-                            </Link>
-                        </div>
+                    ) : creditsSpent ? (
+                        <AiCreditsNotice className="max-w-lg" />
                     ) : null}
                 </footer>
             )}
@@ -481,7 +511,9 @@ export function StyleChooser({
                     onDismiss={() => setAskOpen(false)}
                     onConfirm={() => {
                         setAskOpen(false);
-                        void generateAgain(fix.instruction);
+                        // Keep the stored brief — Fix with AI confirms a retry, it must not
+                        // replace the business description with the repair sentence.
+                        void generateAgain();
                     }}
                 />
             ) : null}
