@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    grade, summarise, blankFieldsIn, blankHumanSheet, summariseHuman,
+    grade, summarise, blankFieldsIn, placeholderFieldsIn, blankHumanSheet, summariseHuman,
     type CorpusItem, type GenerationOutcome,
 } from '../../../evals/grader/index';
 import {
@@ -200,6 +200,51 @@ describe('grader — blank fields', () => {
             items: [{ title: 'Braces', body: '' }],
         })]);
         expect(blankFieldsIn(bad)).toContain('s_02.items[0].body');
+    });
+
+    /**
+     * From the first real run. The hospital's About body shipped
+     * "Founded in [year], our 40-bed hospital…" and the grader passed the page,
+     * because the field was not empty and emptiness was all it checked.
+     */
+    it('catches copy the model left for someone else to finish', () => {
+        const unfinished = composition([section('s_02', 'about', 'text', {
+            heading: 'Our history',
+            body: 'Founded in [year], our 40-bed hospital has served the city.',
+            image: { query: 'hospital', alt: 'Hospital' },
+        })]);
+
+        expect(placeholderFieldsIn(unfinished)).toContain('s_02.body');
+
+        const g = grade({ ...ITEM, expect: { ...ITEM.expect, mustHave: ['about'] } },
+            ok(unfinished));
+        expect(g.nonBlank).toBe(false);
+        expect(g.passed).toBe(false);
+    });
+
+    it('catches a placeholder inside a list item, and a stray template token', () => {
+        const bad = composition([section('s_03', 'services', 'cards', {
+            heading: 'What we do',
+            items: [
+                { title: 'Cardiology', body: 'Care since [year_founded].' },
+                { title: 'Ortho', body: 'Led by {{doctor_name}}.' },
+            ],
+        })]);
+
+        const found = placeholderFieldsIn(bad);
+        expect(found).toContain('s_03.items[0].body');
+        expect(found).toContain('s_03.items[1].body');
+    });
+
+    it('does not fire on ordinary prose that happens to use brackets', () => {
+        const fine = composition([section('s_04', 'about', 'text', {
+            heading: 'About',
+            // A real aside, a citation marker, and an acronym gloss.
+            body: 'We opened in 2004 [sic] and now run three clinics (MD, DM).',
+            image: { query: 'clinic', alt: 'Clinic' },
+        })]);
+
+        expect(placeholderFieldsIn(fine)).toEqual([]);
     });
 
     it('treats an image with empty query and alt as blank', () => {

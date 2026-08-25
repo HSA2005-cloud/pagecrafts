@@ -18,7 +18,7 @@ const envSchema = z.object({
     AI_OUTPUT_CLASSIFY_TOKENS: z.coerce.number().int().positive().default(1_024),
     AI_OUTPUT_GENERATE_TOKENS: z.coerce.number().int().positive().default(4_000),
     AI_OUTPUT_EDIT_TOKENS: z.coerce.number().int().positive().default(2_000),
-    AI_OUTPUT_COMPOSE_TOKENS: z.coerce.number().int().positive().default(12_000),
+    AI_OUTPUT_COMPOSE_TOKENS: z.coerce.number().int().positive().default(6_000),
 
     // Sampling, per operation (D12). Deliberately optional: left unset nothing is
     // sent and the provider's own default applies, which is what every

@@ -7,7 +7,7 @@ vi.mock('@/lib/limits/redis', async () => {
 });
 
 vi.mock('@/lib/data/entitlements', () => ({
-    hasAdvanced: vi.fn(async () => false),
+    accountPlan: vi.fn(async () => 'starter' as const),
 }));
 
 import { resetRedisMock } from '../../support/redis-mock';
@@ -24,20 +24,21 @@ import {
     readGenerationQuota,
 } from '@/lib/ai/jobs/quota';
 import {
-    ADVANCED_GENERATIONS_PER_PROJECT,
     FREE_GENERATIONS_PER_PROJECT,
+    PREMIUM_GENERATIONS_PER_PROJECT,
+    PRO_GENERATIONS_PER_PROJECT,
 } from '@/lib/limits/config';
-import { hasAdvanced } from '@/lib/data/entitlements';
+import { accountPlan } from '@/lib/data/entitlements';
 
 const db = {} as SupabaseClient;
 
 beforeEach(() => {
     resetRedisMock();
     resetFreeGenerationQuota();
-    vi.mocked(hasAdvanced).mockResolvedValue(false);
+    vi.mocked(accountPlan).mockResolvedValue('starter');
 });
 
-describe('AI generation quota packages', () => {
+describe('AI generation quota by account plan', () => {
     it('starts at zero and counts each generation', async () => {
         expect(await freeGenerationsUsed('p_1')).toBe(0);
         expect(await recordFreeGeneration('p_1')).toBe(1);
@@ -46,7 +47,7 @@ describe('AI generation quota packages', () => {
         expect(await freeGenerationsUsed('p_2')).toBe(0);
     });
 
-    it(`refuses the ${FREE_GENERATIONS_PER_PROJECT + 1}th Free generation until they pay`, async () => {
+    it(`refuses the ${FREE_GENERATIONS_PER_PROJECT + 1}th Starter generation until they upgrade`, async () => {
         for (let i = 0; i < FREE_GENERATIONS_PER_PROJECT; i++) {
             await recordFreeGeneration('p_1');
         }
@@ -56,22 +57,31 @@ describe('AI generation quota packages', () => {
         });
         expect(
             await assertFreeGenerationAllowed('p_1', 'u_1', db).catch((err: ApiError) => err.message),
-        ).toMatch(/Free AI generations/i);
+        ).toMatch(/Starter AI generations/i);
     });
 
-    it('raises the limit to 30 for Advanced', async () => {
-        vi.mocked(hasAdvanced).mockResolvedValue(true);
+    it('raises the limit to 15 for Pro', async () => {
+        vi.mocked(accountPlan).mockResolvedValue('pro');
         for (let i = 0; i < FREE_GENERATIONS_PER_PROJECT; i++) {
             await recordFreeGeneration('p_1');
         }
         await expect(assertFreeGenerationAllowed('p_1', 'u_1', db)).resolves.toMatchObject({
-            package: 'advanced',
-            limit: ADVANCED_GENERATIONS_PER_PROJECT,
+            plan: 'pro',
+            limit: PRO_GENERATIONS_PER_PROJECT,
             canGenerate: true,
         });
     });
 
-    it('lets a generation pass cover one round past the package limit', async () => {
+    it('raises the limit to 45 for Premium', async () => {
+        vi.mocked(accountPlan).mockResolvedValue('premium');
+        const quota = await readGenerationQuota('p_1', 'u_1', db);
+        expect(quota).toMatchObject({
+            plan: 'premium',
+            limit: PREMIUM_GENERATIONS_PER_PROJECT,
+        });
+    });
+
+    it('lets a generation pass cover one round past the plan limit', async () => {
         for (let i = 0; i < FREE_GENERATIONS_PER_PROJECT; i++) {
             await recordFreeGeneration('p_1');
         }
@@ -90,14 +100,14 @@ describe('AI generation quota packages', () => {
         });
     });
 
-    it('blocks heavy builds on Free without a pass', async () => {
+    it('blocks heavy builds on Starter without a pass', async () => {
         const quota = await readGenerationQuota('p_1', 'u_1', db);
         await expect(assertHeavyBuildAllowed(quota)).rejects.toMatchObject({
             code: 'payment_required',
         });
     });
 
-    it('allows heavy builds on Free when a pass is available, and spends the pass', async () => {
+    it('allows heavy builds on Starter when a pass is available, and spends the pass', async () => {
         await grantGenerationPasses('u_1', 1);
         const quota = await readGenerationQuota('p_1', 'u_1', db);
         await expect(assertHeavyBuildAllowed(quota)).resolves.toBeUndefined();
@@ -107,8 +117,8 @@ describe('AI generation quota packages', () => {
         expect(await freeGenerationsUsed('p_1')).toBe(1);
     });
 
-    it('allows heavy builds on Advanced without spending a pass', async () => {
-        vi.mocked(hasAdvanced).mockResolvedValue(true);
+    it('allows heavy builds on Pro without spending a pass', async () => {
+        vi.mocked(accountPlan).mockResolvedValue('pro');
         const quota = await readGenerationQuota('p_1', 'u_1', db);
         await expect(assertHeavyBuildAllowed(quota)).resolves.toBeUndefined();
         await recordGenerationUseForBuild('p_1', 'u_1', quota, true);

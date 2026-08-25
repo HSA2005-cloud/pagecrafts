@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { DiscountCodeField, codesMatch, type AppliedCoupon } from "@/components/payments/DiscountCodeField";
 import { useRazorpayCheckout } from "@/hooks/useRazorpayCheckout";
 import { waitForAdvancedGrant, waitForGenerationPass } from "@/lib/payments/wait-for-pro";
 import type { BillingSummary } from "@/lib/contracts";
@@ -14,6 +15,8 @@ import { cn } from "@/lib/utils";
 export function PackagesPanel({ initial }: { initial: BillingSummary }) {
     const [billing, setBilling] = useState(initial);
     const [message, setMessage] = useState<string | null>(null);
+    const [discountCode, setDiscountCode] = useState("");
+    const [applied, setApplied] = useState<AppliedCoupon | null>(null);
     const pendingBuyRef = useRef<"advanced" | "pass" | null>(null);
     const passBaselineRef = useRef(0);
 
@@ -62,23 +65,35 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
             },
         });
 
+    function couponReady(): boolean {
+        const typed = discountCode.trim();
+        if (!typed) return true;
+        if (applied && codesMatch(applied.code, typed)) return true;
+        setMessage("Press Apply to use that coupon before checkout. Razorpay should see the new price first.");
+        return false;
+    }
+
     async function buyAdvanced() {
         setMessage(null);
+        if (!couponReady()) return;
         pendingBuyRef.current = "advanced";
-        await openAdvancedCheckout();
+        await openAdvancedCheckout(applied?.code.trim() || undefined);
     }
 
     async function buyPass() {
         setMessage(null);
+        if (!couponReady()) return;
         passBaselineRef.current = billing.generationPasses;
         pendingBuyRef.current = "pass";
-        await openGenerationPassCheckout();
+        await openGenerationPassCheckout(applied?.code.trim() || undefined);
     }
 
     const free = AI_PACKAGES.free;
     const advanced = AI_PACKAGES.advanced;
     const hasAdvanced = billing.aiPackage === "advanced";
     const busy = status === "loading" || status === "open" || status === "verifying";
+    const advancedDeal = applied?.prices.advanced;
+    const passDeal = applied?.prices.generation_pass;
 
     return (
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
@@ -102,6 +117,15 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
                     .
                 </p>
             </header>
+
+            <DiscountCodeField
+                kind="advanced"
+                kinds={["advanced", "generation_pass"]}
+                value={discountCode}
+                onChange={setDiscountCode}
+                onApplied={setApplied}
+                className="max-w-md"
+            />
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <article
@@ -135,8 +159,17 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
                     )}
                 >
                     <p className="text-sm font-medium text-muted-foreground">{advanced.name}</p>
-                    <p className="mt-1 text-3xl font-bold tracking-tight">
-                        Rs {advanced.priceInr}
+                    <p className="mt-1 flex flex-wrap items-baseline gap-2 text-3xl font-bold tracking-tight">
+                        {advancedDeal && advancedDeal.priceInr < advancedDeal.listPriceInr ? (
+                            <>
+                                <span>{advancedDeal.priceInr === 0 ? "Free" : `Rs ${advancedDeal.priceInr}`}</span>
+                                <span className="text-base font-normal text-muted-foreground line-through">
+                                    Rs {advancedDeal.listPriceInr}
+                                </span>
+                            </>
+                        ) : (
+                            <span>Rs {advanced.priceInr}</span>
+                        )}
                     </p>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">{advanced.blurb}</p>
                     <ul className="mt-4 space-y-2 text-sm text-foreground">
@@ -155,7 +188,13 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
                             disabled={busy}
                             onClick={() => void buyAdvanced()}
                         >
-                            {busy ? "Opening checkout…" : `Upgrade to Advanced · Rs ${advanced.priceInr}`}
+                            {busy
+                                ? "Opening checkout…"
+                                : advancedDeal && advancedDeal.priceInr === 0
+                                  ? "Unlock Advanced · Free"
+                                  : advancedDeal && advancedDeal.priceInr < advancedDeal.listPriceInr
+                                    ? `Upgrade to Advanced · Rs ${advancedDeal.priceInr}`
+                                    : `Upgrade to Advanced · Rs ${advanced.priceInr}`}
                         </Button>
                     )}
                 </article>
@@ -177,7 +216,13 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
                     disabled={busy}
                     onClick={() => void buyPass()}
                 >
-                    {busy ? "Opening checkout…" : `Buy one pass · Rs ${GENERATION_PASS.priceInr}`}
+                    {busy
+                        ? "Opening checkout…"
+                        : passDeal && passDeal.priceInr === 0
+                          ? "Add one pass · Free"
+                          : passDeal && passDeal.priceInr < passDeal.listPriceInr
+                            ? `Buy one pass · Rs ${passDeal.priceInr}`
+                            : `Buy one pass · Rs ${GENERATION_PASS.priceInr}`}
                 </Button>
             </section>
 
@@ -194,8 +239,8 @@ export function PackagesPanel({ initial }: { initial: BillingSummary }) {
                     <code className="font-mono text-xs">RAZORPAY_KEY_SECRET</code> in the server
                     environment (see <code className="font-mono text-xs">.env.example</code>), then
                     restart the app. Checkout will also need{" "}
-                    <code className="font-mono text-xs">RAZORPAY_WEBHOOK_SECRET</code> so purchases
-                    can be granted after payment.
+                    <code className="font-mono text-xs">RAZORPAY_WEBHOOK_SECRET</code> as a
+                    backup grant path after payment (browser verify also grants).
                 </p>
             ) : null}
 

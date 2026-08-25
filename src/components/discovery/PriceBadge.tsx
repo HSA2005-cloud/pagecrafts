@@ -2,7 +2,7 @@ import { Lock } from "lucide-react";
 
 import type { TemplateTier } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
-import { templateBadge } from "@/lib/payments/pricing";
+import { templateTileLabel } from "@/lib/payments/pricing";
 
 const TIER_BADGE: Record<TemplateTier, string> = {
     free: "border border-border bg-background/85 text-foreground backdrop-blur-sm",
@@ -15,20 +15,22 @@ export function PriceBadge({
     priceInr,
     className,
     locked = false,
+    unlocked = false,
 }: {
     tier: TemplateTier;
     priceInr: number;
     className?: string;
     locked?: boolean;
+    unlocked?: boolean;
 }) {
-    // "Free" is a fact about the design; "Rs 0" would be a price on something that has none.
-    const label = tier === "free" ? "Free" : (templateBadge(tier) ?? `Rs ${priceInr}`);
+    const label = templateTileLabel(tier, { unlocked });
+    const visualTier = unlocked && tier !== "free" ? "free" : tier;
 
     return (
         <span
             className={cn(
                 "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold",
-                TIER_BADGE[tier],
+                TIER_BADGE[visualTier],
                 className,
             )}
         >

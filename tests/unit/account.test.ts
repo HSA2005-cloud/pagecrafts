@@ -47,6 +47,17 @@ const ROW = {
   created_at: "2026-08-01T09:00:00.000Z",
 };
 
+const EMPTY_BILLING = {
+  displayName: "",
+  phone: "",
+  billingLine: "",
+  billingCity: "",
+  billingState: "",
+  billingPostal: "",
+  billingCountry: "",
+  gstin: "",
+};
+
 describe("getAccount", () => {
   it("reads the caller's own row and nothing about anyone else", async () => {
     const { client } = fakeSupabase({ users: [{ data: ROW, error: null }] });
@@ -56,11 +67,7 @@ describe("getAccount", () => {
       emailVerified: true,
       trainingOptIn: false,
       createdAt: "2026-08-01T09:00:00.000Z",
-      displayName: "",
-      phone: "",
-      billingLine: "",
-      billingCity: "",
-      gstin: "",
+      ...EMPTY_BILLING,
       billingReady: true,
       notifyPrefs: DEFAULT_NOTIFY_PREFS,
     });
@@ -69,6 +76,7 @@ describe("getAccount", () => {
   it("still returns email and consent when billing columns are not on the table yet", async () => {
     const { client } = fakeSupabase({
       users: [
+        { data: null, error: { message: "column users.billing_state does not exist" } },
         { data: null, error: { message: "column users.phone does not exist" } },
         { data: null, error: { message: "column users.phone does not exist" } },
         { data: ROW, error: null },
@@ -80,11 +88,7 @@ describe("getAccount", () => {
       emailVerified: true,
       trainingOptIn: false,
       createdAt: "2026-08-01T09:00:00.000Z",
-      displayName: "",
-      phone: "",
-      billingLine: "",
-      billingCity: "",
-      gstin: "",
+      ...EMPTY_BILLING,
       billingReady: false,
       notifyPrefs: DEFAULT_NOTIFY_PREFS,
     });
@@ -93,6 +97,7 @@ describe("getAccount", () => {
   it("keeps receipt fields when only notify_prefs is missing", async () => {
     const { client } = fakeSupabase({
       users: [
+        { data: null, error: { message: "column users.notify_prefs does not exist" } },
         { data: null, error: { message: "column users.notify_prefs does not exist" } },
         { data: { ...ROW, phone: "9876543210", billing_line: "MG Road" }, error: null },
       ],
@@ -110,7 +115,16 @@ describe("getAccount", () => {
     const { client } = fakeSupabase({
       users: [
         {
-          data: { ...ROW, notify_prefs: { email: false, published: true, updated: false, payments: true, product: true } },
+          data: {
+            ...ROW,
+            notify_prefs: {
+              email: false,
+              published: true,
+              updated: false,
+              payments: true,
+              security: true,
+            },
+          },
           error: null,
         },
       ],
@@ -122,7 +136,7 @@ describe("getAccount", () => {
         published: true,
         updated: false,
         payments: true,
-        product: true,
+        security: true,
       },
     });
   });
@@ -203,6 +217,9 @@ describe("setBillingProfile", () => {
       phone: "9876543210",
       billingLine: "MG Road",
       billingCity: "Pune",
+      billingState: "Maharashtra",
+      billingPostal: "411001",
+      billingCountry: "India",
       gstin: "",
     });
 
@@ -211,6 +228,9 @@ describe("setBillingProfile", () => {
       phone: "9876543210",
       billing_line: "MG Road",
       billing_city: "Pune",
+      billing_state: "Maharashtra",
+      billing_postal: "411001",
+      billing_country: "India",
       gstin: null,
     });
   });
@@ -224,6 +244,9 @@ describe("billingProfileSchema", () => {
         phone: "",
         billingLine: "",
         billingCity: "",
+        billingState: "",
+        billingPostal: "",
+        billingCountry: "",
         gstin: "",
       }).success,
     ).toBe(true);
@@ -233,6 +256,9 @@ describe("billingProfileSchema", () => {
         phone: "98",
         billingLine: "x",
         billingCity: "Pune",
+        billingState: "MH",
+        billingPostal: "411001",
+        billingCountry: "India",
         gstin: "THISISTOOLONGFORGST",
       }).success,
     ).toBe(false);
@@ -246,7 +272,7 @@ describe("setNotifyPrefs", () => {
       published: true,
       updated: true,
       payments: false,
-      product: true,
+      security: true,
     };
     const { client, updates } = fakeSupabase({
       users: [
@@ -296,6 +322,9 @@ describe("toAccountExport", () => {
         phone: "1",
         billingLine: "MG Road",
         billingCity: "Pune",
+        billingState: "Maharashtra",
+        billingPostal: "411001",
+        billingCountry: "India",
         gstin: "",
         billingReady: true,
         notifyPrefs: DEFAULT_NOTIFY_PREFS,
@@ -326,6 +355,9 @@ describe("toAccountExport", () => {
         phone: "1",
         billingLine: "MG Road",
         billingCity: "Pune",
+        billingState: "Maharashtra",
+        billingPostal: "411001",
+        billingCountry: "India",
         gstin: "",
       },
       sites: [{ id: "p1", name: "Cafe", status: "live", liveUrl: "https://cafe.example" }],
@@ -333,4 +365,3 @@ describe("toAccountExport", () => {
     expect(JSON.stringify(exportPayload)).not.toContain("thumb.png");
   });
 });
-
