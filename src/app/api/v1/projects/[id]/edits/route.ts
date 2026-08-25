@@ -12,7 +12,11 @@ import { persistLedger } from '@/lib/ai/cost/persist';
 import { nextJobId } from '@/lib/ai/jobs/store';
 import { SECTION_KEYS, type SectionInstance } from '@/lib/contracts';
 import { getProjectFiles } from '@/lib/data/project-files';
+import { getProject } from '@/lib/data/projects';
+import { asContentSchema } from '@/lib/content/schema';
 import { styleUpgradeFirewall } from '@/lib/editor/style-firewall';
+import { crossVerticalFirewall } from '@/lib/editor/cross-vertical-firewall';
+import { resolveSiteVertical } from '@/lib/editor/resolve-site-vertical';
 import { parseComposition } from '@/lib/editor/parse-composition';
 
 function pickHtmlEntry(paths: string[]): string | null {
@@ -49,10 +53,22 @@ export const POST = withRoute<z.infer<typeof schema>, Params>({
     handler: async ({ body, params, userId, supabase, recordUsage }) => {
         if (typeof supabase.from === 'function') {
             try {
-                const { files } = await getProjectFiles(supabase, params.id);
+                const [project, { files }] = await Promise.all([
+                    getProject(supabase, params.id),
+                    getProjectFiles(supabase, params.id),
+                ]);
                 const entry = pickHtmlEntry(Object.keys(files));
                 const html = entry ? files[entry] ?? null : null;
                 const composition = parseComposition(files['composition.json']);
+                const contentSchema = asContentSchema(project.contentSchema);
+                const contextText = [
+                    composition?.meta.title,
+                    project.siteMeta?.title,
+                    project.name,
+                    html?.slice(0, 4000),
+                ]
+                    .filter(Boolean)
+                    .join(' ');
                 const blocked = styleUpgradeFirewall({
                     instruction: body.instruction,
                     html,
@@ -60,6 +76,20 @@ export const POST = withRoute<z.infer<typeof schema>, Params>({
                 });
                 if (blocked) {
                     throw new ApiError('validation_failed', blocked);
+                }
+                const crossBlocked = crossVerticalFirewall({
+                    instruction: body.instruction,
+                    vertical: resolveSiteVertical({
+                        composition,
+                        sourceTemplateId: project.sourceTemplateId,
+                        contextText,
+                    }),
+                    sectionCount: composition?.sections.length ?? 0,
+                    hasContentPage: contentSchema.sections.length > 0,
+                    contextText,
+                });
+                if (crossBlocked) {
+                    throw new ApiError('validation_failed', crossBlocked);
                 }
             } catch (err) {
                 if (err instanceof ApiError) throw err;

@@ -7,6 +7,7 @@ import { toSessionUser } from "@/lib/auth/session";
 import { ok, fail, guard } from "@/lib/errors/respond";
 import { readJson } from "@/lib/kernel/body";
 import { authConfirmUrl } from "@/lib/auth/confirm-url";
+import { setPendingCookie } from "@/lib/auth/pending-signup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!data.user || !data.session) {
+      if (data.user) await setPendingCookie(data.user.id);
       return ok({ user: null, pending: true }, 202);
     }
 

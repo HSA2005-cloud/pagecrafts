@@ -46,7 +46,21 @@ const BY_MESSAGE: [RegExp, string][] = [
  * `message` overrides the generic text: the caller knows what the request was referring to
  * and can say so in words the next layer can show a person.
  */
-export function clientFault(error: DbError, message?: string): ApiError | null {
+/**
+ * `message` replaces the wording for the fault a caller was expecting, and only that one.
+ *
+ * It used to replace the wording for all five. So a create-project call that passed "That
+ * design is not available any more" said exactly that whether the id was missing, malformed,
+ * duplicated, or simply too long -- and one of those, a slug arriving where the column wants
+ * a uuid, spent an afternoon looking like an empty templates table because the sentence
+ * insisted the design was gone.
+ *
+ * A caller that wants to reword every fault can still pass a map.
+ */
+export function clientFault(
+    error: DbError,
+    message?: string | Partial<Record<string, string>>,
+): ApiError | null {
     const code =
         error.code && error.code in CLIENT_FAULTS
             ? error.code
@@ -54,5 +68,14 @@ export function clientFault(error: DbError, message?: string): ApiError | null {
 
     if (!code) return null;
 
-    return new ApiError("validation_failed", message ?? CLIENT_FAULTS[code]!, error.message);
+    const said =
+        typeof message === "string"
+            ? // A plain string is the caller describing the thing it refers to, which is only
+              // true when that thing was not found. Everything else keeps its own words.
+              code === "23503"
+                ? message
+                : CLIENT_FAULTS[code]!
+            : message?.[code] ?? CLIENT_FAULTS[code]!;
+
+    return new ApiError("validation_failed", said, error.message);
 }

@@ -1,8 +1,9 @@
 import type { BillingSummary } from "@/lib/contracts";
 import { apiGet } from "@/lib/api/client";
 
-// After Razorpay reports success the entitlement is still not ours until the signed
-// webhook lands. The browser must not treat checkout as a grant — it polls billing.
+// After Razorpay reports success the entitlement is ours once /payments/razorpay/verify
+// has checked the signature and written the grant. Polling covers a short race before
+// billing reflects the new plan (and still helps if only the webhook path ran).
 
 async function billing(): Promise<BillingSummary | null> {
     const { data } = await apiGet<BillingSummary>("/api/v1/account/billing");

@@ -55,13 +55,31 @@ export async function persistGeneratedSite(
     const template = templates.find((t) => t.id === job.fallbackTemplateId);
     if (!template) return;
 
+    // This branch is a substitute, not a result: generation threw and the runner picked the
+    // nearest design it could find. It used to be written exactly like a success -- the
+    // project renamed to the template's name and the template's own title dropped over the
+    // person's. Somebody who asked for "1947 Restaurant" opened a project called
+    // "Architecture" with none of their facts on it and nothing anywhere saying why.
+    //
+    // So keep what they typed. The design underneath is ours to choose when we have failed;
+    // the name of their business is not.
+    const { data: existing } = await supabase
+        .from('projects')
+        .select('name, site_meta')
+        .eq('id', projectId)
+        .maybeSingle();
+
+    const theirName = typeof existing?.name === 'string' ? existing.name.trim() : '';
+    const theirMeta = (existing?.site_meta ?? {}) as { title?: string; description?: string };
+
     await writeSite(supabase, projectId, {
         files: template.files,
         schema: template.contentSchema,
         content: contentFromFiles(template.files, template.contentSchema),
-        title: template.name.slice(0, 80),
-        description: template.description,
-        commitMessage: `Started from ${template.name}`,
+        title: theirMeta.title || theirName || template.name.slice(0, 80),
+        description: theirMeta.description || template.description,
+        rename: false,
+        commitMessage: `Could not generate this — started you on ${template.name} instead`,
     });
 }
 
@@ -74,6 +92,10 @@ async function writeSite(
         content: Record<string, unknown>;
         title?: string;
         description?: string;
+        // A real generation named the site, so the project takes that name. A fallback did
+        // not, so it must leave the name alone. Default true, because every caller that
+        // produced the site it is writing wants it.
+        rename?: boolean;
         /** Original generation ask — used to honor specific page/feature requests. */
         prompt?: string;
         commitMessage: string;
@@ -104,7 +126,7 @@ async function writeSite(
             content_schema: input.schema,
             content_json: input.content,
             site_meta: siteMeta,
-            ...(input.title ? { name: input.title } : {}),
+            ...(input.title && input.rename !== false ? { name: input.title } : {}),
         })
         .eq('id', projectId);
 
