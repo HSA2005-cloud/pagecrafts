@@ -4,48 +4,40 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { scrollToDeckSlide } from "@/lib/deck/scroll-to-slide";
+import {
+    FREE_GENERATIONS_PER_PROJECT,
+    PREMIUM_GENERATIONS_PER_PROJECT,
+    PRO_GENERATIONS_PER_PROJECT,
+} from "@/lib/limits/config";
 import { TIER_PRICE_INR } from "@/lib/payments/pricing";
 import { cn } from "@/lib/utils";
-
-function openCompareBelow() {
-    const el = document.getElementById("compare");
-    if (!el) {
-        window.location.assign("/compare");
-        return;
-    }
-
-    const html = document.documentElement;
-    const hadSnap = html.classList.contains("deck-snap");
-    if (hadSnap) html.classList.remove("deck-snap");
-    el.scrollIntoView({ behavior: "auto", block: "start" });
-    window.history.replaceState(null, "", "/?slide=compare");
-    if (hadSnap) {
-        requestAnimationFrame(() => html.classList.add("deck-snap"));
-    }
-}
 
 const LOOKS = [
     {
         label: "Starter",
         look: "Casual",
         price: TIER_PRICE_INR.free,
-        blurb: "All Starter designs and the Casual look — free to use and publish.",
+        blurb: "Free Starter templates and the Casual look. Publish at no charge, with a limited number of AI rebuilds per site.",
+        detail: `${FREE_GENERATIONS_PER_PROJECT} AI generations per site`,
     },
     {
         label: "Pro",
         look: "Photo-rich",
         price: TIER_PRICE_INR.premium,
-        blurb: "One upgrade unlocks every Pro template and the Photo-rich look.",
+        blurb: "One payment unlocks every Pro template and the Photo-rich look — not one design at a time.",
+        detail: `${PRO_GENERATIONS_PER_PROJECT} AI generations per site (5× Starter)`,
     },
     {
         label: "Premium",
         look: "Animated",
         price: TIER_PRICE_INR.signature,
-        blurb: "One upgrade unlocks every Premium template, every Pro template, and Animated.",
+        blurb: "The top unlock: every Premium and Pro template, plus the Animated look on AI-built sites.",
+        detail: `${PREMIUM_GENERATIONS_PER_PROJECT} AI generations per site (15× Starter)`,
     },
 ] as const;
 
-/** One public price story: Starter / Pro / Premium plans. AI rebuilds live under /packages. */
+/** One public price story: Starter / Pro / Premium plans. */
 export function PricingGuide({ signedIn = false }: { signedIn?: boolean }) {
     return (
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-10">
@@ -60,8 +52,10 @@ export function PricingGuide({ signedIn = false }: { signedIn?: boolean }) {
                     Starter, Pro, or <span className="hero-mix">Premium</span>
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                    No monthly subscription. Start free. Upgrade once to unlock every design
-                    marked for that plan — not one template at a time.{" "}
+                    No monthly subscription. Start free on Starter templates and the Casual look.
+                    Upgrade once on your account to unlock every design marked for that plan — Pro
+                    unlocks all Pro templates; Premium unlocks every template. You do not buy designs
+                    one at a time.{" "}
                     <Link
                         href="/plans"
                         className="font-medium text-foreground underline-offset-4 hover:underline"
@@ -69,6 +63,11 @@ export function PricingGuide({ signedIn = false }: { signedIn?: boolean }) {
                         See User Plans
                     </Link>
                     .
+                </p>
+                <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                    AI rebuild limits follow your plan: Starter gets {FREE_GENERATIONS_PER_PROJECT}{" "}
+                    generations per site, Pro gets 5× that, Premium gets 15×. Template generation
+                    counts toward that cap; edits in the editor use the style firewall instead.
                 </p>
             </header>
 
@@ -85,13 +84,16 @@ export function PricingGuide({ signedIn = false }: { signedIn?: boolean }) {
                             <p className="mt-1 text-2xl font-bold">
                                 {item.price === 0 ? "Free" : `Rs ${item.price}`}
                             </p>
-                            <p className="mt-2 text-sm text-muted-foreground">{item.blurb}</p>
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                {item.blurb}
+                            </p>
+                            <p className="mt-2 text-xs text-muted-foreground/90">{item.detail}</p>
                         </article>
                     ))}
                 </div>
                 <button
                     type="button"
-                    onClick={openCompareBelow}
+                    onClick={() => scrollToDeckSlide("compare")}
                     className={cn(
                         buttonVariants({
                             variant: "outline-brand",
@@ -108,10 +110,10 @@ export function PricingGuide({ signedIn = false }: { signedIn?: boolean }) {
                 <p className="text-sm text-muted-foreground">
                     Need more AI rebuilds on a site?{" "}
                     <Link
-                        href="/packages"
+                        href="/plans"
                         className="font-medium text-foreground underline-offset-4 hover:underline"
                     >
-                        Manage AI usage
+                        Upgrade your plan
                     </Link>
                     .
                 </p>

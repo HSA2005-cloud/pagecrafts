@@ -62,7 +62,15 @@ export function AppTopBar({
                 </span>
 
                 {user ? (
-                    <ProfileMenu user={user} variant="avatar" />
+                    <>
+                        <Link
+                            href="/plans"
+                            className="hidden text-sm font-medium text-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline"
+                        >
+                            User Plans
+                        </Link>
+                        <ProfileMenu user={user} variant="avatar" />
+                    </>
                 ) : (
                     <Link
                         href="/signin"

@@ -5,6 +5,7 @@ import { withRoute } from '@/lib/kernel/with-route';
 import { ok, ApiError } from '@/lib/errors/respond';
 import { getDeployment, type DeploymentView } from '@/lib/data/deployments';
 import { resumeVerification } from '@/lib/data/publish-project';
+import { failureLine } from '@/lib/deploy/failure';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,7 +31,16 @@ function toResponse(deployment: DeploymentView): DeploymentResponse {
         // that is not answering yet.
         liveUrl: deployment.state === 'live' ? deployment.liveUrl : null,
         commitSha: deployment.commitSha,
-        error: deployment.error,
+        // Owner-facing words only. `deployment.error` is the redacted provider detail for
+        // support — leaking it here is how "Deploy credential is not configured" reached
+        // the Go Live dialog (R3 D18).
+        error:
+            deployment.state === 'failed'
+                ? deployment.error &&
+                  /taken|reserved|Choose another/i.test(deployment.error)
+                    ? deployment.error
+                    : failureLine(deployment.failureReason)
+                : null,
     };
 }
 
