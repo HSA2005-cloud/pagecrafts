@@ -29,8 +29,11 @@ describe('composeCustomSite', () => {
         expect(result.data.files['styles.css']).toBeTruthy();
         expect(result.data.composition.meta.title).toBeTruthy();
 
-        const looks = buildCustomStyleOptions(result.data.composition, result.data.files);
+        const looks = await buildCustomStyleOptions(result.data.composition, result.data.files);
         expect(looks).toHaveLength(3);
         expect(looks[0].files['styles.css']).toMatch(/pagecrafts look: casual/);
+        expect(looks[1].files['styles.css']).toMatch(/pagecrafts look: photos/);
+        expect(looks[1].files['styles.css']).toMatch(/100svh/);
+        expect(looks[1].files['index.html']).toMatch(/data-style="photos"/);
     });
 });

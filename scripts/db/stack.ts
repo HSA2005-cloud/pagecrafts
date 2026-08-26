@@ -84,6 +84,11 @@ export async function buildStack({ seed = false } = {}): Promise<Stack> {
     for (const file of migrationFiles()) {
         const sql = readFileSync(join(MIGRATIONS, file), "utf8");
         if (!(await run(file, sql))) return { db, steps };
+        const version = file.replace(/_.*$/, "");
+        await db.query(
+            "insert into supabase_migrations.schema_migrations (version) values ($1) on conflict do nothing",
+            [version],
+        );
     }
 
     if (seed) await run("seed.sql", readFileSync(SEED, "utf8"));

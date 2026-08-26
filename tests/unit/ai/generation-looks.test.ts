@@ -10,6 +10,10 @@ const ART: ArtDirection = {
     spacingId: 'airy', imageryId: 'warm-natural',
 };
 
+// The body attribute, not the first data-motion in the file — motionCss opens with a
+// `[data-motion="none"]` rule, so a loose match reads the stylesheet instead of the page.
+const motionOf = (html: string) => html.match(/<body[^>]*data-motion="([a-z]+)"/)?.[1] ?? '';
+
 const CASES = [
     { vertical: 'sweet-shop', extra: 'Mithas Sweets in Old Delhi', motif: 'jalebi', heading: 'Mithas Sweets' },
     { vertical: 'confectionery', extra: 'kaju katli motichoor laddu', motif: 'jalebi', heading: 'Fresh mithai' },
@@ -70,7 +74,10 @@ describe('three looks stay on-brief for any vertical', () => {
         expect(html.motion).toContain(c.heading);
 
         expect(html.casual).toContain('data-style="casual"');
-        expect(html.casual).toContain('data-motion="none"');
+        // Was data-motion="none" exactly. Every site in the product shared one art
+        // direction, which is what the Rs 499 tier is sold as not doing. The tier still has
+        // to read as quiet, so the assertion moved from one token to the tier's pool.
+        expect(['none', 'whisper']).toContain(motionOf(html.casual));
         expect(html.casual).toContain('images.unsplash.com');
         expect(html.casual).toContain('<img src="');
         expect(html.casual).toContain('site-header');
@@ -82,7 +89,8 @@ describe('three looks stay on-brief for any vertical', () => {
         expect(html.photos).not.toContain('motion-stage');
 
         expect(html.motion).toContain('data-style="motion"');
-        expect(html.motion).toContain('data-motion="kinetic"');
+        // Animated may draw kinetic, showcase or editorial. What it must never be is still.
+        expect(['kinetic', 'showcase', 'editorial']).toContain(motionOf(html.motion));
         expect(html.motion).toContain('motion-stage');
         expect(html.motion).not.toContain('pc-orb');
         if (c.motif !== 'none') {

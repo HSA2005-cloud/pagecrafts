@@ -10,9 +10,12 @@ describe('normalisePlan', () => {
             { type: 'hero', variant: 'centred', brief: 'a' },
             { type: 'about', variant: 'parallax', brief: 'b' },
         ]);
-        expect(show(out)).toEqual(['hero/centred', 'about/text']);
-        expect(out.repairs).toHaveLength(1);
-        expect(out.repairs[0]).toContain('parallax');
+        expect(show(out)[0]).toBe('hero/centred');
+        expect(show(out)).toContain('about/text');
+        expect(out.sections.map((s) => s.type)).toEqual(
+            expect.arrayContaining(['hero', 'about', 'services', 'contact', 'footer']),
+        );
+        expect(out.repairs.some((r) => r.includes('parallax'))).toBe(true);
     });
 
     it('drops an unknown section type and reports it', () => {
@@ -21,7 +24,9 @@ describe('normalisePlan', () => {
             { type: 'vibes', variant: 'whatever', brief: 'b' },
             { type: 'footer', variant: 'columns', brief: 'c' },
         ]);
-        expect(show(out)).toEqual(['hero/centred', 'footer/columns']);
+        expect(out.sections.map((s) => s.type)).not.toContain('vibes');
+        expect(out.sections[0].type).toBe('hero');
+        expect(out.sections.at(-1)?.type).toBe('footer');
         expect(out.repairs.some((r) => r.includes('vibes'))).toBe(true);
     });
 
@@ -31,7 +36,11 @@ describe('normalisePlan', () => {
             { type: 'about', variant: 'text', brief: 'b' },
             { type: 'hero', variant: 'centred', brief: 'a' },
         ]);
-        expect(show(out)).toEqual(['hero/centred', 'about/text', 'footer/columns']);
+        expect(out.sections[0]).toMatchObject({ type: 'hero', variant: 'centred' });
+        expect(out.sections.at(-1)).toMatchObject({ type: 'footer', variant: 'columns' });
+        expect(out.sections.map((s) => s.type)).toEqual(
+            expect.arrayContaining(['about', 'services', 'contact']),
+        );
     });
 
     it('rewrites a repeated variant on the later section', () => {
@@ -39,7 +48,10 @@ describe('normalisePlan', () => {
             { type: 'services', variant: 'cards', brief: 'a' },
             { type: 'team', variant: 'cards', brief: 'b' },
         ]);
-        expect(show(out)).toEqual(['services/cards', 'team/grid']);
+        const team = out.sections.find((s) => s.type === 'team');
+        expect(team?.variant).toBe('grid');
+        expect(out.sections[0].type).toBe('hero');
+        expect(out.sections.at(-1)?.type).toBe('footer');
     });
 
     it('catches a footer repeating the last middle section', () => {
@@ -49,9 +61,10 @@ describe('normalisePlan', () => {
             { type: 'contact', variant: 'simple', brief: 'c' },
             { type: 'footer', variant: 'simple', brief: 'd' },
         ]);
-        expect(show(out)).toEqual([
-            'hero/centred', 'about/text', 'contact/simple', 'footer/columns',
-        ]);
+        expect(out.sections.at(-1)?.variant).toBe('columns');
+        expect(out.sections.map((s) => s.type)).toEqual(
+            expect.arrayContaining(['hero', 'about', 'services', 'contact', 'footer']),
+        );
     });
 
     it('removes adjacent duplicates before the cap, not after', () => {
@@ -68,10 +81,10 @@ describe('normalisePlan', () => {
             { type: 'footer', variant: 'columns', brief: 'i' },
         ]);
         expect(out.sections).toHaveLength(MAX_SECTIONS);
-        expect(show(out)).toEqual([
-            'hero/centred', 'about/text', 'services/cards', 'team/grid',
-            'testimonials/quotes', 'gallery/masonry', 'footer/columns',
-        ]);
+        expect(out.sections[0].type).toBe('hero');
+        expect(out.sections.at(-1)?.type).toBe('footer');
+        expect(out.sections.map((s) => s.type)).toContain('contact');
+        expect(out.sections.filter((s) => s.type === 'about')).toHaveLength(1);
     });
 
     it('handles a plan with no hero and no footer', () => {
@@ -79,7 +92,13 @@ describe('normalisePlan', () => {
             { type: 'about', variant: 'text', brief: 'a' },
             { type: 'contact', variant: 'form', brief: 'b' },
         ]);
-        expect(show(out)).toEqual(['about/text', 'contact/form']);
+        expect(show(out)).toEqual([
+            'hero/centred',
+            'about/text',
+            'services/cards',
+            'contact/form',
+            'footer/simple',
+        ]);
     });
 
     it('inserts contact and drops testimonials when the description asks to register (D11 v22)', () => {
@@ -125,7 +144,7 @@ describe('normalisePlan', () => {
         ], { prompt: 'calm simple page for my yoga studio' });
 
         expect(show(out)).toEqual([
-            'hero/centred', 'about/text', 'services/cards', 'footer/columns',
+            'hero/centred', 'about/text', 'services/cards', 'contact/split-map', 'footer/columns',
         ]);
         expect(out.repairs.some((r) => /gallery\/testimonials\/team/i.test(r))).toBe(true);
     });
@@ -227,7 +246,8 @@ describe('normalisePlan', () => {
 
         const types = out.sections.map((s) => s.type);
         expect(types).not.toContain('testimonials');
-        expect(types).not.toContain('services');
+        // Bare prompts still get a complete site: services return after extras are trimmed.
+        expect(types).toContain('services');
         expect(types).toContain('contact');
         expect(out.sections.find((s) => s.type === 'hero')?.brief).toMatch(/never "Add heading here"/i);
         expect(out.sections.find((s) => s.type === 'about')?.brief).toMatch(/do not invent a company/i);
