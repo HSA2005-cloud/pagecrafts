@@ -63,7 +63,7 @@ describe("the migration stack", () => {
         // A count, deliberately. It is the one assertion that notices a migration file
         // being deleted or never committed — the failure mode where the stack still
         // applies cleanly because the broken one is simply gone. Bump it when you add one.
-        expect(migrationFiles().length).toBe(31);
+        expect(migrationFiles().length).toBe(37);
         expect(applied.rows[0]!.n).toBeGreaterThan(0);
     });
 
@@ -397,5 +397,90 @@ describe("the reference tables the AI layer reads", () => {
                 db.query("insert into public.vertical_profiles (slug, profile) values ('cafe-owner', '{}'::jsonb)"),
             ),
         ).rejects.toThrow(/permission denied/i);
+    });
+});
+
+describe("scratch-card codes", () => {
+    it("hides unused codes from a signed-in person", async () => {
+        await db.exec(`
+            insert into public.discount_codes (code, batch_label, percent_off, applies_to)
+            values ('PC-ABCD-EFGH', 'test-batch', 20, 'all')
+        `);
+
+        const visible = await asUser(db, alice, () =>
+            db.query<{ n: number }>("select count(*)::int as n from public.discount_codes"),
+        );
+        expect(visible.rows[0]!.n).toBe(0);
+    });
+
+    it("refuses a client minting their own card", async () => {
+        await expect(
+            asUser(db, alice, () =>
+                db.query(
+                    "insert into public.discount_codes (code, batch_label, percent_off, applies_to) values ('PC-WXYZ-2345', 'stolen', 100, 'all')",
+                ),
+            ),
+        ).rejects.toThrow(/row-level security|permission denied/i);
+    });
+
+    it("holds and captures a card once", async () => {
+        const reserved = await db.query<{ code: string }>(
+            "select code from public.reserve_discount_code('PC-ABCD-EFGH', $1)",
+            [alice],
+        );
+        expect(reserved.rows[0]?.code).toBe("PC-ABCD-EFGH");
+
+        const stolen = await db.query<{ code: string | null }>(
+            "select code from public.reserve_discount_code('PC-ABCD-EFGH', $1)",
+            [bob],
+        );
+        expect(stolen.rows[0]?.code ?? null).toBeNull();
+
+        const captured = await db.query<{ captured: boolean }>(
+            "select public.capture_discount_code('PC-ABCD-EFGH', $1, 'order_1', 'pro', 499, 399) as captured",
+            [alice],
+        );
+        expect(captured.rows[0]!.captured).toBe(true);
+
+        const again = await db.query<{ captured: boolean }>(
+            "select public.capture_discount_code('PC-ABCD-EFGH', $1, 'order_2', 'pro', 499, 399) as captured",
+            [alice],
+        );
+        expect(again.rows[0]!.captured).toBe(false);
+    });
+
+    it("lets many people use one shared campaign code", async () => {
+        await db.exec(`
+            insert into public.discount_codes (code, batch_label, percent_off, applies_to, max_redemptions)
+            values ('PC-SALE-TENT', 'sale-10', 10, 'all', 100000)
+        `);
+
+        const aliceHold = await db.query<{ code: string }>(
+            "select code from public.reserve_discount_code('PC-SALE-TENT', $1)",
+            [alice],
+        );
+        const bobHold = await db.query<{ code: string }>(
+            "select code from public.reserve_discount_code('PC-SALE-TENT', $1)",
+            [bob],
+        );
+        expect(aliceHold.rows[0]?.code).toBe("PC-SALE-TENT");
+        expect(bobHold.rows[0]?.code).toBe("PC-SALE-TENT");
+
+        const alicePay = await db.query<{ captured: boolean }>(
+            "select public.capture_discount_code('PC-SALE-TENT', $1, 'order_a', 'pro', 499, 449) as captured",
+            [alice],
+        );
+        const bobPay = await db.query<{ captured: boolean }>(
+            "select public.capture_discount_code('PC-SALE-TENT', $1, 'order_b', 'pro', 499, 449) as captured",
+            [bob],
+        );
+        expect(alicePay.rows[0]!.captured).toBe(true);
+        expect(bobPay.rows[0]!.captured).toBe(true);
+
+        const aliceAgain = await db.query<{ captured: boolean }>(
+            "select public.capture_discount_code('PC-SALE-TENT', $1, 'order_a2', 'pro', 499, 449) as captured",
+            [alice],
+        );
+        expect(aliceAgain.rows[0]!.captured).toBe(false);
     });
 });

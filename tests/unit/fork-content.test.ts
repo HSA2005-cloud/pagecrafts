@@ -175,6 +175,7 @@ describe("forking a design", () => {
             sourceTemplateId: templateId,
             brief: {
                 name: "Kettle & Co.",
+                profession: "Cafe",
                 offer: "Tea and cakes",
                 place: "Pune",
                 phone: "0201234567",

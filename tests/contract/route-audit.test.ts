@@ -52,11 +52,17 @@ const NOT_WITH_ROUTE: Record<string, string> = {
     "/v1/auth/password/reset": "Pre-session; uses guard().",
     "/v1/auth/password/update": "Pre-session; uses guard().",
     "/v1/auth/signup": "Pre-session by definition; uses guard().",
+    "/v1/auth/pending":
+        "Pre-session by definition -- it exists to answer somebody who has no session "
+        + "yet. Uses guard() for the envelope.",
     "/v1/auth/verify/resend": "Pre-session; uses guard().",
     "/v1/health": "A liveness probe. Its shape is for a monitor, not a person.",
     "/v1/payments/razorpay/webhook":
         "The caller is Razorpay, not a signed-in person. Authentication is an HMAC over the " +
         "raw bytes, and the status codes are instructions to their retry logic.",
+    "/v1/domains/domain-connect/callback":
+        "Registrar Domain Connect redirect after Authorize. Trust is an HMAC-signed state " +
+        "issued at start; the response is a Location back to the editor, not a JSON envelope.",
 };
 
 /** Routes with a write method and no Zod schema, and why that is right. */
@@ -64,23 +70,28 @@ const NO_SCHEMA: Record<string, string> = {
     "/v1/projects/[id]/assets":
         "multipart/form-data. The body is parsed and checked in the handler — size, mime " +
         "type — because a Zod schema cannot describe a file upload.",
-    "/v1/projects/[id]/checkout": "No body at all; the project is the whole request.",
-    "/v1/templates/[id]/checkout": "No body at all; the design id is the whole request.",
-    "/v1/styles/[id]/checkout": "No body at all; the look id is the whole request.",
-    "/v1/account/packages/advanced/checkout": "No body; Advanced AI package checkout.",
-    "/v1/account/packages/generation/checkout": "No body; extra generation pass checkout.",
     "/v1/account/billing/downgrade":
         "No body. Switching to Starter is a session-scoped revoke, not a payload.",
     "/v1/projects/[id]/publish": "No body. The idempotency key is a header, checked in the route.",
+    "/v1/projects/[id]/domains/[domainId]/verify":
+        "No body. Re-checks host DNS for an existing domain id.",
     "/v1/account":
         "DELETE body is email + password, checked with readCredentials / authenticateWithPassword " +
         "in the handler (same as deleting a site) rather than a withRoute Zod schema — a stolen " +
         "cookie alone must not wipe the account. The UI still shows what they lose and asks them " +
         "to type the words. PATCH /account/consent, which does carry a body, has its schema.",
+    "/v1/payments/razorpay/verify":
+        "Handled directly by verifying razorpay_order_id, razorpay_payment_id and razorpay_signature in handler.",
 };
 
 /** Routes allowed to reach past RLS with the service role, and why. */
 const ADMIN_CLIENT = {
+    "/v1/auth/pending":
+        "Reads one auth user to ask whether their email is confirmed, then mints a one-time " +
+        "link for that same user. There is no session yet, so there is no user-scoped client " +
+        "to use instead. Which user is not taken from the request: it comes from an httpOnly " +
+        "HMAC-signed ticket set at signup, so the route can only ever act on the account the " +
+        "holder of that cookie created.",
     "/v1/health": "Checks the database is reachable at all, which is not a per-user question.",
     "/v1/projects/[id]/generate":
         "Only to hand the vertical-profile cache a writer. Profiles are shared reference " +
@@ -89,6 +100,10 @@ const ADMIN_CLIENT = {
         "Public shop pay page. The visitor is not the owner, so the session client cannot " +
         "read site_meta.upiId under RLS; the handler returns only the UPI id and business " +
         "name, never email or other account fields.",
+    "/v1/domains/domain-connect/callback":
+        "Uses service role only to re-verify the domain row named in the signed state " +
+        "(projectId + userId + domain). No session cookie on the registrar redirect; state " +
+        "HMAC is the trust boundary.",
 };
 
 const usesWithRoute = (source: string) => /withRoute[<(]/.test(source);

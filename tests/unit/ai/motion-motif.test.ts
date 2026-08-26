@@ -34,7 +34,6 @@ describe('motion motif follows the business', () => {
         expect(motifFor('logistics', 'Packers and movers')).toBe('crate');
         expect(motifFor('university')).toBe('cap');
         expect(motifFor('ngo', 'Donate and volunteer')).toBe('heart');
-        expect(motifFor('restaurant')).toBe('steam');
         expect(motifFor('wedding-planner')).toBe('flower');
         expect(motifFor('electrician')).toBe('bolt');
         expect(motifFor('accountant')).toBe('coin');
@@ -43,10 +42,35 @@ describe('motion motif follows the business', () => {
         expect(motifFor('gym')).toBe('flame');
         expect(motifFor('bakery', 'birthday cakes')).toBe('jalebi');
         expect(motifFor('confectionery', 'kaju katli')).toBe('jalebi');
-        expect(motifFor('south-indian-breakfast', 'dosa and idli')).toBe('steam');
         expect(motifFor('personal-trainer', 'sessions')).toBe('flame');
         expect(motifFor('unspecified', 'a website')).toBe('none');
         expect(motionMotifMarkup('unspecified')).toBe('');
+    });
+
+    // A restaurant hero is a photograph of food, and the steam glyph sat on top of it as a
+    // large translucent line drawing — closer to a smudge on the lens than to decoration.
+    // Food businesses get no motif; the picture is already the decoration.
+    it('leaves a food business alone', () => {
+        for (const vertical of [
+            'restaurant',
+            'cafe',
+            'fine-dining',
+            'south-indian-breakfast',
+            'food-truck',
+        ]) {
+            expect(motifFor(vertical), vertical).toBe('none');
+            expect(motionMotifMarkup(vertical), vertical).toBe('');
+        }
+
+        expect(motifFor('south-indian-breakfast', 'dosa and idli')).toBe('none');
+        expect(motifFor('restaurant', 'fine dining in Bengaluru')).toBe('none');
+    });
+
+    // Sweets keep theirs. A jalebi coil over a tray of mithai is the shop's own iconography,
+    // not a generic food glyph, and nobody complained about it.
+    it('still gives a sweet shop its jalebi', () => {
+        expect(motifFor('sweet-shop')).toBe('jalebi');
+        expect(motifFor('bakery', 'birthday cakes')).toBe('jalebi');
     });
 
     it('builds a kinetic stage and ticker, separate from the motif', () => {

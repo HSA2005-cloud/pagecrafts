@@ -11,7 +11,10 @@ export const dynamic = "force-dynamic";
 // One route for every emailed link. Supabase sends either a PKCE `code` (the
 // default template) or a `token_hash` plus `type` ("signup" for confirmation,
 // "recovery" for a password reset). Both are traded for a real session cookie,
-// then we send the user where they were going.
+// then we send the user where they were going. The destination comes from
+// confirmDestination, because emailRedirectTo carries no query string: a
+// TokenHash template appends its own, and two question marks in one URL meant
+// token_hash never parsed and every confirmation died as ?error=expired.
 export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const code = url.searchParams.get("code");

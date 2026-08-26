@@ -9,6 +9,8 @@ import {
     generationThought,
 } from '@/lib/editor/generation-steps';
 import { explainCreationIssue } from '@/lib/editor/ai-fix';
+import { isOutOfAiCreditsMessage } from '@/lib/ai/jobs/credits';
+import { AiCreditsNotice } from '@/components/discovery/AiCreditsNotice';
 import { PREVIEW_IFRAME_SANDBOX, withPreviewCsp } from '@/lib/preview-security';
 import { previewDocumentUrl } from '@/lib/editor/preview-frame';
 import { cn } from '@/lib/utils';
@@ -34,6 +36,7 @@ export function GeneratingOverlay({
     prompt,
     error,
     onAskAiFix,
+    showCreditsNotice = false,
     className,
 }: {
     status: JobStatus | 'loading';
@@ -46,6 +49,8 @@ export function GeneratingOverlay({
     prompt?: string | null;
     error?: string | null;
     onAskAiFix?: (instruction: string) => void;
+    /** Template-generation flows only (build / choose retry). Off in the editor. */
+    showCreditsNotice?: boolean;
     className?: string;
 }) {
     const readyLooks = looks.filter((look) => look.html.trim().length > 0);
@@ -76,7 +81,9 @@ export function GeneratingOverlay({
         plannedSections,
         variantCount: readyLooks.length,
     });
-    const fix = error ? explainCreationIssue(error, 'generation') : null;
+    const quotaError = Boolean(error && isOutOfAiCreditsMessage(error));
+    const outOfCredits = quotaError && showCreditsNotice;
+    const fix = error && !outOfCredits ? explainCreationIssue(error, 'generation') : null;
 
     return (
         <div
@@ -91,7 +98,9 @@ export function GeneratingOverlay({
                     thought={thought}
                     prompt={prompt}
                 />
-                {fix ? (
+                {outOfCredits ? (
+                    <AiCreditsNotice className="mt-4" />
+                ) : fix ? (
                     <div className="mt-4 rounded-2xl border border-border/70 bg-card/80 p-4">
                         <p className="text-sm font-medium text-foreground">{fix.title}</p>
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">{fix.what}</p>
