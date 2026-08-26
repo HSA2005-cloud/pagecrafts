@@ -28,6 +28,7 @@ const MESSAGES: Partial<Record<ErrorCode, string>> = {
     validation_failed: "Check the details above and try again.",
     unauthorized: "That email and password do not match. Try again, or reset your password.",
     forbidden: "Confirm your email address to finish setting up your account.",
+    conflict: "That email already has an account. Sign in instead.",
     rate_limited: "Too many attempts. Wait a few minutes and try again.",
     internal: "We could not finish that just now. Nothing is wrong with your details — try again in a moment.",
 };
@@ -106,7 +107,11 @@ export function AuthCard({
 
     function visibleError(result: ApiResult<unknown>): string {
         if (result.ok) return MESSAGES.internal!;
-        if (result.error.code === "validation_failed" || result.error.code === "forbidden") {
+        if (
+            result.error.code === "validation_failed" ||
+            result.error.code === "forbidden" ||
+            result.error.code === "conflict"
+        ) {
             return result.error.message || (MESSAGES[result.error.code] ?? MESSAGES.internal!);
         }
         return MESSAGES[result.error.code] ?? MESSAGES.internal!;

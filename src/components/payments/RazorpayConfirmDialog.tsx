@@ -12,6 +12,7 @@ import {
 
 export type RazorpayConfirmKind =
     | "publish"
+    | "edit_unlock"
     | "design"
     | "look"
     | "plan"
@@ -23,6 +24,10 @@ const COPY: Record<RazorpayConfirmKind, { title: string; body: string }> = {
         title: "Continue to Razorpay?",
         body: "You'll be taken to Razorpay to pay for publishing this site. Agree only if you want to continue.",
     },
+    edit_unlock: {
+        title: "Continue to Razorpay?",
+        body: "You'll pay Rs 249 to unlock editing on this live site. After that you can change it and republish to the same address. Agree only if you want to continue.",
+    },
     design: {
         title: "Continue to Razorpay?",
         body: "You'll be taken to Razorpay to upgrade your plan so this design unlocks with its whole tier. Agree only if you want to continue.",
@@ -33,15 +38,15 @@ const COPY: Record<RazorpayConfirmKind, { title: string; body: string }> = {
     },
     plan: {
         title: "Continue to Razorpay?",
-        body: "You'll be taken to Razorpay to upgrade to Pro or Premium. That unlocks every design and look in that plan — not just one template. Agree only if you want to continue.",
+        body: "You'll pay the price shown on the plan, after any applied coupon. Razorpay opens next unless the coupon made it free. Agree only if you want to continue.",
     },
     advanced: {
         title: "Continue to Razorpay?",
-        body: "You'll be taken to Razorpay to pay for the Advanced AI package. Agree only if you want to continue.",
+        body: "You'll pay the Advanced price shown on the page, after any applied coupon. Razorpay opens next unless the coupon made it free. Agree only if you want to continue.",
     },
     generation_pass: {
         title: "Continue to Razorpay?",
-        body: "You'll be taken to Razorpay to pay for one extra AI generation. Agree only if you want to continue.",
+        body: "You'll pay the pass price shown on the page, after any applied coupon. Razorpay opens next unless the coupon made it free. Agree only if you want to continue.",
     },
 };
 

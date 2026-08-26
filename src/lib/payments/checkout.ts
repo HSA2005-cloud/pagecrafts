@@ -4,13 +4,18 @@ import type { AccountPlan, BillingSummary, TemplateTier } from "@/lib/contracts"
 import { ApiError } from "@/lib/errors/respond";
 import { supabaseAdmin } from "@/lib/data/supabase-admin";
 import { checkEntitlement, hasStyleAccess, hasTemplateAccess } from "@/lib/data/entitlements";
+import { inrToPaise, isFree, PREMIUM_PRICE_INR, PRO_PRICE_INR, publishPriceInr, requiredPlanForStyle, requiredPlanForTemplate, EDIT_UNLOCK_PRICE_INR } from "./pricing";
 import {
     createOrder,
+    fetchOrder,
+    orderHasCapturedPayment,
     paymentsConfigured,
     publishableKeyId,
+    verifyPaymentSignature,
+    type OrderKind,
     type OrderNotes,
+    type RazorpayOrder,
 } from "./razorpay";
-import { inrToPaise, isFree, PREMIUM_PRICE_INR, PRO_PRICE_INR, publishPriceInr, requiredPlanForStyle, requiredPlanForTemplate } from "./pricing";
 import { TEMPLATES } from "@/lib/templates";
 import { templateUuid } from "@/lib/templates/template-id";
 import type { StyleId } from "@/lib/ai/generate/styles";
@@ -20,6 +25,13 @@ import {
 } from "@/lib/limits/config";
 import { grantGenerationPasses, generationPassesRemaining } from "@/lib/ai/jobs/quota";
 import type { AiPackageId } from "./packages";
+import {
+    attachReservedOrder,
+    captureDiscount,
+    releaseDiscountReservation,
+    reserveDiscount,
+    type PricedWithCode,
+} from "./discount-codes";
 
 // The gate at publish (R3 · Doc 22 P2/P3, Amendment A1).
 //
@@ -38,6 +50,73 @@ export interface CheckoutResponse {
     currency?: "INR";
     keyId?: string;
     priceInr?: number;
+    listPriceInr?: number;
+    discountPercent?: number;
+}
+
+function checkoutFields(priced: PricedWithCode): Pick<CheckoutResponse, "priceInr" | "listPriceInr" | "discountPercent"> {
+    return {
+        priceInr: priced.priceInr,
+        listPriceInr: priced.listPriceInr,
+        ...(priced.discountPercent ? { discountPercent: priced.discountPercent } : {}),
+    };
+}
+
+async function startDiscountedOrder(opts: {
+    userId: string;
+    kind: OrderKind;
+    listPriceInr: number;
+    receipt: string;
+    notes: OrderNotes;
+    discountCode?: string;
+}): Promise<{ priced: PricedWithCode; order?: RazorpayOrder }> {
+    let priced: PricedWithCode = { priceInr: opts.listPriceInr, listPriceInr: opts.listPriceInr };
+    if (opts.discountCode) {
+        priced = await reserveDiscount(opts.userId, opts.kind, opts.listPriceInr, opts.discountCode);
+    }
+
+    if (priced.priceInr === 0) {
+        return { priced };
+    }
+
+    const notes: OrderNotes = priced.discountCode
+        ? {
+              ...opts.notes,
+              discountCode: priced.discountCode,
+              listPriceInr: String(priced.listPriceInr),
+              paidInr: String(priced.priceInr),
+          }
+        : opts.notes;
+
+    try {
+        const order = await createOrder(inrToPaise(priced.priceInr), opts.receipt, notes);
+        if (priced.discountCode && priced.exclusiveHold !== false) {
+            await attachReservedOrder(priced.discountCode, order.id);
+        }
+        return { priced, order };
+    } catch (error) {
+        if (priced.discountCode && priced.exclusiveHold !== false) {
+            await releaseDiscountReservation(priced.discountCode, opts.userId);
+        }
+        throw error;
+    }
+}
+
+async function captureCodeIfUsed(
+    priced: PricedWithCode,
+    userId: string,
+    kind: OrderKind,
+    orderId?: string,
+): Promise<void> {
+    if (!priced.discountCode) return;
+    await captureDiscount({
+        code: priced.discountCode,
+        userId,
+        kind,
+        orderId,
+        listPriceInr: priced.listPriceInr,
+        paidInr: priced.priceInr,
+    });
 }
 
 interface ProjectForCheckout {
@@ -114,6 +193,30 @@ export async function grantPublish(
 }
 
 /**
+ * Grant edit_unlock so a live site can be changed and republished (same address).
+ */
+export async function grantEditUnlock(
+    projectId: string,
+    userId: string,
+    source: "paid" | "launch_offer" = "paid",
+): Promise<void> {
+    const admin = supabaseAdmin();
+
+    const { error } = await admin.from("entitlements").insert({
+        user_id: userId,
+        project_id: projectId,
+        kind: "edit_unlock",
+        source,
+        status: "active",
+    });
+
+    if (!error) return;
+    if (error.code === "23505") return;
+
+    throw new ApiError("internal", "Could not unlock editing.", error.message);
+}
+
+/**
  * Start paying to publish, or discover there is nothing to pay.
  *
  * A free design is granted on the spot: making somebody open a checkout for Rs 0 is a
@@ -124,6 +227,7 @@ export async function startPublishCheckout(
     supabase: SupabaseClient,
     userId: string,
     projectId: string,
+    discountCode?: string,
 ): Promise<CheckoutResponse> {
     // Owner-scoped read first, before the entitlement is consulted (R3 D19 route audit).
     //
@@ -153,10 +257,20 @@ export async function startPublishCheckout(
     }
 
     const priceInr = publishPriceInr(tier);
-    const amountInPaise = inrToPaise(priceInr);
+    const { priced, order } = await startDiscountedOrder({
+        userId,
+        kind: "publish",
+        listPriceInr: priceInr,
+        receipt: `pub_${projectId.slice(0, 8)}_${Date.now()}`,
+        notes: { projectId, userId, kind: "publish" },
+        discountCode,
+    });
 
-    const notes: OrderNotes = { projectId, userId, kind: "publish" };
-    const order = await createOrder(amountInPaise, `pub_${projectId.slice(0, 8)}_${Date.now()}`, notes);
+    if (!order) {
+        await grantPublish(projectId, userId, "launch_offer");
+        await captureCodeIfUsed(priced, userId, "publish");
+        return { granted: true, ...checkoutFields(priced) };
+    }
 
     return {
         granted: false,
@@ -164,7 +278,60 @@ export async function startPublishCheckout(
         amountInPaise: order.amount,
         currency: "INR",
         keyId: publishableKeyId(),
-        priceInr,
+        ...checkoutFields(priced),
+    };
+}
+
+/**
+ * Pay Rs 249 to reopen editing on a published site (and republish to the same address).
+ */
+export async function startEditUnlockCheckout(
+    supabase: SupabaseClient,
+    userId: string,
+    projectId: string,
+    discountCode?: string,
+): Promise<CheckoutResponse> {
+    // Owner check — same pattern as publish checkout.
+    await priceOf(supabase, projectId);
+
+    const permission = await checkEntitlement(supabase, userId, projectId, "edit_unlock");
+    if (permission.granted) return { granted: true };
+
+    const pro = await checkEntitlement(supabase, userId, null, "pro");
+    if (pro.granted) {
+        await grantEditUnlock(projectId, userId, "paid");
+        return { granted: true };
+    }
+
+    if (!paymentsConfigured()) {
+        throw new ApiError(
+            "service_unavailable",
+            "Payments are not available right now. Try again in a little while.",
+        );
+    }
+
+    const { priced, order } = await startDiscountedOrder({
+        userId,
+        kind: "edit_unlock",
+        listPriceInr: EDIT_UNLOCK_PRICE_INR,
+        receipt: `edit_${projectId.slice(0, 8)}_${Date.now()}`,
+        notes: { projectId, userId, kind: "edit_unlock" },
+        discountCode,
+    });
+
+    if (!order) {
+        await grantEditUnlock(projectId, userId, "launch_offer");
+        await captureCodeIfUsed(priced, userId, "edit_unlock");
+        return { granted: true, ...checkoutFields(priced) };
+    }
+
+    return {
+        granted: false,
+        orderId: order.id,
+        amountInPaise: order.amount,
+        currency: "INR",
+        keyId: publishableKeyId(),
+        ...checkoutFields(priced),
     };
 }
 
@@ -226,6 +393,127 @@ export async function grantPro(userId: string): Promise<void> {
 
 export async function grantPremium(userId: string): Promise<void> {
     await grantAccountKind(userId, "premium");
+}
+
+/**
+ * Unlock whatever the order notes say — used by the webhook and by checkout verify.
+ *
+ * Verify used to only check the signature and wait for the webhook. When the session
+ * expired during Razorpay, or the webhook was late/missing, people paid and stayed on
+ * Starter. Granting here (idempotent) closes that gap; the webhook remains the backup.
+ */
+export async function grantFromOrderNotes(notes: Partial<OrderNotes>): Promise<{
+    kind: OrderNotes["kind"];
+    userId: string;
+}> {
+    const userId = typeof notes.userId === "string" ? notes.userId.trim() : "";
+    const kind = typeof notes.kind === "string" ? notes.kind.trim() : "";
+
+    if (!userId) {
+        throw new ApiError("validation_failed", "That payment has no account on it.");
+    }
+
+    if (kind === "pro") {
+        await grantPro(userId);
+        return { kind, userId };
+    }
+    if (kind === "premium") {
+        await grantPremium(userId);
+        return { kind, userId };
+    }
+    if (kind === "advanced") {
+        await grantAdvanced(userId);
+        return { kind, userId };
+    }
+    if (kind === "generation_pass") {
+        await grantGenerationPassPurchase(userId);
+        return { kind, userId };
+    }
+    if (kind === "template") {
+        const templateId = typeof notes.templateId === "string" ? notes.templateId.trim() : "";
+        if (!templateId) {
+            throw new ApiError("validation_failed", "That payment has no design on it.");
+        }
+        await grantTemplate(userId, templateId);
+        return { kind, userId };
+    }
+    if (kind === "style") {
+        const styleId = typeof notes.styleId === "string" ? notes.styleId.trim() : "";
+        if (!styleId) {
+            throw new ApiError("validation_failed", "That payment has no look on it.");
+        }
+        await grantStyle(userId, styleId);
+        return { kind, userId };
+    }
+    if (kind === "publish") {
+        const projectId = typeof notes.projectId === "string" ? notes.projectId.trim() : "";
+        if (!projectId) {
+            throw new ApiError("validation_failed", "That payment has no site on it.");
+        }
+        await grantPublish(projectId, userId, "paid");
+        return { kind, userId };
+    }
+    if (kind === "edit_unlock") {
+        const projectId = typeof notes.projectId === "string" ? notes.projectId.trim() : "";
+        if (!projectId) {
+            throw new ApiError("validation_failed", "That payment has no site on it.");
+        }
+        await grantEditUnlock(projectId, userId, "paid");
+        return { kind, userId };
+    }
+
+    throw new ApiError("validation_failed", "That payment is not for a plan we recognise.");
+}
+
+/**
+ * After Razorpay checkout: prove the payment tokens, read our notes off the order, grant.
+ * Does not need a browser session — the signature is the trust.
+ */
+export async function applyVerifiedCheckout(input: {
+    orderId: string;
+    paymentId: string;
+    signature: string;
+}): Promise<{ kind: OrderNotes["kind"]; userId: string }> {
+    const valid = verifyPaymentSignature(input.orderId, input.paymentId, input.signature);
+    if (!valid) {
+        throw new ApiError(
+            "validation_failed",
+            "Payment verification failed. Please contact support if you were charged.",
+        );
+    }
+
+    const order = await fetchOrder(input.orderId);
+    return grantFromOrderNotes(order.notes);
+}
+
+/**
+ * Recover a paid order for the signed-in account when the webhook never landed.
+ * Order id comes from the Razorpay receipt / dashboard.
+ */
+export async function recoverPaidOrder(
+    userId: string,
+    orderId: string,
+): Promise<{ kind: OrderNotes["kind"] }> {
+    const order = await fetchOrder(orderId.trim());
+    const notesUser = typeof order.notes.userId === "string" ? order.notes.userId.trim() : "";
+
+    if (!notesUser || notesUser !== userId) {
+        throw new ApiError(
+            "forbidden",
+            "That payment belongs to a different account.",
+        );
+    }
+
+    const paid = await orderHasCapturedPayment(order.id);
+    if (!paid && order.status !== "paid") {
+        throw new ApiError(
+            "validation_failed",
+            "Razorpay does not show that order as paid yet.",
+        );
+    }
+
+    const granted = await grantFromOrderNotes(order.notes);
+    return { kind: granted.kind };
 }
 
 /** Grant the Advanced AI usage package (not a catalogue design unlock). */
@@ -336,6 +624,7 @@ export async function startTemplateCheckout(
     supabase: SupabaseClient,
     userId: string,
     templateRef: string,
+    discountCode?: string,
 ): Promise<CheckoutResponse> {
     const resolved = resolveDesign(templateRef);
     const need = resolved ? requiredPlanForTemplate(resolved.design.tier) : null;
@@ -344,7 +633,7 @@ export async function startTemplateCheckout(
     }
 
     // Plans unlock the whole tier — never sell a single template anymore.
-    return startPlanCheckout(supabase, userId, need);
+    return startPlanCheckout(supabase, userId, need, discountCode);
 }
 
 const PAID_STYLES = new Set<StyleId>(["photos", "motion"]);
@@ -353,6 +642,7 @@ export async function startStyleCheckout(
     supabase: SupabaseClient,
     userId: string,
     styleId: string,
+    discountCode?: string,
 ): Promise<CheckoutResponse> {
     if (!PAID_STYLES.has(styleId as StyleId)) {
         throw new ApiError("not_found", "That look does not exist.");
@@ -364,7 +654,7 @@ export async function startStyleCheckout(
     if (!need) throw new ApiError("not_found", "That look does not exist.");
 
     // Same as designs: upgrade the account plan, not a one-off look SKU.
-    return startPlanCheckout(supabase, userId, need);
+    return startPlanCheckout(supabase, userId, need, discountCode);
 }
 
 /** Stop paid plans on this account. Does not refund, and does not touch published sites. */
@@ -437,33 +727,65 @@ function expandUnlocks(
 /**
  * Start paying for Pro or Premium, or discover they already hold it (or a higher plan).
  */
+function devPlanGrantEnabled(): boolean {
+    return process.env.PAGECRAFTS_DEV_GRANT_PLANS === "true";
+}
+
 export async function startPlanCheckout(
     supabase: SupabaseClient,
     userId: string,
     plan: "pro" | "premium",
+    discountCode?: string,
 ): Promise<CheckoutResponse> {
+    if (plan !== "pro" && plan !== "premium") {
+        throw new ApiError("validation_failed", "That plan cannot be purchased.");
+    }
+
     const billing = await getBilling(supabase, userId);
     if (plan === "pro" && (billing.plan === "pro" || billing.plan === "premium")) {
         return { granted: true };
     }
     if (plan === "premium" && billing.plan === "premium") return { granted: true };
 
-    const priceInr = plan === "premium" ? PREMIUM_PRICE_INR : PRO_PRICE_INR;
-    const notes: OrderNotes = { userId, kind: plan };
-    const order = await createOrder(
-        inrToPaise(priceInr),
-        `${plan}_${userId.slice(0, 8)}_${Date.now()}`,
-        notes,
-    );
+    const listPriceInr = plan === "premium" ? PREMIUM_PRICE_INR : PRO_PRICE_INR;
 
-    return {
-        granted: false,
-        orderId: order.id,
-        amountInPaise: order.amount,
-        currency: "INR",
-        keyId: publishableKeyId(),
-        priceInr,
-    };
+    try {
+        const { priced, order } = await startDiscountedOrder({
+            userId,
+            kind: plan,
+            listPriceInr,
+            receipt: `${plan}_${userId.slice(0, 8)}_${Date.now()}`,
+            notes: { userId, kind: plan },
+            discountCode,
+        });
+
+        if (!order) {
+            if (plan === "premium") await grantPremium(userId);
+            else await grantPro(userId);
+            await captureCodeIfUsed(priced, userId, plan);
+            return { granted: true, ...checkoutFields(priced) };
+        }
+
+        return {
+            granted: false,
+            orderId: order.id,
+            amountInPaise: order.amount,
+            currency: "INR",
+            keyId: publishableKeyId(),
+            ...checkoutFields(priced),
+        };
+    } catch (error) {
+        if (
+            error instanceof ApiError &&
+            error.code === "payments_unavailable" &&
+            devPlanGrantEnabled()
+        ) {
+            if (plan === "premium") await grantPremium(userId);
+            else await grantPro(userId);
+            return { granted: true };
+        }
+        throw error;
+    }
 }
 
 export async function startProCheckout(
@@ -477,6 +799,7 @@ export async function startProCheckout(
 export async function startAdvancedCheckout(
     supabase: SupabaseClient,
     userId: string,
+    discountCode?: string,
 ): Promise<CheckoutResponse> {
     const { data, error } = await supabase
         .from("entitlements")
@@ -488,16 +811,20 @@ export async function startAdvancedCheckout(
     if (error) throw new ApiError("internal", "Could not read your AI package.", error.message);
     if (data && isLivePlanRow(data, Date.now())) return { granted: true };
 
-    if (!paymentsConfigured()) {
-        throw new ApiError("internal", "Payments are not set up on this server.");
-    }
+    const { priced, order } = await startDiscountedOrder({
+        userId,
+        kind: "advanced",
+        listPriceInr: ADVANCED_PACKAGE_PRICE_INR,
+        receipt: `adv_${userId.slice(0, 8)}_${Date.now()}`,
+        notes: { userId, kind: "advanced" },
+        discountCode,
+    });
 
-    const notes: OrderNotes = { userId, kind: "advanced" };
-    const order = await createOrder(
-        inrToPaise(ADVANCED_PACKAGE_PRICE_INR),
-        `adv_${userId.slice(0, 8)}_${Date.now()}`,
-        notes,
-    );
+    if (!order) {
+        await grantAdvanced(userId);
+        await captureCodeIfUsed(priced, userId, "advanced");
+        return { granted: true, ...checkoutFields(priced) };
+    }
 
     return {
         granted: false,
@@ -505,24 +832,29 @@ export async function startAdvancedCheckout(
         amountInPaise: order.amount,
         currency: "INR",
         keyId: publishableKeyId(),
-        priceInr: ADVANCED_PACKAGE_PRICE_INR,
+        ...checkoutFields(priced),
     };
 }
 
 /** Buy one extra AI generation round (Rs 199) after the package allowance is used. */
 export async function startGenerationPassCheckout(
     userId: string,
+    discountCode?: string,
 ): Promise<CheckoutResponse> {
-    if (!paymentsConfigured()) {
-        throw new ApiError("internal", "Payments are not set up on this server.");
-    }
+    const { priced, order } = await startDiscountedOrder({
+        userId,
+        kind: "generation_pass",
+        listPriceInr: GENERATION_PASS_PRICE_INR,
+        receipt: `genpass_${userId.slice(0, 8)}_${Date.now()}`,
+        notes: { userId, kind: "generation_pass" },
+        discountCode,
+    });
 
-    const notes: OrderNotes = { userId, kind: "generation_pass" };
-    const order = await createOrder(
-        inrToPaise(GENERATION_PASS_PRICE_INR),
-        `genpass_${userId.slice(0, 8)}_${Date.now()}`,
-        notes,
-    );
+    if (!order) {
+        await grantGenerationPassPurchase(userId);
+        await captureCodeIfUsed(priced, userId, "generation_pass");
+        return { granted: true, ...checkoutFields(priced) };
+    }
 
     return {
         granted: false,
@@ -530,12 +862,141 @@ export async function startGenerationPassCheckout(
         amountInPaise: order.amount,
         currency: "INR",
         keyId: publishableKeyId(),
-        priceInr: GENERATION_PASS_PRICE_INR,
+        ...checkoutFields(priced),
     };
 }
 
 export async function grantGenerationPassPurchase(userId: string): Promise<void> {
     await grantGenerationPasses(userId, 1);
+}
+
+const ORDER_KINDS = new Set<OrderNotes["kind"]>([
+    "publish",
+    "pro",
+    "premium",
+    "template",
+    "style",
+    "advanced",
+    "generation_pass",
+]);
+
+/**
+ * Apply a paid order's notes: unlock the plan, design, look, package, or publish row.
+ *
+ * Used by both the checkout verify route (after HMAC of order|payment) and the
+ * webhook (after HMAC of the raw body). Grants are idempotent — a second call for
+ * the same payment is a no-op, never a downgrade.
+ *
+ * When `requireUserId` is set (browser verify), notes.userId must match the signed-in
+ * person so one account cannot claim another account's order.
+ */
+export async function fulfillPaidNotes(
+    notes: Partial<OrderNotes>,
+    meta: { paymentId: string; orderId: string },
+    options?: { requireUserId?: string },
+): Promise<{ kind: OrderNotes["kind"] }> {
+    const { userId, kind, projectId, templateId, styleId } = notes;
+
+    if (!userId || !kind || !ORDER_KINDS.has(kind as OrderNotes["kind"])) {
+        console.error("[payments] captured payment carries no usable notes", {
+            paymentId: meta.paymentId,
+            orderId: meta.orderId,
+        });
+        throw new ApiError(
+            "validation_failed",
+            "This payment could not be matched to a purchase. Please contact support if you were charged.",
+        );
+    }
+
+    const resolvedKind = kind as OrderNotes["kind"];
+
+    const finish = async () => {
+        if (notes.discountCode) {
+            await captureDiscount({
+                code: notes.discountCode,
+                userId,
+                kind: resolvedKind,
+                orderId: meta.orderId,
+                listPriceInr: Number(notes.listPriceInr) || 0,
+                paidInr: Number(notes.paidInr) || 0,
+            });
+        }
+        return { kind: resolvedKind };
+    };
+
+    if (options?.requireUserId && options.requireUserId !== userId) {
+        console.error("[payments] verified payment user mismatch", {
+            paymentId: meta.paymentId,
+            orderId: meta.orderId,
+            expectedUserId: options.requireUserId,
+        });
+        throw new ApiError(
+            "forbidden",
+            "This payment belongs to a different account.",
+        );
+    }
+
+    if (resolvedKind === "advanced") {
+        await grantAdvanced(userId);
+        console.info("[payments] Advanced unlocked", { userId, paymentId: meta.paymentId });
+        return finish();
+    }
+
+    if (resolvedKind === "generation_pass") {
+        await grantGenerationPassPurchase(userId);
+        console.info("[payments] generation pass granted", { userId, paymentId: meta.paymentId });
+        return finish();
+    }
+
+    if (resolvedKind === "template") {
+        if (!templateId) {
+            console.error("[payments] captured template payment carries no design", meta);
+            throw new ApiError(
+                "validation_failed",
+                "This payment could not be matched to a design. Please contact support if you were charged.",
+            );
+        }
+        await grantTemplate(userId, templateId);
+        console.info("[payments] template unlocked", {
+            userId,
+            templateId,
+            paymentId: meta.paymentId,
+        });
+        return finish();
+    }
+
+    if (resolvedKind === "style") {
+        if (!styleId) {
+            console.error("[payments] captured look payment carries no style", meta);
+            throw new ApiError(
+                "validation_failed",
+                "This payment could not be matched to a look. Please contact support if you were charged.",
+            );
+        }
+        await grantStyle(userId, styleId);
+        console.info("[payments] look unlocked", { userId, styleId, paymentId: meta.paymentId });
+        return finish();
+    }
+
+    if (resolvedKind === "pro" || resolvedKind === "premium") {
+        if (resolvedKind === "premium") await grantPremium(userId);
+        else await grantPro(userId);
+        const label = resolvedKind === "premium" ? "Premium" : "Pro";
+        console.info(`[payments] ${label} unlocked`, { userId, paymentId: meta.paymentId });
+        return finish();
+    }
+
+    if (!projectId) {
+        console.error("[payments] captured publish payment carries no project", meta);
+        throw new ApiError(
+            "validation_failed",
+            "This payment could not be matched to a site. Please contact support if you were charged.",
+        );
+    }
+
+    await grantPublish(projectId, userId, "paid");
+    console.info("[payments] publish unlocked", { projectId, paymentId: meta.paymentId });
+    return finish();
 }
 
 /** What Settings and /plans show: the live plan, whether checkout can open, and every grant. */

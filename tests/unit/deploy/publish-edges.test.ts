@@ -83,14 +83,16 @@ describe("the address a site is published to", () => {
         }
     });
 
-    it("verifies the same URL it reports, on both shapes", async () => {
+    it("does not re-probe origins after push (speed)", async () => {
         for (const shape of ["cloudflare", "github"] as const) {
             const p = provider({ shape });
             const verify = vi.spyOn(p, "verifyLive");
 
             const result = await publish({ ...input, idempotencyKey: nextKey() }, () => {}, p);
 
-            expect(verify).toHaveBeenCalledWith(result.liveUrl);
+            expect(result.state).toBe("live");
+            expect(result.liveUrl).toBe("https://spike.pagecrafts.in");
+            expect(verify, shape).not.toHaveBeenCalled();
         }
     });
 });
@@ -132,29 +134,23 @@ describe("a publish that fails after the site was provisioned", () => {
     });
 });
 
-describe("a publish whose DNS has not propagated yet", () => {
-    it("stays verifying rather than falling back to pending", async () => {
-        // `pending` is the state a publish starts in. Reusing it for "provisioned, pushed,
-        // hosted, and waiting on DNS" throws away everything the attempt achieved: the
-        // dashboard cannot tell a publish that has done nothing from one that is a
-        // propagation delay away from being live, and nothing can resume it, because
-        // resuming means knowing there is something to resume.
+describe("a publish after push and hosting succeed", () => {
+    it("marks live immediately without waiting on DNS probes", async () => {
+        // Origin probing after a confirmed Direct Upload was burning 5–8s. DNS can still
+        // warm via the dashboard poll; the owner gets the address as soon as files are up.
         const result = await publish(
             { ...input, idempotencyKey: nextKey() },
             () => {},
             provider({ shape: "cloudflare", live: false }),
         );
 
-        expect(result.state).toBe("verifying");
-        expect(result.liveUrl).toBeNull();
-        // A reason, not a code. `verification_timeout` used to be stored verbatim in a
-        // column the dashboard shows a person (R3 D18).
-        expect(result.reason).toBe("not_answering_yet");
+        expect(result.state).toBe("live");
+        expect(result.liveUrl).toBe("https://spike.pagecrafts.in");
+        expect(result.pendingUrl).toBeNull();
+        expect(result.reason).toBeNull();
     });
 
-    it("carries the site id and the address it is waiting on", async () => {
-        // What a resume needs: which site, and which URL to re-check. Without them the only
-        // way to finish the publish is to run the whole thing again.
+    it("carries the site id on the live result", async () => {
         const result = await publish(
             { ...input, idempotencyKey: nextKey() },
             () => {},
@@ -162,10 +158,10 @@ describe("a publish whose DNS has not propagated yet", () => {
         );
 
         expect(result.siteId).toBe("spike");
-        expect(result.pendingUrl).toBe("https://spike.pagecrafts.in");
+        expect(result.liveUrl).toBe("https://spike.pagecrafts.in");
     });
 
-    it("goes live on a later check without provisioning or pushing again", async () => {
+    it("does not provision again on republish", async () => {
         const first = provider({ shape: "cloudflare", live: false });
         const timedOut = await publish({ ...input, idempotencyKey: nextKey() }, () => {}, first);
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { publish } from '@/lib/deploy/publish';
 import type { DeployProvider } from '@/lib/deploy/provider';
 
-function fakeProvider(live = true): DeployProvider {
+function fakeProvider(): DeployProvider {
     return {
         provisionSite: async () => ({
             siteId: 'pagecraft-sites/spike',
@@ -15,7 +15,7 @@ function fakeProvider(live = true): DeployProvider {
         },
         pushBuild: async () => ({ commitSha: 'commit-1' }),
         enableHosting: async () => { },
-        verifyLive: async () => live,
+        verifyLive: async () => true,
         removeSite: async () => { },
     };
 }
@@ -32,7 +32,7 @@ describe('publish', () => {
         const result = await publish(
             { ...input, idempotencyKey: 'k1' },
             (s) => states.push(s),
-            fakeProvider(true),
+            fakeProvider(),
         );
 
         expect(states).toEqual([
@@ -40,32 +40,33 @@ describe('publish', () => {
             'provisioning',
             'pushing',
             'enabling_hosting',
-            'verifying',
             'live',
         ]);
+        expect(result.state).toBe('live');
         expect(result.liveUrl).toBe('https://spike.pagecrafts.in');
         expect(result.commitSha).toBe('commit-1');
     });
 
-    it('stays verifying with no url when verification times out', async () => {
-        // Was `pending` until R3 D17. That is the state an attempt *starts* in, so a site
-        // that had been provisioned, pushed and hosted reported the same thing as one that
-        // had done nothing at all — and a resume needs to be able to tell them apart. See
-        // tests/unit/deploy/publish-edges.test.ts for the rest of that case.
+    it('marks live after push + hosting without a second origin wait', async () => {
+        // verifyLive is unused on the happy path — pushBuild already confirmed Pages.
+        const provider = fakeProvider();
+        const verify = vi.spyOn(provider, 'verifyLive');
+
         const result = await publish(
             { ...input, idempotencyKey: 'k2' },
             () => { },
-            fakeProvider(false),
+            provider,
         );
 
-        expect(result.state).toBe('verifying');
-        expect(result.liveUrl).toBeNull();
-        expect(result.pendingUrl).toBe('https://spike.pagecrafts.in');
-        expect(result.reason).toBe('not_answering_yet');
+        expect(result.state).toBe('live');
+        expect(result.liveUrl).toBe('https://spike.pagecrafts.in');
+        expect(verify).not.toHaveBeenCalled();
     });
 
-    it('skips hosting setup when republishing', async () => {
-        const provider = fakeProvider(true);
+    it('still attaches hosting when republishing', async () => {
+        // siteId is remembered even after a failed first push; skipping enableHosting
+        // left orphan Pages projects with no DNS (522 / NXDOMAIN).
+        const provider = fakeProvider();
         const enable = vi.spyOn(provider, 'enableHosting');
 
         await publish(
@@ -74,6 +75,6 @@ describe('publish', () => {
             provider,
         );
 
-        expect(enable).not.toHaveBeenCalled();
+        expect(enable).toHaveBeenCalledOnce();
     });
 });

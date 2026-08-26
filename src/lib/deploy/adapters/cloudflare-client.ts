@@ -14,14 +14,19 @@ export async function cf<T = unknown>(
     path: string,
     body?: unknown,
 ): Promise<T> {
+    const headers: Record<string, string> = {
+        authorization: `Bearer ${readDeployCredential()}`,
+    };
+    if (body !== undefined) {
+        headers['content-type'] = 'application/json';
+    }
+
     const res = await fetch(`${deployConfig().apiBase}${path}`, {
         method,
-        headers: {
-            authorization: `Bearer ${readDeployCredential()}`,
-            'content-type': 'application/json',
-        },
+        headers,
         body: body === undefined ? undefined : JSON.stringify(body),
         cache: 'no-store',
+        signal: AbortSignal.timeout(45_000),
     });
 
     const payload = (await res.json().catch(() => null)) as CfResponse<T> | null;
