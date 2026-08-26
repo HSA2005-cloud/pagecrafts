@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PageCrafts — craft. publish. impact.",
   description:
-    "Build a real website by describing it. No code, nothing to install. Free to build; Rs 249 to go live.",
+    "Build a real website by describing it. No code, nothing to install. Free to build and go live on PageCrafts; Pro and Premium unlock richer looks.",
   icons: {
     icon: "/brand/pagecrafts-lockup.png",
     apple: "/brand/pagecrafts-lockup.png",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "PageCrafts — craft. publish. impact.",
     description:
-      "Build a real website by describing it. No code, nothing to install. Free to build; Rs 249 to go live.",
+      "Build a real website by describing it. No code, nothing to install. Free to build and go live on PageCrafts; Pro and Premium unlock richer looks.",
     images: ["/brand/pagecrafts-lockup.png"],
   },
 };
@@ -40,7 +40,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${plusJakarta.variable} ${outfit.variable} ${geistMono.variable} h-full scroll-smooth antialiased`}
+      data-scroll-behavior="smooth"
+      className={`${plusJakarta.variable} ${outfit.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
         <PageFlow>{children}</PageFlow>

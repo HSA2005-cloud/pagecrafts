@@ -111,12 +111,14 @@ describe("the prompt bar is shared", () => {
         const artwork = read("src", "components", "landing", "HeroArtwork.tsx");
         const deck = read("src", "components", "landing", "LandingDeck.tsx");
         expect(artwork).toContain("thumbnailUrl");
-        expect(artwork).toContain("object-cover object-top");
+        expect(artwork).toContain("object-cover object-[center_12%]");
         expect(artwork).not.toContain("/landing/");
         expect(deck).toContain("pickLandingHeroTemplates");
         expect(deck).toContain("pickLandingShowcaseTemplates");
         expect(deck).toContain("<HeroArtwork templates={templates} />");
         expect(artwork).not.toContain("hero-pane");
+        expect(css).toMatch(/\.page-slide\s*\{[\s\S]*min-height:\s*100svh/);
+        expect(css).toMatch(/\.hero-blueprint\s*\{[\s\S]*aspect-ratio:\s*5\s*\/\s*4/);
         expect(welcome).toContain("<WelcomePrompt />");
         expect(welcome).not.toContain("HeroPrompt");
         expect(welcome).not.toMatch(/<input|<textarea|contentEditable|contenteditable/);
@@ -134,7 +136,8 @@ describe("the prompt bar is shared", () => {
         expect(welcome).not.toContain("no templates");
         expect(welcome).toContain("Pick a design");
         expect(welcome).toContain("edit in place");
-        expect(welcome).toContain("Rs 249");
+        expect(welcome).toContain("go live free");
+        expect(welcome).not.toContain("Rs 249");
         expect(welcome).toContain("text-[3.5rem]");
         expect(welcome).toContain("text-lg");
     });

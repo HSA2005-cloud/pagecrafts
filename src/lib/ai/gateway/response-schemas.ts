@@ -107,3 +107,24 @@ export const composeSiteSchema: Schema = {
     required: ['title', 'description', 'files'],
     propertyOrdering: ['title', 'description', 'files'],
 };
+
+/**
+ * The shape Ask has to answer an edit in.
+ *
+ * proposeEdit sent no schema at all, alone among the stages, so nothing put response_format
+ * on the request and a model free to reply in prose sometimes did. JSON.parse threw a
+ * SyntaxError nothing caught and the editor showed "we could not finish that just now".
+ *
+ * `changes` is a bag of section fields whose names depend on the section being edited, so it
+ * cannot be enumerated here the way classify's enums are. Declaring it an object is enough
+ * to make the reply JSON; editProposal in contracts checks the rest.
+ */
+export const editProposalSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+        changes: { type: Type.OBJECT },
+        explanation: { type: Type.STRING },
+    },
+    required: ['changes', 'explanation'],
+    propertyOrdering: ['changes', 'explanation'],
+};

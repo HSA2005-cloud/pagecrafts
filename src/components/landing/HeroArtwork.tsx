@@ -1,25 +1,29 @@
 import type { TemplateSummary } from "@/lib/templates/query";
 import { TemplatePreview } from "@/components/discovery/TemplatePreview";
 
+/**
+ * Landscape-first mosaic so 16:10 library thumbnails stay fully readable.
+ * Tall portrait slots were cropping headlines (e.g. yoga "Breathe. Stretch…").
+ */
 const FRAMES = [
     {
-        place: "left-[5%] top-[8%] h-[40%] w-[58%] rounded-2xl float-b",
+        place: "inset-[5%_auto_auto_4%] h-[48%] w-[58%] rounded-2xl float-b",
         tone: "hero-shot",
     },
     {
-        place: "right-[5%] top-[12%] h-[50%] w-[38%] rounded-2xl float-a",
+        place: "inset-[8%_4%_auto_auto] h-[42%] w-[34%] rounded-2xl float-a",
         tone: "hero-shot-amber",
     },
     {
-        place: "left-[7%] bottom-[8%] h-[34%] w-[34%] rounded-xl float-c",
+        place: "inset-[auto_auto_5%_4%] h-[36%] w-[31%] rounded-xl float-c",
         tone: "hero-shot",
     },
     {
-        place: "left-[42%] bottom-[9%] h-[32%] w-[28%] rounded-xl",
+        place: "inset-[auto_auto_5%_37%] h-[36%] w-[28%] rounded-xl",
         tone: "hero-shot-amber",
     },
     {
-        place: "right-[6%] bottom-[8%] h-[28%] w-[30%] rounded-lg",
+        place: "inset-[auto_4%_5%_auto] h-[36%] w-[31%] rounded-lg",
         tone: "hero-shot",
     },
 ] as const;
@@ -56,7 +60,7 @@ function HeroFace({ template }: { template: TemplateSummary }) {
                 alt=""
                 width={640}
                 height={400}
-                className="absolute inset-0 size-full object-cover object-top"
+                className="absolute inset-0 size-full object-cover object-[center_12%]"
             />
         );
     }

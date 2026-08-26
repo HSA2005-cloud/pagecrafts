@@ -12,7 +12,7 @@ const MOVES = [
     },
     {
         title: "Nudge and publish",
-        body: "“Warmer”, “bigger headline”, “add a menu”. Then go live. Building is free; you pay Rs 249 to publish.",
+        body: "“Warmer”, “bigger headline”, “add a menu”. Then go live on a PageCrafts address — free. Pro and Premium unlock richer looks.",
     },
 ];
 

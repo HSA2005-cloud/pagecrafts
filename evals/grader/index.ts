@@ -79,6 +79,8 @@ export interface AutoGrade {
 
     /** Field paths that came back empty, e.g. `s_02.items[0].body`. */
     blankFields: string[];
+    /** Field paths still carrying a placeholder, e.g. "Founded in [year]". */
+    placeholderFields: string[];
     missingSections: SectionKey[];
     forbiddenSections: SectionKey[];
 
@@ -148,6 +150,63 @@ export function blankFieldsIn(composition: Composition): string[] {
     return blanks;
 }
 
+/**
+ * Copy the model left for someone else to finish.
+ *
+ * Found by reading the first real run: a hospital's About section shipped
+ * "Founded in [year], our 40-bed hospital…" and the grader passed it, because
+ * the field was not empty and emptiness was all it checked. A bracketed slug is
+ * not content — it is a note to a human that never got actioned, and it is the
+ * most obviously broken thing a visitor can see.
+ *
+ * Deliberately narrow. `[year]` and `{{name}}` are placeholders; "[sic]" and
+ * ordinary bracketed asides are not, so the pattern requires a short
+ * lowercase-or-underscore token and nothing else inside the brackets.
+ */
+const BRACKETED = /\[([a-z][a-z _-]{1,24})\]/gi;
+const OTHER_PLACEHOLDER = /\{\{[^}]{1,40}\}\}|\b(?:TODO|FIXME|LOREM IPSUM|XXXX+)\b/i;
+
+/**
+ * Bracketed marks that are real editorial notation rather than an unfilled
+ * slot. Short and closed on purpose — the list of things a writer legitimately
+ * puts in square brackets mid-sentence is genuinely this small, and everything
+ * else in brackets in generated marketing copy is a slot nobody filled.
+ */
+const EDITORIAL = /^(sic|ed|emphasis added|translated|clarification|verbatim)$/i;
+
+function hasPlaceholder(text: string): boolean {
+    if (OTHER_PLACEHOLDER.test(text)) return true;
+
+    BRACKETED.lastIndex = 0;
+    for (const match of text.matchAll(BRACKETED)) {
+        if (!EDITORIAL.test(match[1].trim())) return true;
+    }
+    return false;
+}
+
+export function placeholderFieldsIn(composition: Composition): string[] {
+    const found: string[] = [];
+
+    const walk = (value: unknown, path: string): void => {
+        if (typeof value === 'string') {
+            if (hasPlaceholder(value)) found.push(path);
+            return;
+        }
+        if (Array.isArray(value)) {
+            value.forEach((v, i) => walk(v, `${path}[${i}]`));
+            return;
+        }
+        if (value && typeof value === 'object') {
+            for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+                walk(v, `${path}.${k}`);
+            }
+        }
+    };
+
+    for (const section of composition.sections) walk(section.props, section.id);
+    return found;
+}
+
 /** Distinct `type:variant` pairs. One variant repeated down the page reads as machine-assembled. */
 export function variantSignature(composition: Composition): string {
     return composition.sections.map((s) => `${s.type}:${s.variant}`).join('|');
@@ -188,6 +247,7 @@ export function grade(item: CorpusItem, outcome: GenerationOutcome): AutoGrade {
             failureStage: outcome.failureStage,
             passed: false,
             blankFields: [],
+            placeholderFields: [],
             missingSections: [...item.expect.mustHave],
             forbiddenSections: [],
         };
@@ -199,8 +259,10 @@ export function grade(item: CorpusItem, outcome: GenerationOutcome): AutoGrade {
     const missingSections = item.expect.mustHave.filter((k) => !present.has(k));
     const forbiddenSections = item.expect.shouldNotHave.filter((k) => present.has(k));
     const blankFields = blankFieldsIn(composition);
+    const placeholderFields = placeholderFieldsIn(composition);
 
-    const nonBlank = blankFields.length === 0;
+    // A field holding "[year]" is not blank and is not content either.
+    const nonBlank = blankFields.length === 0 && placeholderFields.length === 0;
     const requiredSectionsPresent = missingSections.length === 0;
     const forbiddenSectionsAbsent = forbiddenSections.length === 0;
     const fallbackUsed = outcome.fallbackTemplateId !== undefined;
@@ -217,6 +279,7 @@ export function grade(item: CorpusItem, outcome: GenerationOutcome): AutoGrade {
         fallbackUsed,
         passed: nonBlank && requiredSectionsPresent && forbiddenSectionsAbsent && !fallbackUsed,
         blankFields,
+        placeholderFields,
         missingSections,
         forbiddenSections,
     };

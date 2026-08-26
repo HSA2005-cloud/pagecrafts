@@ -1,11 +1,10 @@
 import Link from "next/link";
 import {
-    CircleDollarSign,
     Columns2,
     Globe,
     LayoutGrid,
     LayoutTemplate,
-    Package,
+    CircleDollarSign,
     Plus,
     Settings,
     Sparkles,
@@ -33,8 +32,7 @@ interface NavItem {
 const NAV: NavItem[] = [
     { label: "Build", icon: LayoutTemplate, href: "/#build" },
     { label: "Ask AI", icon: Sparkles, href: "/#build", badge: "Beta" },
-    { label: "Packages", icon: Package, href: "/packages" },
-    { label: "Pricing", icon: CircleDollarSign, href: "/#pricing" },
+    { label: "User Plans", icon: CircleDollarSign, href: "/plans" },
     { label: "Compare", icon: Columns2, href: "/#compare" },
     { label: "Your sites", icon: LayoutGrid, href: "/#sites" },
     // Still inert, and deliberately. Domains and Team are post-MVP (Amendment A1 §22.3) with
@@ -141,8 +139,8 @@ export function AppSidebar({
                     <Sparkles className="size-5 text-primary" strokeWidth={1.75} aria-hidden />
                     <p className="mt-3 text-base font-semibold text-foreground">Designs</p>
                     <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                        Free designs you can use straight away. Pro and Premium designs unlock
-                        one at a time.
+                        Starter templates are free. Pro and Premium plans unlock every matching
+                        design on your account.
                     </p>
                     <Link
                         href="/templates"
