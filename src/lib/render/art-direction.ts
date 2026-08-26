@@ -52,24 +52,26 @@ export const THEMES: Record<ThemeId, Theme> = {
         bg: '#fffdf9', ink: '#1c1917', muted: '#78716c',
         accent: '#b45309', accentInk: '#ffffff',
         panel: '#f5f0e8', rule: '#e7e0d5',
-        displayFont: 'ui-serif, Georgia, "Times New Roman", serif',
-        displayWeight: 600, displayTracking: '-0.02em',
+        // Pro display: Newsreader (loaded for Photo-rich) — not Free's plain Georgia.
+        displayFont: 'Newsreader, "Iowan Old Style", Palatino, "Book Antiqua", Georgia, serif',
+        displayWeight: 500, displayTracking: '-0.028em',
     },
     'deep-luxury': {
         label: 'Deep luxury',
         bg: '#0c0a09', ink: '#fafaf9', muted: '#a8a29e',
         accent: '#c8a962', accentInk: '#0c0a09',
         panel: '#1c1917', rule: '#292524',
-        displayFont: 'ui-serif, "Didot", Georgia, serif',
-        displayWeight: 400, displayTracking: '0.02em',
+        // Premium signature: Bodoni Moda (loaded for Animated) — high-contrast Didot, not Impact sans.
+        displayFont: '"Bodoni Moda", Didot, "Bodoni MT", "Times New Roman", serif',
+        displayWeight: 400, displayTracking: '0.04em',
     },
     'vivid-energy': {
         label: 'Vivid energy',
         bg: '#ffffff', ink: '#18181b', muted: '#71717a',
         accent: '#e11d48', accentInk: '#ffffff',
         panel: '#fafafa', rule: '#e4e4e7',
-        displayFont: 'ui-sans-serif, system-ui, "Helvetica Neue", sans-serif',
-        displayWeight: 800, displayTracking: '-0.03em',
+        displayFont: '"Avenir Next", Avenir, "Century Gothic", ui-rounded, system-ui, sans-serif',
+        displayWeight: 600, displayTracking: '0.02em',
     },
     'calm-sage': {
         label: 'Calm sage',
@@ -92,16 +94,17 @@ export const THEMES: Record<ThemeId, Theme> = {
         bg: '#fffaf0', ink: '#2d1e12', muted: '#8a7160',
         accent: '#d97706', accentInk: '#ffffff',
         panel: '#fdf1de', rule: '#f0e0c8',
+        // Free: plain, friendly Georgia — Pro uses a richer editorial stack.
         displayFont: 'ui-serif, Georgia, serif',
-        displayWeight: 700, displayTracking: '-0.015em',
+        displayWeight: 600, displayTracking: '-0.01em',
     },
     'tech-slate': {
         label: 'Tech slate',
         bg: '#0f1115', ink: '#e9edf2', muted: '#8b97a8',
         accent: '#3b82f6', accentInk: '#ffffff',
         panel: '#171a21', rule: '#242833',
-        displayFont: 'ui-sans-serif, system-ui, "Inter", sans-serif',
-        displayWeight: 650, displayTracking: '-0.02em',
+        displayFont: '"Avenir Next Condensed", "Helvetica Neue", "Segoe UI", system-ui, sans-serif',
+        displayWeight: 500, displayTracking: '0.06em',
     },
 };
 
@@ -121,13 +124,27 @@ export const SPACING: Record<SpacingId, { section: string; gap: string; measure:
     airy: { section: '8rem', gap: '2.5rem', measure: '74ch' },
 };
 
-/** Photographic treatment, applied to every image the page renders. */
+/**
+ * Photographic treatment, applied to every image the page renders.
+ *
+ * Never grayscale / black-and-white, and never desaturate below full colour.
+ * Customers sell colourful shops, food, and products — a B&W or washed photo
+ * made Pro look broken next to Casual and Premium.
+ */
 export const IMAGERY: Record<ImageryId, { filter: string; overlay: string }> = {
-    'bright-clean': { filter: 'saturate(1.05) contrast(1.02)', overlay: 'transparent' },
-    'warm-natural': { filter: 'saturate(1.1) sepia(0.08)', overlay: 'rgba(180,120,60,0.05)' },
-    'bold-contrast': { filter: 'contrast(1.18) saturate(1.15)', overlay: 'transparent' },
-    'muted-duotone': { filter: 'grayscale(0.55) contrast(1.05)', overlay: 'rgba(30,40,60,0.10)' },
-    documentary: { filter: 'grayscale(1) contrast(1.1)', overlay: 'transparent' },
+    'bright-clean': { filter: 'saturate(1.12) contrast(1.02)', overlay: 'transparent' },
+    'warm-natural': { filter: 'saturate(1.18) sepia(0.06)', overlay: 'rgba(180,120,60,0.04)' },
+    'bold-contrast': { filter: 'contrast(1.14) saturate(1.2)', overlay: 'transparent' },
+    // Soft cool grade — colour stays; never grayscale.
+    'muted-duotone': {
+        filter: 'saturate(1.08) contrast(1.04) brightness(0.99)',
+        overlay: 'rgba(40, 55, 85, 0.06)',
+    },
+    // Editorial press — crisp colour, never mono.
+    documentary: {
+        filter: 'contrast(1.1) saturate(1.12) brightness(1.01)',
+        overlay: 'transparent',
+    },
 };
 
 /**
@@ -196,9 +213,16 @@ section { padding-block: var(--section-gap); }
 img {
   max-width: 100%;
   height: auto;
+  /* Imagery dials may grade colour — they must never grayscale. */
   filter: var(--image-filter);
   border-radius: var(--radius-md);
-}`;
+}
+/* Hard ban: no generated page may wash photographs to black-and-white. */
+img[style*="grayscale"],
+img.grayscale {
+  filter: saturate(1.15) !important;
+}
+`;
 }
 
 /** Every dial, for the eval report and the D14 write-up. */

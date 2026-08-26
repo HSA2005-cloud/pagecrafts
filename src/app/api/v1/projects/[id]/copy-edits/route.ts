@@ -9,10 +9,13 @@ import { assertCanEdit } from '@/lib/data/entitlements';
 import { asContentSchema } from '@/lib/content/schema';
 import { applyContentToHtml } from '@/lib/content/slots';
 import { rewriteTemplateCopy } from '@/lib/ai/edit/rewrite-copy';
+import { crossVerticalFirewall } from '@/lib/editor/cross-vertical-firewall';
+import { offTopicWebsiteAsk } from '@/lib/editor/website-ask-gate';
+import { resolveSiteVertical } from '@/lib/editor/resolve-site-vertical';
+import { parseComposition } from '@/lib/editor/parse-composition';
 import { persistLedger } from '@/lib/ai/cost/persist';
 import { rowFor } from '@/lib/ai/cost/ledger';
 import { nextJobId } from '@/lib/ai/jobs/store';
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +38,12 @@ export const POST = withRoute<z.infer<typeof schema>, Params>({
     schema,
     handler: async ({ body, params, userId, supabase, recordUsage }) => {
         await assertCanEdit(supabase, userId, params.id);
+
+        const offTopic = offTopicWebsiteAsk(body.instruction);
+        if (offTopic) {
+            throw new ApiError('validation_failed', offTopic);
+        }
+
         const project = await getProject(supabase, params.id);
         const schemaForPage = asContentSchema(project.contentSchema);
         if (!schemaForPage.sections.length) {
@@ -47,12 +56,40 @@ export const POST = withRoute<z.infer<typeof schema>, Params>({
             throw new ApiError('validation_failed', 'This site has no page to rewrite.');
         }
 
+        const composition = parseComposition(tree.files['composition.json']);
+        const contextText = [
+            composition?.meta.title,
+            project.siteMeta?.title,
+            project.name,
+            tree.files[path]?.slice(0, 4000),
+        ]
+            .filter(Boolean)
+            .join(' ');
+        const crossBlocked = crossVerticalFirewall({
+            instruction: body.instruction,
+            vertical: resolveSiteVertical({
+                composition,
+                sourceTemplateId: project.sourceTemplateId,
+                contextText,
+            }),
+            sectionCount: composition?.sections.length ?? 0,
+            hasContentPage: schemaForPage.sections.length > 0,
+            contextText,
+        });
+        if (crossBlocked) {
+            throw new ApiError('validation_failed', crossBlocked);
+        }
+
         const before = tree.files[path] ?? '';
         let rewritten;
         try {
             rewritten = await rewriteTemplateCopy(schemaForPage, project.contentJson, body.instruction);
-        } catch {
-            throw new ApiError('internal', 'The suggestion could not be prepared. Try again.');
+        } catch (error) {
+            const detail =
+                error instanceof Error && error.message.trim()
+                    ? error.message.trim()
+                    : 'The suggestion could not be prepared. Try again.';
+            throw new ApiError('validation_failed', detail);
         }
 
         const after = applyContentToHtml(before, schemaForPage, rewritten.content);

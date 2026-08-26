@@ -1,13 +1,15 @@
-import { apiGet, apiPatch, apiPut, apiUpload } from '@/lib/api/client';
+import { apiGet, apiPatch, apiPost, apiPostHeaders, apiPut, apiUpload } from '@/lib/api/client';
 import type {
     AssetResponse,
     Commit,
     Composition,
     ContentOp,
+    DeploymentResponse,
     EditProposal,
     FileMap,
     ImageSearchResponse,
     ListCommitsResponse,
+    PublishProjectResponse,
     RestoreResponse,
     GetProjectFilesResponse,
     PatchContentResponse,
@@ -15,7 +17,6 @@ import type {
     ProjectDetail,
     SectionKey,
 } from '@/lib/contracts';
-import { apiPost } from '@/lib/api/client';
 import type { CreateCommitResponse } from '@/lib/contracts';
 
 export interface CommitResult {
@@ -240,12 +241,14 @@ export async function proposeProjectEdit(
     projectId: string,
     payload: ProposeEditPayload,
 ): Promise<{ proposal: EditProposal | null; error: string | null }> {
-    const { data, error } = await apiPost<EditProposal>(
+    const { data, error, detail } = await apiPost<EditProposal>(
         `${projectUrl(projectId)}/edits`,
         payload,
     );
 
-    if (error || !data) return { proposal: null, error: error ?? EMPTY_REPLY };
+    if (error || !data) {
+        return { proposal: null, error: detail?.trim() || error || EMPTY_REPLY };
+    }
     return { proposal: data, error: null };
 }
 
@@ -282,18 +285,38 @@ export interface CopyEditProposal {
     path: string;
     after: string;
     explanation: string;
+    /** Extra HTML files changed in the same Ask turn (path → content). */
+    files?: Record<string, string>;
 }
 
 export async function proposeCopyEdit(
     projectId: string,
     instruction: string,
 ): Promise<{ proposal: CopyEditProposal | null; error: string | null }> {
-    const { data, error } = await apiPost<CopyEditProposal>(
+    const { data, error, detail } = await apiPost<CopyEditProposal>(
         `${projectUrl(projectId)}/copy-edits`,
         { instruction },
     );
 
-    if (error || !data) return { proposal: null, error: error ?? EMPTY_REPLY };
+    if (error || !data) {
+        return { proposal: null, error: detail?.trim() || error || EMPTY_REPLY };
+    }
+    return { proposal: data, error: null };
+}
+
+export async function proposePageEdit(
+    projectId: string,
+    instruction: string,
+    focusPath?: string | null,
+): Promise<{ proposal: CopyEditProposal | null; error: string | null }> {
+    const { data, error, detail } = await apiPost<CopyEditProposal>(
+        `${projectUrl(projectId)}/page-edits`,
+        { instruction, ...(focusPath ? { focusPath } : {}) },
+    );
+
+    if (error || !data) {
+        return { proposal: null, error: detail?.trim() || error || EMPTY_REPLY };
+    }
     return { proposal: data, error: null };
 }
 
@@ -306,4 +329,40 @@ export async function loadGenerationJob(
 
     if (error || !data) return { job: null, error: error ?? EMPTY_REPLY };
     return { job: data, error: null };
+}
+
+export async function startProjectPublish(
+    projectId: string,
+    idempotencyKey: string,
+): Promise<{
+    deploymentId: string | null;
+    status: PublishProjectResponse['status'] | null;
+    liveUrl: string | null;
+    error: string | null;
+}> {
+    const { data, error } = await apiPostHeaders<PublishProjectResponse>(
+        `${projectUrl(projectId)}/publish`,
+        { 'Idempotency-Key': idempotencyKey },
+    );
+
+    if (error || !data) {
+        return { deploymentId: null, status: null, liveUrl: null, error: error ?? EMPTY_REPLY };
+    }
+    return {
+        deploymentId: data.deploymentId,
+        status: data.status,
+        liveUrl: data.liveUrl ?? null,
+        error: data.error ?? null,
+    };
+}
+
+export async function pollDeployment(
+    deploymentId: string,
+): Promise<{ deployment: DeploymentResponse | null; error: string | null }> {
+    const { data, error } = await apiGet<DeploymentResponse>(
+        `/api/v1/deployments/${encodeURIComponent(deploymentId)}`,
+    );
+
+    if (error || !data) return { deployment: null, error: error ?? EMPTY_REPLY };
+    return { deployment: data, error: null };
 }

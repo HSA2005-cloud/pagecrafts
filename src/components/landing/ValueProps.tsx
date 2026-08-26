@@ -20,7 +20,7 @@ const PROPS = [
         icon: Globe,
         step: "03",
         title: "A real site, at a real address",
-        body: "Publishing gives you a live website we host and renew for you. Building is free. You pay Rs 249 only when you go live.",
+        body: "Publishing gives you a live website we host for you. Building is free, and going live on a PageCrafts address is free. Pro and Premium unlock richer looks.",
     },
 ];
 

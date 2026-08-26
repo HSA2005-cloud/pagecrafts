@@ -30,6 +30,7 @@ export async function plan(
 
     const reply = await model.strong.complete({
         job: 'generate',
+        prefer: 'groq',
         system: contained.system,
         user: render(tpl.user, {
             prompt: contained.values.prompt,

@@ -6,7 +6,7 @@ import { CATEGORY_IDS } from "@/lib/contracts";
 import { TEMPLATES } from "@/lib/templates";
 import { templateRow } from "@/lib/templates/row";
 
-// The seed, against the schema twenty-one migrations later (R3 D19).
+// The seed, against the schema twenty-two migrations later (R3 D19).
 //
 // The seed is what a fresh database is built from, what every new developer sees on their
 // first `supabase db reset`, and what the browser walk-through in CI signs in as. It has
@@ -179,7 +179,7 @@ describe("the templates the seed creates", () => {
     });
 });
 
-describe("what twenty-one migrations left behind", () => {
+describe("what twenty-two migrations left behind", () => {
     it("leaves no column added later sitting null across every seeded row", async () => {
         // The failure this whole file exists for. A migration adds a column, the seed is
         // never updated, and every row has it null — which inserts fine and breaks whatever
@@ -218,7 +218,10 @@ describe("what twenty-one migrations left behind", () => {
             // Nobody has signed in with GitHub, and nobody has set a display name.
             "users.avatar_url",
             "users.billing_city",
+            "users.billing_country",
             "users.billing_line",
+            "users.billing_postal",
+            "users.billing_state",
             "users.encrypted_token",
             "users.github_id",
             "users.gstin",

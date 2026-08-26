@@ -494,7 +494,13 @@
 .hero-blueprint {
   position: relative;
   overflow: hidden;
-  min-height: 26rem;
+  /* Fill the intro column without overflowing the 100svh slide */
+  width: 100%;
+  aspect-ratio: 5 / 4;
+  height: auto;
+  max-height: min(34rem, calc(100svh - 9rem));
+  min-height: 20rem;
+  margin-inline: auto;
   border-radius: 1.75rem;
   border: 1px solid color-mix(in srgb, var(--bloom-sky) 22%, var(--border));
   background:
@@ -521,7 +527,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: top center;
+  /* Prefer the hero band of each thumbnail — avoid side-cropping headlines */
+  object-position: center 12%;
 }
 
 @utility glass-pill {
@@ -536,9 +543,8 @@
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
-html {
-  scroll-behavior: smooth;
-}
+/* scroll-behavior is set via data-scroll-behavior="smooth" on <html> so
+   Next.js can disable it during route transitions and avoid jank. */
 
 h1,
 h2 {
@@ -639,20 +645,37 @@ html.deck-snap .page-glide-out {
   position: relative;
   isolation: isolate;
   display: flex;
+  /* svh first so phone URL chrome does not clip centred landing slides */
+  min-height: 100svh;
   min-height: 100dvh;
   flex-direction: column;
   justify-content: center;
   justify-content: safe center;
+  align-items: stretch;
+  box-sizing: border-box;
   /* proximity + normal stop — `always` locks the deck between tall slides. */
   scroll-snap-align: start;
   scroll-snap-stop: normal;
-  /* Equal inset so centered copy sits in the middle of the viewport, not below it. */
-  padding: 4rem 0;
+  /* Header clearance + equal inset so centred copy sits mid-viewport */
+  padding: max(5rem, calc(env(safe-area-inset-top, 0px) + 4rem)) 0
+    max(3rem, env(safe-area-inset-bottom, 0px));
+}
+
+.page-slide > * {
+  width: 100%;
 }
 
 .page-slide-tall {
   justify-content: flex-start;
   padding-bottom: 4rem;
+}
+
+@media (max-width: 48rem) {
+  .page-slide {
+    min-height: 100svh;
+    padding-top: max(5.5rem, calc(env(safe-area-inset-top, 0px) + 4.5rem));
+    padding-bottom: max(2.5rem, env(safe-area-inset-bottom, 0px));
+  }
 }
 
 [data-reveal] {
