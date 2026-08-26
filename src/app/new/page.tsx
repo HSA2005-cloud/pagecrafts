@@ -7,6 +7,11 @@ import { PagecraftFeatures } from "@/components/discovery/PagecraftFeatures";
 import { TEMPLATES } from "@/lib/templates";
 import { templateUuid } from "@/lib/templates/template-id";
 import { requiredPlanForTemplate } from "@/lib/payments/pricing";
+import { planCovers } from "@/lib/payments/plans";
+import { viewer } from "@/lib/auth/session";
+import { supabaseViewerClient } from "@/lib/auth/server";
+import { getBilling } from "@/lib/payments/checkout";
+import type { PaidPlan } from "@/lib/payments/pricing";
 
 function designFor(templateId: string | undefined) {
   if (!templateId) return null;
@@ -22,6 +27,29 @@ export default async function NewProjectPage({
 }) {
   const { q, category, template } = await searchParams;
   const design = designFor(template);
+
+  let paidPlan: PaidPlan | null = null;
+  let activePlan: "starter" | "pro" | "premium" = "starter";
+  if (design) {
+    const required = requiredPlanForTemplate(design.tier);
+    if (required) {
+      const user = await viewer();
+      if (user) {
+        try {
+          const supabase = await supabaseViewerClient();
+          const billing = await getBilling(supabase, user.id);
+          activePlan = billing.plan;
+          if (!planCovers(billing.plan, required)) {
+            paidPlan = required;
+          }
+        } catch {
+          paidPlan = required;
+        }
+      } else {
+        paidPlan = required;
+      }
+    }
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 pb-10 pt-4">
@@ -40,10 +68,16 @@ export default async function NewProjectPage({
             ? `Name, place, and what they do — we put those facts on ${design.name} and add About, Contact and Settings.`
             : "A one-liner is not enough. Name, place, and what they do — then AI writes every page from those facts."}
         </p>
-        {design && design.tier !== "free" ? (
+        {design && paidPlan ? (
           <p className="text-xs text-muted-foreground">
-            This design is paid. Razorpay opens before it is set up if you have not
-            bought it yet.
+            This design needs {paidPlan === "premium" ? "Premium" : "Pro"}. Open User Plans to
+            upgrade, then come back here.
+          </p>
+        ) : design && design.tier !== "free" ? (
+          <p className="text-xs text-muted-foreground">
+            {activePlan === "premium"
+              ? "Premium is active — this design is included."
+              : "Pro is active — this design is included."}
           </p>
         ) : null}
       </header>
@@ -53,7 +87,7 @@ export default async function NewProjectPage({
         initialCategory={toCategory(category) ?? null}
         library={!design}
         sourceTemplateId={design ? templateUuid(design.id) : template ?? null}
-        paidPlan={design ? requiredPlanForTemplate(design.tier) : null}
+        paidPlan={paidPlan}
       />
 
       {design ? null : <PagecraftFeatures />}

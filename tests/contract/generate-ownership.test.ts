@@ -50,6 +50,13 @@ vi.mock("@/lib/ai/jobs/store", () => ({
 }));
 vi.mock("@/lib/ai/jobs/runner", () => ({ runJob: vi.fn(async () => undefined) }));
 vi.mock("@/lib/ai/jobs/counters", () => ({ recordGenerationUse: vi.fn() }));
+vi.mock("@/lib/ai/assess-clarity", () => ({
+    assessPromptClarity: vi.fn(async () => ({
+        usable: true,
+        confidence: "high",
+        message: "",
+    })),
+}));
 
 const OWNER = "11111111-1111-4111-8111-000000000001";
 const STRANGER = "11111111-1111-4111-8111-000000000002";

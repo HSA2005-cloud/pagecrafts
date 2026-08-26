@@ -7,9 +7,18 @@ import {
     CLOTHING_PHOTO_ID,
     DESSERT_PHOTO_ID,
     MITHAI_SEARCH,
+    photoKeyFromUrl,
     photoSearchQuery,
     stampPhotoUrls,
 } from '@/lib/ai/generate/photos';
+
+// The body attribute, not the first data-motion in the file — motionCss opens with a
+// `[data-motion="none"]` rule, so a loose match reads the stylesheet instead of the page.
+const bodyMotion = (html: string) => html.match(/<body[^>]*data-motion="([a-z]+)"/)?.[1] ?? '';
+const heroVariant = (html: string) =>
+    html.match(/data-type="hero" data-variant="([a-z-]+)"/)?.[1] ?? '';
+const aboutVariant = (html: string) =>
+    html.match(/data-type="about" data-variant="([a-z-]+)"/)?.[1] ?? '';
 import { SCHEMA_VERSION, type ArtDirection, type Composition, type SectionInstance } from '@/lib/contracts';
 
 const ART: ArtDirection = {
@@ -75,6 +84,56 @@ describe('style presets — three looks from one brief', () => {
         expect(bankPhotoUrl('indian sweets mithai')).not.toBe(bankPhotoUrl('a gym in koramangala'));
     });
 
+    it('never stamps bakery bread on a travel / nature / vlog brief', async () => {
+        const { BAKERY_SHELF_PHOTO_ID } = await import('@/lib/ai/generate/photos');
+        const travelQuery = photoSearchQuery(
+            'travel-vlog',
+            'Pragna Travel Vlogs',
+            'hero',
+            'Explore nature videos, share your journeys, connect with fellow viewers.',
+        );
+        expect(travelQuery.toLowerCase()).toMatch(/nature|travel|journey/);
+        expect(bankPhotoUrl(travelQuery, 'job_travel_1')).not.toContain(BAKERY_SHELF_PHOTO_ID);
+        expect(bankPhotoUrl(travelQuery, 'job_travel_1')).not.toMatch(
+            /photo-1509440159596-0249088772ff|photo-1555507036|photo-1414235077428|photo-1504674900247/,
+        );
+
+        const travelSite = {
+            ...composition,
+            vertical: 'travel-vlog',
+            meta: {
+                ...composition.meta,
+                title: 'Pragna Travel Vlogs',
+                description: 'Explore nature videos, share your journeys, connect with fellow viewers.',
+            },
+        };
+        const stamped = await stampPhotoUrls(travelSite);
+        const heroImage = stamped.sections.find((section) => section.type === 'hero')?.props.image as { url?: string };
+        expect(heroImage.url).toMatch(/images\.unsplash\.com\/photo-/);
+        expect(heroImage.url).not.toContain(BAKERY_SHELF_PHOTO_ID);
+    });
+
+    it('gives Set 1 and Set 2 different restaurant heroes when salted by job id', () => {
+        const query = 'chinese restaurant fine dining bangalore';
+        const set1 = bankPhotoUrl(query, 'job_set_1');
+        const set2 = bankPhotoUrl(query, 'job_set_2');
+        expect(set1).toMatch(/images\.unsplash\.com\/photo-/);
+        expect(set2).toMatch(/images\.unsplash\.com\/photo-/);
+        expect(set1).not.toBe(set2);
+        // Same set again is stable.
+        expect(bankPhotoUrl(query, 'job_set_1')).toBe(set1);
+    });
+
+    it('never reuses a Set 1 hero when that photo is excluded for Set 2', () => {
+        const query = 'chinese restaurant fine dining bangalore';
+        const set1 = bankPhotoUrl(query, 'job_set_1');
+        const used = new Set([photoKeyFromUrl(set1)]);
+        // Even with the same salt that would have picked set1, exclude forces another.
+        const set2 = bankPhotoUrl(query, 'job_set_1', used);
+        expect(set2).not.toBe(set1);
+        expect(photoKeyFromUrl(set2)).not.toBe(photoKeyFromUrl(set1));
+    });
+
     it('does not use a clothing shop photo for a sweet shop, even if the slot says shop interior', async () => {
         const shoppy = {
             ...composition,
@@ -115,19 +174,24 @@ describe('style presets — three looks from one brief', () => {
         // Casual shows one hero photograph in a split layout (not a grey wall of type).
         expect(home.casual).toContain('images.unsplash.com');
         expect(home.casual).toContain('<img src="');
-        expect(home.casual).toContain('data-type="hero" data-variant="split-image"');
+        // The layout is drawn per business now, so the assertion is the tier's pool rather
+        // than one variant. Every Photo-rich site sharing one hero was the thing the Rs 499
+        // tier is sold as not doing.
+        expect(['split-image', 'centred', 'minimal']).toContain(heroVariant(home.casual));
         expect(home.casual).toContain('site-header');
         // About lives on about.html after the multi-page split.
-        expect(about.casual).toContain('data-type="about" data-variant="text"');
-        // Photo-rich goes further: cinematic hero + media-split About + more photos site-wide.
+        expect(['text', 'media-split']).toContain(aboutVariant(about.casual));
+        // Photo-rich goes further: cinematic hero + more photos site-wide.
         expect(home.photos).toContain('images.unsplash.com');
-        expect(home.photos).toContain('data-type="hero" data-variant="image-bg"');
-        expect(about.photos).toContain('data-type="about" data-variant="media-split"');
+        expect(['image-bg', 'split-image', 'centred']).toContain(heroVariant(home.photos));
+        expect(['media-split', 'text']).toContain(aboutVariant(about.photos));
         expect((allHtml.photos.match(/images\.unsplash\.com/g) ?? []).length)
             .toBeGreaterThan((allHtml.casual.match(/images\.unsplash\.com/g) ?? []).length);
-        expect(home.casual).toContain('data-motion="none"');
-        expect(home.photos).toContain('data-motion="editorial"');
-        expect(home.motion).toContain('data-motion="kinetic"');
+        // Each tier keeps its character while it varies: quiet stays quiet, kinetic stays
+        // in motion. What must never happen is Casual animating like Animated.
+        expect(['none', 'whisper']).toContain(bodyMotion(home.casual));
+        expect(['whisper', 'calm', 'editorial', 'showcase']).toContain(bodyMotion(home.photos));
+        expect(['kinetic', 'showcase', 'editorial']).toContain(bodyMotion(home.motion));
         expect(home.motion).toContain('motion-stage');
         expect(home.motion).toContain('jalebi-coil');
         expect(home.casual).not.toContain('motion-stage');

@@ -47,12 +47,42 @@ describe('chat suggestions', () => {
         });
         expect(items.map((item) => item.label)).toEqual(
             expect.arrayContaining([
-                'Make the hero more graphical',
-                'Use a slide-through layout',
+                'Sharpen the headline',
+                'Make the copy warmer',
                 'Keep going with my last instruction',
-                'Make the list of offerings richer',
             ]),
         );
         expect(items.find((item) => item.id === 'keep-going')?.send).toBe('Make it warmer');
+    });
+
+    // Ask rewrites the words in one section — edit.v1: "you change the content of ONE
+    // section", "never write HTML". It cannot return a layout, so "use a slide-through
+    // layout" answered "that change did not go through" every time it was tapped.
+    it('never suggests a change Ask cannot make', () => {
+        const items = chatSuggestions({
+            composition: sample(['hero', 'services', 'contact']),
+            lastUserText: 'Make it warmer',
+        });
+        const labels = items.map((item) => item.label);
+
+        expect(labels).not.toContain('Use a slide-through layout');
+        expect(labels).not.toContain('Make the hero more graphical');
+        for (const label of labels) {
+            expect(label, label).not.toMatch(/layout|graphical|animation|3d/i);
+        }
+    });
+
+    it('sends a full instruction, not the three words on the chip', () => {
+        const items = chatSuggestions({
+            composition: sample(['hero', 'services', 'contact']),
+        });
+
+        for (const item of items) {
+            // keep-going echoes what the person typed, so its length is theirs, not ours.
+            if (item.compose || item.id === 'keep-going') continue;
+
+            const sent = item.send ?? item.label;
+            expect(sent.split(' ').length, item.id).toBeGreaterThan(3);
+        }
     });
 });

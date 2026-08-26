@@ -143,3 +143,12 @@ $$;
 grant usage on schema storage to anon, authenticated, service_role;
 grant select, insert, update, delete on storage.objects to authenticated;
 grant select on storage.buckets to authenticated;
+
+-- ── supabase_migrations ────────────────────────────────────────────────────────────────
+-- The CLI keeps applied versions here. Our migrations (and db:drift) read it through
+-- public.applied_migration_versions(), so CI must create the ledger too.
+create schema if not exists supabase_migrations;
+
+create table if not exists supabase_migrations.schema_migrations (
+    version text primary key
+);
