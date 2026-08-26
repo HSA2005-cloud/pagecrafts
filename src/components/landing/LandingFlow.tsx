@@ -7,7 +7,7 @@ const BEATS = [
     "AI writes every page",
     "Three looks from one brief",
     "Edit in place",
-    "Go live for Rs 249",
+    "Go live free on PageCrafts",
 ];
 
 export function LandingFlow() {

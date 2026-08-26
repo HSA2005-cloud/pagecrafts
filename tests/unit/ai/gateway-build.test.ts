@@ -6,16 +6,20 @@ import { loadAiConfig } from '@/lib/ai/config';
 afterEach(() => vi.restoreAllMocks());
 
 describe('buildGateway / chainFor', () => {
-    it('D1: only GROQ_API_KEY set — chain has one provider and no fallback wrapper', () => {
+    // These asserted that one provider is handed back unwrapped. It is wrapped now, and
+    // deliberately: a stage can ask for a provider by name with `prefer`, and the wrapper is
+    // what routes to it — including a provider outside the configured order. The chain still
+    // has to be exactly the one provider that has a key, which is what these were guarding.
+    it('D1: only GROQ_API_KEY set — the chain is groq alone', () => {
         const cfg = loadAiConfig({ GROQ_API_KEY: 'g' });
         expect(chainFor(cfg).map((g) => g.name)).toEqual(['groq']);
-        expect(buildGateway(cfg)).not.toBeInstanceOf(FallbackGateway);
+        expect(buildGateway(cfg)).toBeInstanceOf(FallbackGateway);
     });
 
     it('D1: only GROQ_API_KEYS set — groq is still configured', () => {
         const cfg = loadAiConfig({ GROQ_API_KEYS: 'g1,g2' });
         expect(chainFor(cfg).map((g) => g.name)).toEqual(['groq']);
-        expect(buildGateway(cfg)).not.toBeInstanceOf(FallbackGateway);
+        expect(buildGateway(cfg)).toBeInstanceOf(FallbackGateway);
     });
 
     it('wraps two configured providers in a FallbackGateway, in order', () => {

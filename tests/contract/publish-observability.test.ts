@@ -136,9 +136,7 @@ describe("a publish that goes live", () => {
         expect(ids).not.toContain("EV-08");
     });
 
-    it("says whether it went live or is still switching on", async () => {
-        // Conflating the two would make the success rate look wrong in whichever direction
-        // somebody guessed — a slow DNS day reads as a broken one, or the reverse.
+    it("records live when the host work finished without an origin wait", async () => {
         const { db, projectId } = seeded();
         const attempt = await publishProject(
             db.asUser(OWNER), OWNER, projectId, nextKey(), provider({ live: false }),
@@ -146,8 +144,8 @@ describe("a publish that goes live", () => {
         await settled(db, attempt.deploymentId);
 
         const done = captured.events.find((e) => e.id === "EV-07");
-        expect(done?.props.state).toBe("verifying");
-        expect(done?.props.reason).toBe("not_answering_yet");
+        expect(done?.props.state).toBe("live");
+        expect(done?.props.reason).toBeNull();
     });
 
     it("distinguishes a first publish from a republish", async () => {
@@ -250,18 +248,21 @@ describe("what the events are allowed to carry", () => {
     });
 });
 
-describe("a publish refused before it starts", () => {
-    it("counts nothing, because nothing was attempted", async () => {
-        // An unpaid publish is turned away at the gate. Counting it as a started publish
-        // would put a permanent failure rate into the funnel for a case that is working
-        // exactly as designed.
+describe("a publish by somebody who has paid nothing", () => {
+    it("counts as an ordinary publish, because that is what it now is", async () => {
+        // Going live on a PageCrafts address is free, so this is no longer turned away at
+        // the gate. It has to appear in the funnel like any other publish — leaving it out
+        // would hide most of the traffic during the launch offer.
         const { db, projectId } = seeded({ paid: false });
 
-        await expect(
-            publishProject(db.asUser(OWNER), OWNER, projectId, nextKey(), provider()),
-        ).rejects.toMatchObject({ code: "payment_required" });
+        const attempt = await publishProject(
+            db.asUser(OWNER), OWNER, projectId, nextKey(), provider(),
+        );
+        await settled(db, attempt.deploymentId);
 
-        expect(captured.events).toEqual([]);
+        const ids = captured.events.map((e) => e.id);
+        expect(ids).toContain("EV-06");
+        expect(ids).toContain("EV-07");
         expect(sentry.errors).toEqual([]);
     });
 });

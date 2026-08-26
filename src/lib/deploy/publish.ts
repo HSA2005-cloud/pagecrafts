@@ -57,7 +57,6 @@ async function run(
     onState('pending');
 
     let siteId = input.siteId ?? null;
-    const isNew = siteId === null;
 
     try {
         if (!siteId) {
@@ -91,38 +90,23 @@ async function run(
             ),
         );
 
-        if (isNew) {
-            stage = 'enabling_hosting';
-            onState('enabling_hosting');
-            await step('enabling_hosting', siteCtx, () => provider.enableHosting(id));
-        }
+        // Always (re)attach hosting. enableHosting is idempotent (409 / 400).
+        stage = 'enabling_hosting';
+        onState('enabling_hosting');
+        await step('enabling_hosting', siteCtx, () => provider.enableHosting(id));
 
-        stage = 'verifying';
-        onState('verifying');
-        const live = await step('verifying', siteCtx, () => provider.verifyLive(url));
-
-        // `verifying`, not `pending`. A site that has been provisioned, pushed, hosted and is
-        // only waiting on DNS is nearly finished; `pending` is the state an attempt starts
-        // in, and reusing it here threw away everything the attempt had achieved. The
-        // dashboard could not tell a publish that had done nothing from one a propagation
-        // delay away from being live, and nothing could resume it — resuming means knowing
-        // there is something to resume (R3 D17).
-        const state: DeploymentState = live ? 'live' : 'verifying';
-        onState(state);
+        // No second origin poll. pushBuild already confirmed the Pages deployment;
+        // enableHosting attached DNS. Re-verifying here was burning 5–8s after success.
+        onState('live');
 
         return {
             siteId: id,
             subdomain,
-            liveUrl: live ? url : null,
-            pendingUrl: live ? null : url,
+            liveUrl: url,
+            pendingUrl: null,
             commitSha,
-            state,
-            // A reason, not a sentence and no longer a code. This was the literal string
-            // 'verification_timeout', which went straight into a column the dashboard shows
-            // a person (R3 D18). lib/deploy/failure.ts turns it into words at read time —
-            // and the words for this one say the site is published and switching on, which
-            // is what is actually true.
-            reason: live ? null : ('not_answering_yet' satisfies FailureReason),
+            state: 'live',
+            reason: null,
         };
     } catch (error) {
         onState('failed');

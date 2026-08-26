@@ -52,9 +52,9 @@ export const COMPARE_LOOKS: {
         priceInr: STYLE_SPECS.photos.priceInr,
         pages: ["Home", "About", "Menu", "Gallery", "Contact", "Settings"],
         features: [
+            "Editorial display type",
             "Cinematic full-bleed photo hero",
             "Photographs through the page",
-            "Masonry gallery",
             "Pro · Rs 499",
         ],
         blurb: STYLE_SPECS.photos.blurb,
@@ -67,7 +67,7 @@ export const COMPARE_LOOKS: {
         pages: ["Home", "About", "Services", "FAQ", "Contact", "Settings"],
         features: [
             "Kinetic canvas with business motif",
-            "Oversized display type + glow",
+            "Didot / Bodoni Moda display with gold accents",
             "Motion stage and ticker",
             "Premium · Rs 999",
         ],

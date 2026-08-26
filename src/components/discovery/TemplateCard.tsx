@@ -22,6 +22,8 @@ function CardFace({
     showPrice: boolean;
     locked: boolean;
 }) {
+    const paid = Boolean(templateBadge(template.tier));
+    const showFree = !locked && paid;
     return (
         <>
             <span className="relative block overflow-hidden">
@@ -49,6 +51,7 @@ function CardFace({
                         tier={template.tier}
                         priceInr={template.priceInr}
                         locked={locked}
+                        unlocked={showFree}
                         className="absolute right-2 top-2 z-[2] shadow-sm"
                     />
                 ) : null}
