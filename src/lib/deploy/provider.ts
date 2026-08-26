@@ -17,6 +17,24 @@ export interface SiteAddress {
   url: string;
 }
 
+/** DNS records the owner must create at their registrar for a connected custom domain. */
+export interface CustomDomainDnsRecord {
+  type: 'CNAME' | 'TXT' | 'ALIAS';
+  host: string;
+  value: string;
+  /** Short hint for apex / flattening cases. */
+  note?: string;
+}
+
+export type CustomDomainHostStatus = 'pending' | 'active' | 'failed';
+
+export interface AttachCustomDomainResult {
+  hostname: string;
+  /** Where the CNAME (or ALIAS) should point — usually `{siteId}.pages.dev`. */
+  target: string;
+  records: CustomDomainDnsRecord[];
+}
+
 export interface DeployProvider {
   provisionSite(input: ProvisionInput): Promise<ProvisionResult>;
   /**
@@ -34,4 +52,14 @@ export interface DeployProvider {
   enableHosting(siteId: string): Promise<void>;
   verifyLive(url: string): Promise<boolean>;
   removeSite(siteId: string): Promise<void>;
+  /** Attach a hostname the customer already owns. Idempotent on conflict. */
+  attachCustomDomain(siteId: string, hostname: string): Promise<AttachCustomDomainResult>;
+  /** Host-side status for a previously attached custom hostname. */
+  domainStatus(siteId: string, hostname: string): Promise<CustomDomainHostStatus>;
+  /**
+   * Ensure a DNS zone exists for a domain we registered, and return the
+   * nameservers the registrar must publish. Used after buy so we can flip NS
+   * and finish Pages custom-hostname validation without manual DNS.
+   */
+  ensureDnsZone(hostname: string): Promise<{ nameservers: string[] }>;
 }

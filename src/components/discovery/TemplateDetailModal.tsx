@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { ApiResult } from "@/lib/contracts";
 import type { TemplatePreview as PreviewSpec } from "@/lib/discovery/preview";
 import { CATEGORY_LABELS } from "@/lib/discovery/categories";
-import { madeOfLine, priceLine, type TemplateDetail } from "@/lib/templates/detail";
+import { madeOfLine, type TemplateDetail } from "@/lib/templates/detail";
 import { Badge } from "@/components/ui/badge";
 import { UseDesignButton } from "./UseDesignButton";
 import { LockedPlanNotice } from "./LockedPlanNotice";
@@ -37,42 +37,54 @@ import { cn } from "@/lib/utils";
 // used by almost nobody. Fetching on open costs one request and is also how this will keep
 // working when the library is a table rather than a module (D6).
 
-// The miniature is drawn at one width and scaled, so the same design reads at desktop,
-// tablet and phone widths without its type collapsing into specks at the small end.
-const BASE_WIDTH = 560;
-const ASPECT = 0.625; // 16:10, as the miniature is drawn
+// Device frames scale a shared miniature. Landscape matches TemplatePreview's 16:10;
+// phone uses a portrait miniature so the handset reads vertical on every template.
+const LANDSCAPE_BASE_WIDTH = 560;
+const LANDSCAPE_ASPECT = 10 / 16; // height / width
+const PORTRAIT_BASE_WIDTH = 280;
+const PORTRAIT_ASPECT = 19.5 / 9; // tall phone viewport (~iPhone proportions)
 
 const DEVICES = [
-    { label: "Desktop", width: 380 },
-    { label: "Tablet", width: 180 },
-    { label: "Phone", width: 110 },
+    { label: "Desktop", width: 380, orientation: "landscape" },
+    { label: "Tablet", width: 180, orientation: "landscape" },
+    // Keep the handset clearly smaller than Desktop/Tablet — portrait, not towering.
+    { label: "Phone", width: 72, orientation: "portrait" },
 ] as const;
 
 function DeviceFrame({
     label,
     width,
+    orientation,
     preview,
 }: {
     label: string;
     width: number;
+    orientation: "landscape" | "portrait";
     preview: PreviewSpec;
 }) {
-    const scale = width / BASE_WIDTH;
+    const portrait = orientation === "portrait";
+    const baseWidth = portrait ? PORTRAIT_BASE_WIDTH : LANDSCAPE_BASE_WIDTH;
+    const aspect = portrait ? PORTRAIT_ASPECT : LANDSCAPE_ASPECT;
+    const height = width * aspect;
+    const scale = width / baseWidth;
 
     return (
         <figure className="shrink-0" style={{ width }}>
             <div
-                className="overflow-hidden rounded-lg border border-border bg-card"
-                style={{ height: BASE_WIDTH * ASPECT * scale }}
+                className={cn(
+                    "overflow-hidden border border-border bg-card",
+                    portrait ? "rounded-[1.35rem]" : "rounded-lg",
+                )}
+                style={{ width, height }}
             >
                 <div
                     style={{
-                        width: BASE_WIDTH,
+                        width: baseWidth,
                         transform: `scale(${scale})`,
                         transformOrigin: "top left",
                     }}
                 >
-                    <TemplatePreview preview={preview} />
+                    <TemplatePreview preview={preview} orientation={orientation} />
                 </div>
             </div>
             <figcaption className="mt-1.5 text-center text-[11px] text-muted-foreground">
@@ -160,8 +172,9 @@ export function TemplateDetailModal({
     };
 
     const detail = state.status === "ready" ? state.detail : null;
-    const price = showPrice && detail && !locked ? priceLine(detail.tier, detail.priceInr) : null;
-    const paidBadge = detail ? templateBadge(detail.tier) : null;
+    const price =
+        showPrice && detail && !locked && detail.tier !== "free" ? "Free" : null;
+    const paidBadge = detail && locked ? templateBadge(detail.tier) : null;
 
     return (
         <Dialog onOpenChange={onOpenChange}>
@@ -206,6 +219,7 @@ export function TemplateDetailModal({
                                     key={device.label}
                                     label={device.label}
                                     width={device.width}
+                                    orientation={device.orientation}
                                     preview={detail.preview}
                                 />
                             ))}
@@ -285,7 +299,7 @@ export function TemplateDetailModal({
                                                 {price}
                                             </span>
                                             <span className="text-xs text-muted-foreground">
-                                                listed price
+                                                Included in your plan
                                             </span>
                                         </span>
                                     ) : null}
@@ -294,6 +308,7 @@ export function TemplateDetailModal({
                                         name={detail.name}
                                         tier={detail.tier}
                                         showPayNote={showPrice}
+                                        unlocked={!locked}
                                     />
                                 </>
                             )}
