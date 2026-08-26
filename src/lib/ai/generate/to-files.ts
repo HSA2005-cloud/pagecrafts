@@ -599,9 +599,38 @@ address { font-style: normal; }
   transform: translate3d(0, var(--pc-bg-shift, 0px), 0) scale(1.08);
   will-change: transform;
 }
+/*
+ * Drop-down background: nav floats over the hero photo (same pattern as Premium).
+ * A solid/cream header above the hero made Pick a look look like Casual — never again.
+ */
 [data-style="photos"] .site-header {
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
-  backdrop-filter: blur(14px) saturate(1.1);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-width: none;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.15rem clamp(1.25rem, 5vw, 3rem);
+  background: linear-gradient(to bottom, rgba(12, 10, 9, 0.55), transparent);
+  backdrop-filter: none;
+  border-bottom: 0;
+  color: #fff;
+}
+[data-style="photos"] .site-header .wordmark {
+  color: #fff;
+  font-family: var(--display-font);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+[data-style="photos"] .site-header nav a {
+  color: rgba(255, 255, 255, 0.78);
+}
+[data-style="photos"] .site-header nav a:hover,
+[data-style="photos"] .site-header nav a[aria-current="page"] {
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.85);
 }
 /* Full-bleed main — hero must reach the screen edges (same promise as Premium) */
 [data-style="photos"] main {
@@ -611,37 +640,44 @@ address { font-style: normal; }
   padding-inline: 0;
   padding-bottom: 0;
 }
-/* Cinematic hero: edge-to-edge cover, no inset card / white gaps.
+/* Cinematic hero: edge-to-edge cover behind nav + copy — the Pro standard.
    Apply to EVERY Pro hero variant — not only image-bg — so a slipped
    centred/split draw cannot look like Casual. */
-[data-style="photos"] [data-type="hero"] {
+[data-style="photos"] [data-type="hero"],
+[data-style="photos"] [data-type="hero"][data-variant="image-bg"],
+[data-style="photos"] [data-type="hero"][data-variant="centred"],
+[data-style="photos"] [data-type="hero"][data-variant="split-image"],
+[data-style="photos"] [data-type="hero"][data-variant="minimal"] {
   position: relative;
   isolation: isolate;
   display: grid !important;
   grid-template-columns: 1fr !important;
-  place-items: center;
+  place-items: stretch;
   width: 100%;
   max-width: none;
-  min-height: 100vh;
-  min-height: 100svh;
+  min-height: 100vh !important;
+  min-height: 100svh !important;
   margin: 0;
-  padding: 0;
-  padding-block: 0;
+  padding: 0 !important;
+  padding-block: 0 !important;
   overflow: hidden;
-  border-radius: 0;
+  border-radius: 0 !important;
 }
-[data-style="photos"] [data-type="hero"] .img-slot {
-  position: absolute;
-  inset: 0;
+[data-style="photos"] [data-type="hero"] .img-slot,
+[data-style="photos"] [data-type="hero"][data-variant] .img-slot {
+  position: absolute !important;
+  inset: 0 !important;
   z-index: 0;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
-  min-height: 100%;
-  height: 100%;
-  width: 100%;
-  box-shadow: none;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  min-height: 100% !important;
+  height: 100% !important;
+  width: 100% !important;
+  max-width: none !important;
+  box-shadow: none !important;
   overflow: hidden;
+  grid-area: auto;
 }
 [data-style="photos"] [data-type="hero"] .img-slot img {
   display: block;
@@ -651,7 +687,7 @@ address { font-style: normal; }
   max-width: none;
   object-fit: cover;
   object-position: center;
-  border-radius: 0;
+  border-radius: 0 !important;
   /* Force colour on Pro heroes — never leave a B&W Gemini/stock photo looking mono. */
   filter: saturate(1.22) contrast(1.04) !important;
 }
@@ -666,28 +702,40 @@ address { font-style: normal; }
   pointer-events: none;
   background: linear-gradient(
     to bottom,
-    rgba(12, 10, 9, 0.35) 0%,
-    rgba(12, 10, 9, 0.12) 42%,
-    rgba(12, 10, 9, 0.72) 100%
+    rgba(12, 10, 9, 0.42) 0%,
+    rgba(12, 10, 9, 0.18) 38%,
+    rgba(12, 10, 9, 0.68) 100%
   );
 }
-[data-style="photos"] [data-type="hero"] .hero-copy {
+/* Editorial left stack over the photo — matches the Pro reference hero */
+[data-style="photos"] [data-type="hero"] .hero-copy,
+[data-style="photos"] [data-type="hero"][data-variant] .hero-copy {
   position: relative;
   z-index: 2;
-  padding: clamp(5rem, 14vh, 8rem) clamp(1.25rem, 5vw, 3rem) clamp(3rem, 8vh, 5rem);
-  text-align: center;
-  justify-self: center;
+  padding: clamp(5.5rem, 16vh, 9rem) clamp(1.25rem, 5vw, 3rem) clamp(3rem, 8vh, 5rem);
+  text-align: left !important;
+  justify-self: start;
   align-self: center;
-  max-width: min(42rem, 92vw);
+  max-width: min(36rem, 92vw);
   width: 100%;
-  background: none;
+  background: none !important;
   color: #fff;
+  grid-area: auto;
 }
 [data-style="photos"] [data-type="hero"] .eyebrow,
 [data-style="photos"] [data-type="hero"] .lede,
 [data-style="photos"] [data-type="hero"] h1 {
-  color: #fff;
+  color: #fff !important;
   text-shadow: 0 1px 18px rgba(12, 10, 9, 0.55);
+  max-width: none;
+}
+[data-style="photos"] [data-type="hero"] .lede {
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+@media (max-width: 48rem) {
+  [data-style="photos"] .site-header {
+    padding-inline: 1.15rem;
+  }
 }
 [data-style="photos"] section:not([data-type="hero"]):not([data-type="footer"]) {
   background: color-mix(in srgb, var(--panel) 82%, transparent);

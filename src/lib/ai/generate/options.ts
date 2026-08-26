@@ -115,18 +115,27 @@ body{font-family:"Avenir Next",Avenir,"Segoe UI",system-ui,sans-serif;margin:0;b
 img{max-width:100%;height:auto;border-radius:0.75rem;filter:saturate(1.12)!important}`,
     // Custom builds used to get a one-line overlay — Pro looked like Casual with a
     // rounded thumbnail. This is a real cinematic cover so Pick a look matches recipe Pro.
-    photos: `/* pagecrafts look: photos */
+    photos: `/* pagecrafts look: photos — drop-down cinematic hero behind nav */
 :root{color-scheme:light}
 body[data-style="photos"],body.look-photos,html:has(body){
   --display-font:Newsreader,"Iowan Old Style",Palatino,Georgia,serif;
 }
-body{margin:0;font-family:system-ui,sans-serif;color:#111}
+body{margin:0;font-family:system-ui,sans-serif;color:#111;position:relative}
 img{filter:saturate(1.18)!important;border-radius:0!important}
-/* First photograph becomes a full-viewport cinematic hero */
+.site-header,.site-topbar,.site-topbar-blend,header.site-header{
+  position:absolute!important;top:0;left:0;right:0;z-index:40;
+  max-width:none!important;width:100%;box-sizing:border-box;
+  background:linear-gradient(to bottom,rgba(12,10,9,.55),transparent)!important;
+  backdrop-filter:none!important;border:0!important;color:#fff!important;
+}
+.site-header .wordmark,.site-topbar .wordmark,.wordmark{color:#fff!important}
+.site-header nav a,.site-topbar .nav a{color:rgba(255,255,255,.78)!important}
+/* First photograph becomes a full-viewport cinematic hero behind the nav */
 body > img:first-of-type,
 main > img:first-of-type,
 .hero img:first-of-type,
 [class*="hero"] img:first-of-type,
+[data-type="hero"] img:first-of-type,
 header img:first-of-type,
 main > section:first-child img:first-of-type,
 main > div:first-child img:first-of-type{
@@ -140,7 +149,10 @@ main > div:first-child img:first-of-type{
   margin:0!important;
   border-radius:0!important;
 }
-h1{font-family:var(--display-font,Georgia,serif);font-weight:500;letter-spacing:-0.028em}`,
+[data-type="hero"],.hero{position:relative;min-height:100svh!important;border-radius:0!important;padding:0!important}
+[data-type="hero"] .img-slot,.hero .img-slot{position:absolute!important;inset:0!important;border-radius:0!important;margin:0!important}
+[data-type="hero"] .hero-copy,.hero-copy{position:relative;z-index:2;color:#fff!important;background:none!important;text-align:left!important}
+h1{font-family:var(--display-font,Georgia,serif);font-weight:500;letter-spacing:-0.028em;color:#fff}`,
     motion: `/* pagecrafts look: motion */
 :root{color-scheme:dark}
 @keyframes pc-fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}

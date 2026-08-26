@@ -444,14 +444,23 @@ export function StyleChooser({
                                     )}
                                 >
                                     <CardIndex n={i + 1} />
-                                    <div className="relative h-64 overflow-hidden bg-muted">
+                                    <div
+                                        className={cn(
+                                            "relative h-64 overflow-hidden bg-muted",
+                                            /* Pro: crop into the drop-down photo hero, not a cream header strip */
+                                            option.id === "photos" && "bg-neutral-900",
+                                        )}
+                                    >
                                         <iframe
                                             title={`${option.label} preview`}
                                             srcDoc={option.html}
                                             sandbox="allow-scripts"
                                             tabIndex={-1}
                                             className={cn(
-                                                "pointer-events-none absolute left-0 top-0 h-[220%] w-[180%] origin-top-left scale-[0.56] border-0 bg-transparent",
+                                                "pointer-events-none absolute left-0 top-0 border-0 bg-transparent",
+                                                option.id === "photos"
+                                                    ? "h-[240%] w-[200%] origin-top-left scale-[0.5]"
+                                                    : "h-[220%] w-[180%] origin-top-left scale-[0.56]",
                                                 locked && "opacity-55",
                                             )}
                                         />

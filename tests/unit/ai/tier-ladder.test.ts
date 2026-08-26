@@ -76,6 +76,8 @@ describe('Pro earns its Rs 499', () => {
         expect(photos).toContain('images.unsplash.com');
         expect(photos).toMatch(/\[data-style="photos"\] \[data-type="hero"\][\s\S]*?min-height:\s*100svh/);
         expect(photos).toMatch(/\[data-style="photos"\] main[\s\S]*?padding-inline:\s*0/);
+        expect(photos).toMatch(/\[data-style="photos"\] \.site-header[\s\S]*?position:\s*absolute/);
+        expect(photos).toMatch(/\[data-style="photos"\] \[data-type="hero"\] \.hero-copy[\s\S]*?text-align:\s*left/);
     });
 
     it('leaves the premium chrome to Premium', async () => {

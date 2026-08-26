@@ -233,6 +233,10 @@ describe('style presets — three looks from one brief', () => {
         expect(heroVariant(home.photos)).toBe('image-bg');
         expect(home.photos).toMatch(/\[data-style="photos"\] \[data-type="hero"\][\s\S]*?min-height:\s*100svh/);
         expect(home.photos).toMatch(/\[data-style="photos"\] main[\s\S]*?padding-inline:\s*0/);
+        // Drop-down background: nav floats over the full-bleed photo (never a cream bar above it).
+        expect(home.photos).toMatch(/\[data-style="photos"\] \.site-header[\s\S]*?position:\s*absolute/);
+        expect(home.photos).toMatch(/\[data-style="photos"\] \[data-type="hero"\] \.img-slot[\s\S]*?position:\s*absolute/);
+        expect(home.photos).toMatch(/\[data-style="photos"\] \[data-type="hero"\] \.hero-copy[\s\S]*?text-align:\s*left/);
         expect(['media-split', 'text']).toContain(aboutVariant(about.photos));
         expect((allHtml.photos.match(/images\.unsplash\.com/g) ?? []).length)
             .toBeGreaterThan((allHtml.casual.match(/images\.unsplash\.com/g) ?? []).length);
