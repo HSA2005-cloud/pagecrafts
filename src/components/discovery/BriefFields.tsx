@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    BRIEF_LIMITS,
     BRIEF_TONES,
     type BriefTone,
     type SiteBrief,
@@ -37,6 +38,7 @@ export function BriefFields({
                 <Field label="Business name" htmlFor="brief-name">
                     <Input
                         id="brief-name"
+                        maxLength={BRIEF_LIMITS.name}
                         inputSize="lg"
                         autoComplete="organization"
                         placeholder="Mithas Sweets"
@@ -48,6 +50,7 @@ export function BriefFields({
                 <Field label="City or area" htmlFor="brief-place">
                     <Input
                         id="brief-place"
+                        maxLength={BRIEF_LIMITS.place}
                         inputSize="lg"
                         placeholder="Old Delhi, Koramangala…"
                         value={value.place}
@@ -66,8 +69,10 @@ export function BriefFields({
                     <textarea
                         id="brief-offer"
                         rows={3}
+                        maxLength={BRIEF_LIMITS.offer}
                         value={value.offer}
                         disabled={disabled}
+                        aria-describedby="brief-offer-count"
                         placeholder="Family dental clinic. Check-ups, root canals and braces."
                         className="flex min-h-20 w-full resize-y rounded-lg border border-input bg-field px-4 py-3 pr-12 text-base text-foreground shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         onChange={(e) => set({ offer: e.target.value })}
@@ -81,12 +86,32 @@ export function BriefFields({
                         }
                     />
                 </div>
+                {/* Silent until it matters, loud once it does: a counter on every field from
+                    the first keystroke is noise, but a paste that lands on the cap with no
+                    warning is how somebody loses a long brief. */}
+                <p
+                    id="brief-offer-count"
+                    aria-live="polite"
+                    className={cn(
+                        'mt-1 text-xs',
+                        value.offer.length >= BRIEF_LIMITS.offer
+                            ? 'text-destructive'
+                            : 'text-muted-foreground',
+                    )}
+                >
+                    {value.offer.length >= BRIEF_LIMITS.offer
+                        ? `That is the limit — ${BRIEF_LIMITS.offer} characters. Anything longer was not kept.`
+                        : value.offer.length > BRIEF_LIMITS.offer * 0.75
+                          ? `${value.offer.length} of ${BRIEF_LIMITS.offer} characters.`
+                          : null}
+                </p>
             </Field>
 
             <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Phone" htmlFor="brief-phone" optional>
                     <Input
                         id="brief-phone"
+                        maxLength={BRIEF_LIMITS.phone}
                         inputSize="lg"
                         inputMode="tel"
                         autoComplete="tel"
@@ -99,6 +124,7 @@ export function BriefFields({
                 <Field label="Hours" htmlFor="brief-hours" optional>
                     <Input
                         id="brief-hours"
+                        maxLength={BRIEF_LIMITS.hours}
                         inputSize="lg"
                         placeholder="Open daily 10–8, Sundays too"
                         value={value.hours}
@@ -141,6 +167,7 @@ export function BriefFields({
                 <div className="relative">
                     <textarea
                         id="brief-extra"
+                        maxLength={BRIEF_LIMITS.extra}
                         rows={2}
                         value={value.extra}
                         disabled={disabled}

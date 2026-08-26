@@ -7,6 +7,7 @@ import {
     STYLE_IDS, STYLE_SPECS, applyStyle,
     type StyleId, type StyleSpec, type StyleTier,
 } from './styles';
+import { artSeed, variedSpec } from './art-variety';
 
 export interface StyleOption {
     id: StyleId;
@@ -33,12 +34,19 @@ async function renderOption(
     spec: StyleSpec,
     lookup?: PhotoLookup,
     prompt?: string,
+    seed = '',
+    photoSalt = '',
+    excludePhotos: ReadonlySet<string> = new Set(),
 ): Promise<StyleOption> {
-    let composition = applyStyle(base, spec);
+    let composition = applyStyle(base, variedSpec(spec, seed));
     if (spec.photos === 'hero') {
-        composition = await stampPhotoUrls(composition, lookup, ['hero']);
+        composition = await stampPhotoUrls(
+            composition, lookup, ['hero'], photoSalt, excludePhotos,
+        );
     } else if (spec.photos) {
-        composition = await stampPhotoUrls(composition, lookup);
+        composition = await stampPhotoUrls(
+            composition, lookup, undefined, photoSalt, excludePhotos,
+        );
     }
     return {
         id: spec.id,
@@ -47,18 +55,49 @@ async function renderOption(
         tier: spec.tier,
         priceInr: spec.priceInr,
         composition,
-        files: withRequestedExtras(compositionToFiles(composition, spec.id), composition, prompt),
+        files: withRequestedExtras(
+            compositionToFiles(composition, spec.id, seed),
+            composition,
+            prompt,
+        ),
     };
 }
 
-/** Three finished sites from one generated composition. */
+/**
+ * Three finished sites from one generated composition.
+ *
+ * `jobId` seeds the art direction, so the same business asking twice gets the same site back
+ * while a different business -- or the same one pressing "generate another look" -- gets a
+ * different one. Without a seed every site in the product shared one theme.
+ *
+ * `excludePhotos` are Unsplash ids already used as heroes on earlier Sets for this project.
+ */
 export async function buildStyleOptions(
     composition: Composition,
     lookup?: PhotoLookup,
     prompt?: string,
+    jobId?: string,
+    excludePhotos: ReadonlySet<string> = new Set(),
 ): Promise<StyleOption[]> {
+    const seed = artSeed({
+        title: composition.meta.title,
+        vertical: composition.vertical,
+        jobId,
+    });
+    const photoSalt = jobId ?? '';
+
     return Promise.all(
-        STYLE_IDS.map((id) => renderOption(composition, STYLE_SPECS[id], lookup, prompt)),
+        STYLE_IDS.map((id) =>
+            renderOption(
+                composition,
+                STYLE_SPECS[id],
+                lookup,
+                prompt,
+                seed,
+                photoSalt,
+                excludePhotos,
+            ),
+        ),
     );
 }
 

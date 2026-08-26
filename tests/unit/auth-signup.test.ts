@@ -54,7 +54,7 @@ describe('POST /api/v1/auth/signup', () => {
         expect(payload.error.code).toBe('internal');
     });
 
-    it('still masks an already-registered address, so SEC-02 holds', async () => {
+    it('tells an already-registered address to sign in, and never mints a pending ticket', async () => {
         signUp.mockResolvedValue({
             data: { user: null, session: null },
             error: { code: 'user_already_exists', status: 422, message: 'User already registered' },
@@ -62,8 +62,26 @@ describe('POST /api/v1/auth/signup', () => {
 
         const { status, payload } = await post();
 
-        expect(status).toBe(202);
-        expect(payload).toEqual({ ok: true, data: { user: null, pending: true } });
+        expect(status).toBe(409);
+        expect(payload.ok).toBe(false);
+        expect(payload.error.code).toBe('conflict');
+        expect(payload.error.message).toMatch(/already has an account/i);
+    });
+
+    it('rejects the masked duplicate (empty identities) instead of auto-signing in later', async () => {
+        signUp.mockResolvedValue({
+            data: {
+                user: { id: 'u-existing', email: credentials.email, identities: [] },
+                session: null,
+            },
+            error: null,
+        });
+
+        const { status, payload } = await post();
+
+        expect(status).toBe(409);
+        expect(payload.ok).toBe(false);
+        expect(payload.error.code).toBe('conflict');
     });
 
     it('maps a weak password and a rate limit to their own codes', async () => {

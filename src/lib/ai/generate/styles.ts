@@ -58,7 +58,7 @@ export const STYLE_SPECS: Record<StyleId, StyleSpec> = {
     photos: {
         id: 'photos',
         label: 'Photo-rich',
-        blurb: 'A cinematic hero and real photographs throughout the page.',
+        blurb: 'Editorial type, a cinematic hero, and real photographs throughout the page.',
         tier: 'pro',
         priceInr: 499,
         art: {
@@ -82,15 +82,15 @@ export const STYLE_SPECS: Record<StyleId, StyleSpec> = {
     motion: {
         id: 'motion',
         label: 'Animated',
-        blurb: 'A kinetic canvas — oversized type, glow, and motion drawn from this business, not generic blobs.',
+        blurb: 'A kinetic canvas — Bodoni display type, champagne gold, and motion drawn from this business.',
         tier: 'premium',
         priceInr: 999,
         art: {
-            themeId: 'vivid-energy',
+            themeId: 'deep-luxury',
             motionId: 'kinetic',
-            radiusId: 'pill',
-            spacingId: 'tight',
-            imageryId: 'bold-contrast',
+            radiusId: 'framed',
+            spacingId: 'airy',
+            imageryId: 'muted-duotone',
         },
         variants: {
             hero: 'centred',
@@ -100,7 +100,11 @@ export const STYLE_SPECS: Record<StyleId, StyleSpec> = {
             contact: 'form',
             footer: 'columns',
         },
-        photos: false,
+        // 'hero', not false. False meant the premium tier never fetched a photograph at
+        // all, so it sold a glowing SVG while the free tier showed a real room. The hero
+        // photo is the whole composition now; the rest of the page stays type and motion,
+        // which is what separates this from Photo-rich.
+        photos: 'hero',
     },
 };
 

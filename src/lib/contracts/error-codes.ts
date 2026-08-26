@@ -9,9 +9,12 @@ export type ErrorCode =
   | "rate_limited"
   | "spend_capped"
   | "validation_failed"
+  | "brief_unclear"
   | "payload_too_large"
   | "generation_failed"
   | "payment_required"
+  | "payments_unavailable"
+  | "invalid_discount"
   | "hosting_error"
   | "service_unavailable"
   | "internal";
