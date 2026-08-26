@@ -45,12 +45,16 @@ export function toSessionUser(user: User): SessionUser {
 }
 
 export async function currentUser(): Promise<SessionUser | null> {
-    const supabase = await supabaseRouteClient();
-    const { data, error } = await supabase.auth.getUser();
+    try {
+        const supabase = await supabaseRouteClient();
+        const { data, error } = await supabase.auth.getUser();
 
-    if (error || !data.user) return null;
+        if (error || !data.user) return null;
 
-    return toSessionUser(data.user);
+        return toSessionUser(data.user);
+    } catch {
+        return null;
+    }
 }
 
 export type Viewer = SessionUser & { name: string };
@@ -66,10 +70,14 @@ export function toViewer(user: User): Viewer {
 // The signed-in user as seen from a Server Component — who to show in the app shell.
 // Signed out is an ordinary answer here, not an error: several screens are public.
 export async function viewer(): Promise<Viewer | null> {
-    const supabase = await supabaseViewerClient();
-    const { data, error } = await supabase.auth.getUser();
+    try {
+        const supabase = await supabaseViewerClient();
+        const { data, error } = await supabase.auth.getUser();
 
-    if (error || !data.user) return null;
+        if (error || !data.user) return null;
 
-    return toViewer(data.user);
+        return toViewer(data.user);
+    } catch {
+        return null;
+    }
 }

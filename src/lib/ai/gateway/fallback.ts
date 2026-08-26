@@ -38,6 +38,11 @@ export class FallbackGateway implements Gateway {
         private readonly chain: NamedGateway[],
         /** Overall budget in ms; defaults to the per-job timeout. Injectable for tests. */
         private readonly deadlineMs?: number,
+        /**
+         * Every configured provider, including ones not in the default order — so a
+         * `prefer: 'gemini'` call can still reach Gemini when the order is `groq` only.
+         */
+        private readonly roster: NamedGateway[] = chain,
     ) {
         if (chain.length === 0) {
             throw new Error('FallbackGateway needs at least one provider.');
@@ -59,7 +64,16 @@ export class FallbackGateway implements Gateway {
 
         // Never disable the last provider standing.
         const usable = this.chain.filter((gw) => !this.disabled.has(gw.name));
-        const chain = usable.length ? usable : this.chain;
+        let chain = usable.length ? usable : this.chain;
+
+        if (req.prefer) {
+            const preferred = this.roster.find(
+                (gw) => gw.name === req.prefer && !this.disabled.has(gw.name),
+            );
+            if (preferred) {
+                chain = [preferred, ...chain.filter((gw) => gw.name !== preferred.name)];
+            }
+        }
 
         for (let i = 0; i < chain.length; i++) {
             const gw = chain[i];

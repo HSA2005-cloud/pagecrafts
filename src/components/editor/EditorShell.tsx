@@ -9,8 +9,6 @@ import type { JobStatus } from '@/lib/ai/jobs/types';
 import { explainCreationIssue } from '@/lib/editor/ai-fix';
 import TopBar from './TopBar';
 import PreviewPane from './PreviewPane';
-import FileTree from './FileTree';
-import CodePane from './CodePane';
 import { TreeSkeleton, PaneSkeleton } from './Skeletons';
 import SectionsPanel from './SectionsPanel';
 import VersionHistory from './VersionHistory';
@@ -19,6 +17,7 @@ import ChatPanel from './ChatPanel';
 import EditorSplit from './EditorSplit';
 import { AskAiFixDialog } from './AskAiFixDialog';
 import { NeedUpiDialog } from './NeedUpiDialog';
+import { EditUnlockGate } from './EditUnlockGate';
 
 interface JobProgress {
     status: JobStatus;
@@ -29,8 +28,15 @@ interface JobProgress {
     preview_html?: string;
     prompt?: string;
     error?: string;
+    fallback_template_id?: string;
     composition?: { vertical?: string };
 }
+
+// A job that fell back reports `done`, because a site did get written and the editor does
+// have something to open. What it is not is the site the person asked for, and the screen
+// used to greet them as though it were. This is the sentence that says otherwise.
+const FALLBACK_NOTICE =
+    'I could not build a site from your description, so this is a ready-made design to start from — your details are not on it yet. Tell me what to change, or try describing it again.';
 
 export default function EditorShell({
     projectId,
@@ -51,10 +57,10 @@ export default function EditorShell({
     });
     const [sectionsOpen, setSectionsOpen] = useState(false);
     const [loadAskOpen, setLoadAskOpen] = useState(false);
-    const advanced = useEditorStore((s) => s.advanced);
     const loading = useEditorStore((s) => s.loading);
     const loadError = useEditorStore((s) => s.loadError);
     const loadProject = useEditorStore((s) => s.loadProject);
+    const setGenerationNotice = useEditorStore((s) => s.setGenerationNotice);
     const saveProject = useEditorStore((s) => s.saveProject);
     const flushPendingSave = useEditorStore((s) => s.flushPendingSave);
     const composition = useEditorStore((s) => s.composition);
@@ -101,18 +107,26 @@ export default function EditorShell({
             setGeneration(data);
 
             if (data.status === "done" || data.status === "failed") {
+                setGenerationNotice(data.fallback_template_id ? FALLBACK_NOTICE : null);
                 await loadProject(projectId);
                 if (cancelled) return;
-                if (data.status === "done") {
+                // Only go to /choose when there are variant looks to pick from.
+                // A fallback job wrote a template directly — no looks exist, so
+                // sending the user to /choose would bounce them straight back here.
+                if (data.status === "done" && !data.fallback_template_id) {
                     router.replace(
                         `/choose/${encodeURIComponent(projectId)}?job=${encodeURIComponent(jobId)}`,
                     );
                     return;
                 }
+                // For fallback or failed jobs, clear the generation overlay and
+                // settle on the editor with whatever the project now holds.
+                setGeneration(null);
+                router.replace(`/editor/${encodeURIComponent(projectId)}`);
                 return;
             }
 
-            timer = setTimeout(poll, 400);
+            timer = setTimeout(poll, 1500);
         };
 
         void poll();
@@ -120,7 +134,7 @@ export default function EditorShell({
             cancelled = true;
             if (timer) clearTimeout(timer);
         };
-    }, [jobId, projectId, loadProject, router]);
+    }, [jobId, projectId, loadProject, router, setGenerationNotice]);
 
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
@@ -203,7 +217,7 @@ export default function EditorShell({
                         </div>
                     </div>
                 </div>
-            ) : (
+            ) : generating ? (
                 <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
                     {generation && (
                         <GeneratingOverlay
@@ -218,40 +232,34 @@ export default function EditorShell({
                             onAskAiFix={(instruction) => void retryGeneration(instruction)}
                         />
                     )}
+                    <EditorSplit
+                        left={<PaneSkeleton />}
+                        right={<PaneSkeleton />}
+                    />
+                </main>
+            ) : (
+                <EditUnlockGate projectId={projectId}>
+                <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
                     {sectionsOpen && composition && (
                         <aside className="w-64 shrink-0 overflow-auto border-r border-border/60">
                             {loading ? <TreeSkeleton /> : <SectionsPanel />}
                         </aside>
                     )}
-                    {advanced ? (
-                        <>
-                            <aside className="w-56 shrink-0 overflow-auto border-r border-border/60">
-                                {loading ? <TreeSkeleton /> : <FileTree />}
-                            </aside>
-                            <section className="min-w-0 flex-1 overflow-auto border-r border-border/60">
-                                {loading ? <PaneSkeleton /> : <CodePane />}
-                            </section>
-                            <section className="relative min-h-0 min-w-0 flex-1">
-                                {loading ? <PaneSkeleton /> : <PreviewPane />}
-                            </section>
-                            {pendingChange ? (
-                                <aside className="flex w-[min(100%,24rem)] shrink-0 flex-col overflow-hidden border-l border-border/60">
-                                    {loading ? <PaneSkeleton /> : <ChatPanel autoFocus={focusAsk} />}
-                                </aside>
-                            ) : null}
-                        </>
-                    ) : (
-                        <EditorSplit
-                            left={loading || generating ? <PaneSkeleton /> : <ChatPanel autoFocus={focusAsk} />}
-                            right={loading || generating ? <PaneSkeleton /> : <PreviewPane />}
-                        />
-                    )}
+                    {/*
+                      Chat + preview only. File tree / raw HTML (old "Advanced") is
+                      not offered to customers — that exposed template source.
+                    */}
+                    <EditorSplit
+                        left={loading ? <PaneSkeleton /> : <ChatPanel autoFocus={focusAsk} />}
+                        right={loading ? <PaneSkeleton /> : <PreviewPane />}
+                    />
                     {historyOpen && (
                         <aside className="w-72 shrink-0 overflow-hidden border-l border-border/60">
                             <VersionHistory />
                         </aside>
                     )}
                 </main>
+                </EditUnlockGate>
             )}
 
             {loadFix ? (

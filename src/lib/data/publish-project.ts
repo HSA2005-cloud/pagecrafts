@@ -13,25 +13,21 @@ import { projectPublishInputs } from "@/lib/deploy/publishable";
 import { publish } from "@/lib/deploy/publish";
 import { PublishError } from "@/lib/deploy/errors";
 import { deployProvider } from "@/lib/deploy/adapters";
+import { assertDeployReady } from "@/lib/deploy/credentials";
 import { failureMessage, reasonForError } from "@/lib/deploy/failure";
 import { track } from "@/lib/observability/analytics";
 import { captureError } from "@/lib/observability/capture";
 import type { DeployProvider } from "@/lib/deploy/provider";
 
+export type PublishProjectResult = PublishProjectResponse & {
+  /** @deprecated Host work now finishes in-request; kept for the route await seam. */
+  background?: Promise<void>;
+};
+
 // Publishing a project (R3 D15 · FR-080–FR-091, C-05).
 //
-// Everything this needs already existed and nothing called it: entitlements decide whether
-// a site may go live, publishable.ts turns a working tree into a build, deployments.ts
-// records the attempt, and publish() runs the provider steps. This is the seam between
-// them, and the shape of it is dictated by one fact — a publish can legitimately take
-// ninety seconds, and no request should be held open that long.
-//
-// So the request does the parts that can fail fast and answer honestly (is this project
-// yours, is it paid for, does it have files), writes the deployment row, and hands back its
-// id. The provider work runs on after the response, reporting into that row, and the client
-// polls GET /deployments/{id} — which is what NFR-117 asks for and what the contract's
-// `status: "pending"` has always implied.
-
+// Fast path: the request awaits Direct Upload + DNS, then answers with the final
+// deployment status so the client does not burn another round of polling.
 /** Where the site lives on the host, kept so a republish updates rather than duplicating. */
 async function siteIdFor(supabase: SupabaseClient, projectId: string): Promise<string | null> {
   const { data, error } = await supabase
@@ -65,12 +61,31 @@ export async function publishProject(
   // Injectable for the same reason publish() takes one: the edge cases this function exists
   // to survive — a claim that outlives a failed attempt, a site that is not answering yet —
   // can only be reproduced by a provider that behaves that way on purpose.
-  provider: DeployProvider = deployProvider,
-): Promise<PublishProjectResponse> {
+  provider?: DeployProvider,
+): Promise<PublishProjectResult> {
+  const activeProvider = provider ?? deployProvider;
+
   // Before anything is recorded or provisioned. A publish nobody paid for should cost us
   // nothing and leave no trace, and the caller should hear payment_required rather than
   // watch a deployment fail for reasons it cannot act on.
   await assertCanPublish(supabase, userId, projectId);
+
+  // Hosting misconfiguration is ours, not the owner's. Refuse before a deployment row is
+  // opened so Go Live does not look like their site broke. Skipped when a test injects a
+  // fake provider, and under Vitest (unit tests mock publish() and omit the provider arg).
+  if (provider === undefined && process.env.VITEST == null) {
+    try {
+      assertDeployReady();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("[publish] hosting is not configured", detail);
+      throw new ApiError(
+        "service_unavailable",
+        "Publishing is not available right now. Try again in a little while.",
+        detail,
+      );
+    }
+  }
 
   const siteId = await siteIdFor(supabase, projectId);
   const { projectName, files } = await projectPublishInputs(supabase, projectId);
@@ -86,6 +101,10 @@ export async function publishProject(
   // runOnce() in the deploy layer only dedupes an identical idempotency key; two different
   // keys for one project would otherwise race each other onto the same subdomain. Moved
   // here from the route at D18, with the rest of what a publish has to decide.
+  //
+  // Important: this only returns the id — it does not resume host work. A frozen Vercel
+  // isolate left rows in pushing/pending with nobody running; rejoining them made Go Live
+  // spin for minutes. openDeployment ignores rows older than its TTL so a retry can start.
   const running = await openDeployment(supabase, projectId);
   if (running) return { deploymentId: running.id, status: "pending" };
 
@@ -96,92 +115,76 @@ export async function publishProject(
   // rather than requests that bounced off a precondition.
   track("EV-06", userId, { republish: siteId !== null });
 
-  // Deliberately not awaited. The response carries the deployment id and the client polls;
-  // holding the request open for the ninety seconds this can take would time out the
-  // function and tell the user nothing. Every outcome is written to the row, including the
-  // failures — an attempt that dies silently leaves `pending`, which is the honest answer
-  // when nobody knows how it ended.
-  void publish(
-    { projectId, projectName, files, siteId, idempotencyKey },
-    attempt.onState,
-    provider,
-  )
-    .then(async (result) => {
-      if (!siteId) await rememberSite(supabase, projectId, result.siteId);
+  // Await the host work in this request. Returning 202 with a detached upload used to
+  // freeze mid-push on Vercel; answering only after finish also lets the client skip polling.
+  try {
+    const result = await publish(
+      { projectId, projectName, files, siteId, idempotencyKey },
+      attempt.onState,
+      activeProvider,
+    );
 
-      await attempt.finish({
-        state: result.state,
-        liveUrl: result.liveUrl,
-        commitSha: result.commitSha,
-        failureReason: result.reason,
-      });
+    if (!siteId) await rememberSite(supabase, projectId, result.siteId);
 
-      // EV-07. `state` distinguishes live from verifying, which is the difference between
-      // "it worked" and "it is waiting on DNS" — and conflating those would make the
-      // success rate look worse than it is on a slow day, or better than it is on a broken
-      // one, depending on which way somebody guessed.
-      track("EV-07", userId, {
-        state: result.state,
-        republish: siteId !== null,
-        reason: result.reason,
-      });
-    })
-    .catch(async (error: unknown) => {
-      // Keep the address even though the attempt failed.
-      //
-      // Provisioning claims a subdomain on the host. If the attempt then dies at pushing,
-      // that claim is real and, until R3 D17, nobody recorded it — so the retry re-derived
-      // the address from the project name, was told by the host that it was taken (by the
-      // site we had just abandoned), and published to `name-2`. A transient upload error
-      // moved somebody's address and orphaned their first site. Remembering it here means
-      // the retry reuses the site instead of racing its own leftovers.
-      if (!siteId && error instanceof PublishError && error.siteId) {
-        await rememberSite(supabase, projectId, error.siteId).catch(() => undefined);
-      }
-
-      // Two separate things, and keeping them separate is the point of D18.
-      //
-      // `failureReason` is what the owner is told, by way of lib/deploy/failure.ts — a value,
-      // so the wording can be improved later and improve rows already written, and so
-      // "the dashboard explains every failure mode" is a claim a test can check.
-      //
-      // `error` is the redacted provider detail, kept for whoever has to work out why this
-      // person's publish failed. It is not shown; it used to be, which is how a stray HTTP
-      // status could end up in front of a customer.
-      const detail =
-        error instanceof PublishError
-          ? (error.detail ?? null)
-          : error instanceof Error
-            ? error.message
-            : String(error);
-
-      const reason = reasonForError(error);
-
-      // The publish runs after the response has gone, so nothing upstream is watching:
-      // withRoute's Sentry boundary only wraps errors thrown *during* a request, and this
-      // promise is detached by design. Until R3 D20 a failed publish left one console line
-      // in a serverless log and nothing else — no Sentry issue, no analytics event — so the
-      // first anybody knew of a bad deploy was a customer saying so.
-      //
-      // Tagged with the reason so failures group by cause rather than by whichever provider
-      // string came back, and with the project so support can find the attempt.
-      captureError(error, {
-        tags: { boundary: "publish", reason },
-        extra: { projectId, deploymentId: attempt.deploymentId },
-      });
-      track("EV-08", userId, { reason, republish: siteId !== null });
-
-      console.error("[publish]", projectId, error);
-
-      // finish() can itself fail — a dropped connection, a policy change. There is nothing
-      // useful left to do at that point except not crash the process the response already
-      // left behind.
-      await attempt
-        .finish({ state: "failed", error: detail, failureReason: reason })
-        .catch(() => undefined);
+    await attempt.finish({
+      state: result.state,
+      liveUrl: result.liveUrl,
+      commitSha: result.commitSha,
+      failureReason: result.reason,
     });
 
-  return { deploymentId: attempt.deploymentId, status: "pending" };
+    track("EV-07", userId, {
+      state: result.state,
+      republish: siteId !== null,
+      reason: result.reason,
+    });
+
+    const status: PublishProjectResponse["status"] =
+      result.state === "live" ? "live" : result.state === "failed" ? "failed" : "pending";
+
+    return {
+      deploymentId: attempt.deploymentId,
+      status,
+      liveUrl: result.liveUrl,
+    };
+  } catch (error: unknown) {
+    if (!siteId && error instanceof PublishError && error.siteId) {
+      await rememberSite(supabase, projectId, error.siteId).catch(() => undefined);
+    }
+
+    const detail =
+      error instanceof PublishError
+        ? error.code === "validation_failed"
+          ? error.message
+          : (error.detail ?? error.message)
+        : error instanceof Error
+          ? error.message
+          : String(error);
+
+    const reason = reasonForError(error);
+
+    captureError(error, {
+      tags: { boundary: "publish", reason },
+      extra: { projectId, deploymentId: attempt.deploymentId },
+    });
+    track("EV-08", userId, { reason, republish: siteId !== null });
+
+    console.error("[publish]", projectId, error);
+
+    await attempt
+      .finish({ state: "failed", error: detail, failureReason: reason })
+      .catch(() => undefined);
+
+    return {
+      deploymentId: attempt.deploymentId,
+      status: "failed",
+      liveUrl: null,
+      error:
+        error instanceof PublishError && error.code === "validation_failed"
+          ? error.message
+          : failureMessage(reason).what + " " + failureMessage(reason).next,
+    };
+  }
 }
 
 /**

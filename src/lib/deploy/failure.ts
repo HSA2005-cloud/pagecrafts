@@ -141,8 +141,24 @@ export function reasonForError(error: unknown): FailureReason {
     const candidate = error as Partial<PublishError> | undefined;
     if (candidate?.name === "PublishError") {
         if (candidate.code === "payment_required") return "not_paid_for";
-        if (candidate.code === "validation_failed") return "nothing_to_publish";
+        if (candidate.code === "validation_failed") {
+            return candidate.reason ?? "nothing_to_publish";
+        }
         return candidate.reason ?? "unknown";
     }
+
+    // Plain Errors from missing HOSTING_* / sealed credential land here when something
+    // throws before toPublishError wraps them. Treat them as provisioning failures so the
+    // owner hears a real sentence instead of an env-var name.
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    if (
+        /deploy credential is not configured/i.test(message) ||
+        /missing environment variable:\s*HOSTING_/i.test(message) ||
+        /missing environment variable:\s*PAGECRAFT_ROOT_DOMAIN/i.test(message) ||
+        /SECRET_MASTER_KEY/i.test(message)
+    ) {
+        return "provisioning_failed";
+    }
+
     return "unknown";
 }

@@ -29,19 +29,23 @@ if [ -z "$BODY" ]; then
   BODY="$(git log -1 --pretty=%b)"
 fi
 
-# Push branch to the fork (writable). Pulls still come from original via origin fetch.
-if git remote get-url fork >/dev/null 2>&1; then
-  git push -u fork "HEAD:refs/heads/${BRANCH}"
-else
-  git push -u origin "HEAD:refs/heads/${BRANCH}"
+# Push branch to the original repo (same as fetch).
+if ! git push -u origin "HEAD:refs/heads/${BRANCH}"; then
+  echo "Push to ${ORIGINAL_REPO} failed. If you lack write access, push to fork and open a cross-repo PR:" >&2
+  if git remote get-url fork >/dev/null 2>&1; then
+    git push -u fork "HEAD:refs/heads/${BRANCH}"
+    COMPARE="https://github.com/${ORIGINAL_REPO}/compare/main...${FORK_OWNER}:${BRANCH}?expand=1"
+    echo "  ${COMPARE}" >&2
+  fi
+  exit 1
 fi
 
-COMPARE="https://github.com/${ORIGINAL_REPO}/compare/main...${FORK_OWNER}:${BRANCH}?expand=1"
+COMPARE="https://github.com/${ORIGINAL_REPO}/compare/main...${BRANCH}?expand=1"
 
-echo "Opening PR on ${ORIGINAL_REPO} from ${FORK_OWNER}:${BRANCH}…"
+echo "Opening PR on ${ORIGINAL_REPO} from ${BRANCH}…"
 if gh pr create \
   --repo "$ORIGINAL_REPO" \
-  --head "${FORK_OWNER}:${BRANCH}" \
+  --head "${BRANCH}" \
   --base main \
   --title "$TITLE" \
   --body "${BODY:-See branch ${BRANCH}.}"; then
@@ -49,7 +53,7 @@ if gh pr create \
 fi
 
 echo ""
-echo "Could not create the PR with this token (often 403 for cursor[bot])."
-echo "Branch is on the fork. Open the PR on the ORIGINAL repo here:"
+echo "Could not create the PR with this token."
+echo "Branch is on the original repo. Open the PR here:"
 echo "  ${COMPARE}"
 exit 0

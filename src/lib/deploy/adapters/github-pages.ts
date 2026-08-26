@@ -20,6 +20,13 @@ async function repoExists(name: string): Promise<boolean> {
     }
 }
 
+function unsupportedCustomDomain(): never {
+    throw new HostingError(
+        'Custom domains are not available on this hosting setup. Publish again after hosting is configured.',
+        501,
+    );
+}
+
 export const githubPagesAdapter: DeployProvider = {
     async provisionSite({ projectId, projectName }: ProvisionInput): Promise<ProvisionResult> {
         const subdomain = await uniqueSlug(projectName, repoExists);
@@ -92,5 +99,17 @@ export const githubPagesAdapter: DeployProvider = {
     async removeSite(siteId: string): Promise<void> {
         const [owner, repo] = siteId.split('/');
         await gh('DELETE', `/repos/${owner}/${repo}`);
+    },
+
+    async attachCustomDomain() {
+        unsupportedCustomDomain();
+    },
+
+    async domainStatus() {
+        unsupportedCustomDomain();
+    },
+
+    async ensureDnsZone() {
+        unsupportedCustomDomain();
     },
 };

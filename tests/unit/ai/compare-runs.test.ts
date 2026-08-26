@@ -17,6 +17,7 @@ const row = (id: string, passed: boolean, over: Partial<AutoGrade> = {}): AutoGr
     fallbackUsed: false,
     passed,
     blankFields: [],
+    placeholderFields: [],
     missingSections: [],
     forbiddenSections: [],
     requests: 9,
