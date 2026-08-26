@@ -26,6 +26,7 @@ export async function profile(vertical: string): Promise<AiResult<VerticalProfil
 
     const reply = await model.strong.complete({
         job: 'generate',
+        prefer: 'groq',
         system: render(tpl.system),
         user: render(tpl.user, { vertical: slug }),
         schema: profileResponseSchema,

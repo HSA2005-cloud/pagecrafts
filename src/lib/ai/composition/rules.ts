@@ -408,11 +408,15 @@ export function normalisePlan(
         );
     }
 
-    const out = [
+    let out = [
         ...(hero ? [hero] : []),
         ...middle.slice(0, MAX_SECTIONS - reserved),
         ...(footer ? [footer] : []),
     ];
+
+    // Every first site should feel finished: hero, about, an offering, contact, footer.
+    // Scoped "just / only / minimal" asks keep the thinner plan.
+    out = ensureCompleteSite(out, prompt, repairs);
 
     for (let i = 1; i < out.length; i += 1) {
         if (out[i].variant !== out[i - 1].variant) continue;
@@ -421,4 +425,98 @@ export function normalisePlan(
     }
 
     return { sections: out, repairs };
+}
+
+const CORE_BRIEFS: Partial<Record<SectionKey, string>> = {
+    hero: 'welcome visitors with the business name, what they do, and one clear action',
+    about: 'who this business is, who they serve, and why someone should trust them — real sentences, never placeholders',
+    services: 'what they offer — named items with short descriptions people can act on',
+    menu: 'what they serve — named items with short descriptions; prices only if given',
+    contact: 'how to get in touch — warm heading, short blurb, and a working message form; leave phone/email empty when not given',
+    footer: 'business name, a one-line tagline, and links to the main pages',
+};
+
+/**
+ * Guarantee a complete first website unless the person asked for a minimal / scoped page.
+ */
+export function ensureCompleteSite(
+    sections: NormalisedSection[],
+    prompt: string | undefined,
+    repairs: string[],
+): NormalisedSection[] {
+    const text = prompt?.trim() ?? '';
+    if (text && SCOPED_ASK.test(text)) return sections;
+
+    const next = [...sections];
+    const has = (type: SectionKey) => next.some((s) => s.type === type);
+
+    const insert = (type: SectionKey, at: 'start' | 'middle' | 'end') => {
+        if (has(type)) return;
+        if (next.length >= MAX_SECTIONS) {
+            // Make room by dropping social proof first.
+            for (const drop of DISPENSABLE) {
+                const i = next.findLastIndex((s) => s.type === drop);
+                if (i >= 0) {
+                    repairs.push(`dropped ${next[i].type} to keep a complete ${type} section`);
+                    next.splice(i, 1);
+                    break;
+                }
+            }
+        }
+        if (next.length >= MAX_SECTIONS) return;
+        const row: NormalisedSection = {
+            type,
+            variant: variantsFor(type)[0] ?? 'default',
+            brief: CORE_BRIEFS[type] ?? `complete ${type} section with real copy`,
+        };
+        if (at === 'start') next.unshift(row);
+        else if (at === 'end') next.push(row);
+        else {
+            const footerAt = next.findIndex((s) => s.type === 'footer');
+            if (footerAt >= 0) next.splice(footerAt, 0, row);
+            else next.push(row);
+        }
+        repairs.push(`inserted ${type} — every first site needs a complete ${type}`);
+    };
+
+    insert('hero', 'start');
+    insert('about', 'middle');
+    if (!has('services') && !has('menu')) {
+        insert('services', 'middle');
+    }
+    insert('contact', 'middle');
+    insert('footer', 'end');
+
+    // Keep hero first and footer last; pin about → offering → contact in the middle.
+    const heroRow = next.find((s) => s.type === 'hero');
+    const footerRow = next.find((s) => s.type === 'footer');
+    const aboutRow = next.find((s) => s.type === 'about');
+    const offerRow = next.find((s) => s.type === 'services' || s.type === 'menu');
+    const contactRow = next.find((s) => s.type === 'contact');
+    const other = next.filter(
+        (s) =>
+            s.type !== 'hero' &&
+            s.type !== 'footer' &&
+            s.type !== 'about' &&
+            s.type !== 'services' &&
+            s.type !== 'menu' &&
+            s.type !== 'contact',
+    );
+    const middle = [
+        ...(aboutRow ? [aboutRow] : []),
+        ...(offerRow ? [offerRow] : []),
+        ...other,
+        ...(contactRow ? [contactRow] : []),
+    ];
+    const reserved = (heroRow ? 1 : 0) + (footerRow ? 1 : 0);
+    const ordered = [
+        ...(heroRow ? [heroRow] : []),
+        ...middle.slice(0, MAX_SECTIONS - reserved),
+        ...(footerRow ? [footerRow] : []),
+    ];
+
+    // Briefs for sections we just inserted (bare / personal) must match the prompt.
+    if (text) rewriteBriefs(ordered, text, repairs);
+
+    return ordered;
 }

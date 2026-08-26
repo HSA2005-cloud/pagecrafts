@@ -20,6 +20,8 @@ import { supabaseAdmin } from "./supabase-admin";
 // else's.
 
 const ACCOUNT_SELECT =
+  "email, email_verified, training_opt_in, created_at, handle, phone, billing_line, billing_city, billing_state, billing_postal, billing_country, gstin, notify_prefs";
+const ACCOUNT_SELECT_LEGACY =
   "email, email_verified, training_opt_in, created_at, handle, phone, billing_line, billing_city, gstin, notify_prefs";
 const ACCOUNT_SELECT_BILLING =
   "email, email_verified, training_opt_in, created_at, handle, phone, billing_line, billing_city, gstin";
@@ -33,43 +35,49 @@ function missingColumn(message: string): boolean {
 }
 
 export async function getAccount(supabase: SupabaseClient): Promise<AccountResponse> {
-  const full = await supabase.from("users").select(ACCOUNT_SELECT).maybeSingle();
+  const selects: { sql: string; billingReady: boolean }[] = [
+    { sql: ACCOUNT_SELECT, billingReady: true },
+    { sql: ACCOUNT_SELECT_LEGACY, billingReady: true },
+    { sql: ACCOUNT_SELECT_BILLING, billingReady: true },
+    { sql: ACCOUNT_SELECT_CORE, billingReady: false },
+  ];
 
-  if (!full.error) {
-    if (!full.data) throw new ApiError("not_found", "That account does not exist.");
-    return mapAccount(full.data as Record<string, unknown>, true);
+  let lastError: { message: string } | null = null;
+
+  for (const attempt of selects) {
+    const result = await supabase.from("users").select(attempt.sql).maybeSingle();
+    if (!result.error) {
+      if (!result.data) throw new ApiError("not_found", "That account does not exist.");
+      return mapAccount(result.data as unknown as Record<string, unknown>, attempt.billingReady);
+    }
+    if (!missingColumn(result.error.message)) {
+      throw new ApiError("internal", "Could not read your account.", result.error.message);
+    }
+    lastError = result.error;
   }
 
-  if (!missingColumn(full.error.message)) {
-    throw new ApiError("internal", "Could not read your account.", full.error.message);
-  }
-
-  const billing = await supabase.from("users").select(ACCOUNT_SELECT_BILLING).maybeSingle();
-
-  if (!billing.error) {
-    if (!billing.data) throw new ApiError("not_found", "That account does not exist.");
-    return mapAccount(billing.data as Record<string, unknown>, true);
-  }
-
-  if (!missingColumn(billing.error.message)) {
-    throw new ApiError("internal", "Could not read your account.", billing.error.message);
-  }
-
-  const core = await supabase.from("users").select(ACCOUNT_SELECT_CORE).maybeSingle();
-  if (core.error) throw new ApiError("internal", "Could not read your account.", core.error.message);
-  if (!core.data) throw new ApiError("not_found", "That account does not exist.");
-  return mapAccount(core.data as Record<string, unknown>, false);
+  throw new ApiError(
+    "internal",
+    "Could not read your account.",
+    lastError?.message ?? "unknown",
+  );
 }
 
 function parseNotifyPrefs(raw: unknown): NotifyPrefs {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_NOTIFY_PREFS };
   const value = raw as Record<string, unknown>;
+  const security =
+    typeof value.security === "boolean"
+      ? value.security
+      : DEFAULT_NOTIFY_PREFS.security;
   return {
     email: typeof value.email === "boolean" ? value.email : DEFAULT_NOTIFY_PREFS.email,
-    published: typeof value.published === "boolean" ? value.published : DEFAULT_NOTIFY_PREFS.published,
+    published:
+      typeof value.published === "boolean" ? value.published : DEFAULT_NOTIFY_PREFS.published,
     updated: typeof value.updated === "boolean" ? value.updated : DEFAULT_NOTIFY_PREFS.updated,
-    payments: typeof value.payments === "boolean" ? value.payments : DEFAULT_NOTIFY_PREFS.payments,
-    product: typeof value.product === "boolean" ? value.product : DEFAULT_NOTIFY_PREFS.product,
+    payments:
+      typeof value.payments === "boolean" ? value.payments : DEFAULT_NOTIFY_PREFS.payments,
+    security,
   };
 }
 
@@ -83,6 +91,9 @@ function mapAccount(data: Record<string, unknown>, billingReady: boolean): Accou
     phone: typeof data.phone === "string" ? data.phone : "",
     billingLine: typeof data.billing_line === "string" ? data.billing_line : "",
     billingCity: typeof data.billing_city === "string" ? data.billing_city : "",
+    billingState: typeof data.billing_state === "string" ? data.billing_state : "",
+    billingPostal: typeof data.billing_postal === "string" ? data.billing_postal : "",
+    billingCountry: typeof data.billing_country === "string" ? data.billing_country : "",
     gstin: typeof data.gstin === "string" ? data.gstin : "",
     billingReady,
     notifyPrefs: parseNotifyPrefs(data.notify_prefs),
@@ -117,29 +128,47 @@ export async function setTrainingConsent(
   return getAccount(supabase);
 }
 
+export type BillingProfileInput = {
+  displayName: string;
+  phone: string;
+  billingLine: string;
+  billingCity: string;
+  billingState: string;
+  billingPostal: string;
+  billingCountry: string;
+  gstin: string;
+};
+
 export async function setBillingProfile(
   supabase: SupabaseClient,
-  profile: {
-    displayName: string;
-    phone: string;
-    billingLine: string;
-    billingCity: string;
-    gstin: string;
-  },
+  profile: BillingProfileInput,
 ): Promise<AccountResponse> {
-  const { error } = await supabase
-    .from("users")
-    .update({
-      handle: profile.displayName || null,
-      phone: profile.phone || null,
-      billing_line: profile.billingLine || null,
-      billing_city: profile.billingCity || null,
-      gstin: profile.gstin || null,
-    })
-    .not("id", "is", null);
+  const full = {
+    handle: profile.displayName || null,
+    phone: profile.phone || null,
+    billing_line: profile.billingLine || null,
+    billing_city: profile.billingCity || null,
+    billing_state: profile.billingState || null,
+    billing_postal: profile.billingPostal || null,
+    billing_country: profile.billingCountry || null,
+    gstin: profile.gstin || null,
+  };
+  const legacy = {
+    handle: profile.displayName || null,
+    phone: profile.phone || null,
+    billing_line: profile.billingLine || null,
+    billing_city: profile.billingCity || null,
+    gstin: profile.gstin || null,
+  };
 
-  if (error) {
-    throw new ApiError("internal", "Could not save those details.", error.message);
+  const first = await supabase.from("users").update(full).not("id", "is", null);
+  if (first.error && missingColumn(first.error.message)) {
+    const second = await supabase.from("users").update(legacy).not("id", "is", null);
+    if (second.error) {
+      throw new ApiError("internal", "Could not save those details.", second.error.message);
+    }
+  } else if (first.error) {
+    throw new ApiError("internal", "Could not save those details.", first.error.message);
   }
 
   return getAccount(supabase);
@@ -185,6 +214,9 @@ export function toAccountExport(
       phone: account.phone,
       billingLine: account.billingLine,
       billingCity: account.billingCity,
+      billingState: account.billingState,
+      billingPostal: account.billingPostal,
+      billingCountry: account.billingCountry,
       gstin: account.gstin,
     },
     sites: sites.map((site) => ({

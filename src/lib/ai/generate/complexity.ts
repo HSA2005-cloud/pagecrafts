@@ -74,3 +74,18 @@ export function estimateSiteBuild(prompt: string): BuildEstimate {
 export function isHeavyBuild(estimate: BuildEstimate): boolean {
     return estimate.band === 'heavy';
 }
+
+const COMPOSE_INPUT_TOKENS = 2_000;
+const COMPOSE_MIN_OUTPUT_TOKENS = 10_000;
+
+export interface ComposeBudget {
+    composeMaxTokens: number;
+    tpm: number;
+}
+
+export function customBuildFits(estimate: BuildEstimate, budget: ComposeBudget): boolean {
+    if (estimate.mode !== 'custom') return true;
+    if (budget.composeMaxTokens < COMPOSE_MIN_OUTPUT_TOKENS) return false;
+    if (budget.tpm <= 0) return true;
+    return COMPOSE_INPUT_TOKENS + budget.composeMaxTokens <= budget.tpm;
+}

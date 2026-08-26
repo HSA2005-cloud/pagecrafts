@@ -32,7 +32,7 @@ export default async function SignUpPage({
                         Start <span className="hero-gold">building.</span>
                     </h1>
                     <p className="mt-5 max-w-md text-base leading-7 text-muted-foreground">
-                        Create an account. Building is free. You pay Rs 249 only when you go live.
+                        Create an account. Building is free. Going live on a PageCrafts address is free too.
                     </p>
                     <Link
                         href="/"

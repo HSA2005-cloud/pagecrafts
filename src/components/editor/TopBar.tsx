@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useEditorStore } from '@/lib/editor-store';
-import PublishCheckoutButton from './PublishCheckoutButton';
+import GoLiveButton from './GoLiveButton';
 
 function statusLine(saving: boolean, saveError: string | null, unsaved: number, savedAt: string | null) {
     if (saving) return { text: 'Saving…', tone: 'muted' as const };
@@ -30,8 +30,6 @@ export default function TopBar({
     historyOpen,
     onToggleHistory,
 }: TopBarProps) {
-    const advanced = useEditorStore((s) => s.advanced);
-    const toggleAdvanced = useEditorStore((s) => s.toggleAdvanced);
     const dirtyPaths = useEditorStore((s) => s.dirtyPaths);
     const saveProject = useEditorStore((s) => s.saveProject);
     const saving = useEditorStore((s) => s.saving);
@@ -86,13 +84,6 @@ export default function TopBar({
                 >
                     Versions
                 </button>
-                <button
-                    type="button"
-                    onClick={toggleAdvanced}
-                    className="h-11 cursor-pointer rounded-full border border-border px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                    {advanced ? 'Exit Advanced' : 'Advanced'}
-                </button>
                 <Link
                     href="/#build"
                     className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -108,7 +99,7 @@ export default function TopBar({
                 >
                     {saving ? 'Saving…' : 'Save'}
                 </button>
-                <PublishCheckoutButton projectId={projectId} />
+                <GoLiveButton projectId={projectId} projectName={projectName} />
             </div>
         </header>
     );
