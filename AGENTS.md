@@ -12,15 +12,15 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 Canonical / production repo: **`AdithyaPatil-1609/pagecrafts`**.
 
-The cloud agent often clones the fork `HSA2005-cloud/pagecrafts`. That fork is only a place to **host branches** when `cursor[bot]` cannot push to the original (GitHub returns 403).
+The cloud agent may clone the fork `HSA2005-cloud/pagecrafts`, but **pull, push, and PRs target the original repo** (`AdithyaPatil-1609/pagecrafts`). The fork remote is legacy only.
 
 ## Rules
 
-1. **Pull / fetch** always from the original repo (`origin` fetch URL → `AdithyaPatil-1609/pagecrafts`). Use `scripts/pull-original.sh` or `git fetch origin` / `git pull origin main` after `scripts/setup-original-repo.sh`.
-2. **Never open PRs on the fork.** PRs target `AdithyaPatil-1609/pagecrafts` `main` with head `HSA2005-cloud:<branch>`. Use `scripts/pr-original.sh`.
+1. **Pull / fetch / push** always through `origin` → `AdithyaPatil-1609/pagecrafts`. Use `scripts/pull-original.sh` or `git pull origin main` after `scripts/setup-original-repo.sh`.
+2. **Never open PRs on the fork.** PRs target `AdithyaPatil-1609/pagecrafts` `main` with head `<branch>` on the original repo. Use `scripts/pr-original.sh`.
 3. **Do not treat a fork-only PR as done.** Production follows the original repo.
 4. `gh` is defaulted to the original via `scripts/setup-original-repo.sh` (wired into `.cursor/install.sh` and `.cursor/start.sh`). `GH_REPO=AdithyaPatil-1609/pagecrafts`.
 
-If `gh pr create` returns 403, push the branch (fork push URL) and give the human:
+If push to the original returns 403 (e.g. cursor[bot]), fall back to `git push fork HEAD` and give the human:
 
 `https://github.com/AdithyaPatil-1609/pagecrafts/compare/main...HSA2005-cloud:<branch>?expand=1`

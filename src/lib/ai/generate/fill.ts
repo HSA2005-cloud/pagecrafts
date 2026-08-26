@@ -47,6 +47,7 @@ export async function fillSection(
 
     const reply = await model.strong.complete({
         job: 'generate',
+        prefer: 'groq',
         system: contained.system,
         user: repairContext ? `${user}\n\n${repairContext}` : user,
         schema: contract.json,

@@ -7,6 +7,7 @@ import { toSessionUser } from "@/lib/auth/session";
 import { ok, fail, guard } from "@/lib/errors/respond";
 import { readJson } from "@/lib/kernel/body";
 import { authConfirmUrl } from "@/lib/auth/confirm-url";
+import { setPendingCookie } from "@/lib/auth/pending-signup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,13 +65,34 @@ export async function POST(request: NextRequest) {
         return fail("forbidden", "New accounts are not being accepted right now.");
       }
       if (error.code === "user_already_exists" || error.code === "email_exists") {
+        return fail(
+          "conflict",
+          "That email already has an account. Sign in instead.",
+        );
+      }
+      // Supabase can create the account and still fail while sending the confirmation
+      // mail (built-in mailer / missing SMTP). Prefer "check your email" over a hard 500.
+      if (/confirmation email|error sending|smtp/i.test(error.message ?? "")) {
+        console.error("[auth/signup] mailer", error.code ?? error.status, error.message);
         return ok({ user: null, pending: true }, 202);
       }
       console.error("[auth/signup]", error.code ?? error.status, error.message);
       return fail("internal", "We could not create your account. Try again.");
     }
 
+    // Supabase masks duplicates by returning a user with no identities and no session.
+    // Treat that as "already registered" — do not mint a pending ticket (that would let
+    // the verify page sign someone in without checking the password they typed).
+    const identities = data.user?.identities;
+    if (data.user && Array.isArray(identities) && identities.length === 0) {
+      return fail(
+        "conflict",
+        "That email already has an account. Sign in instead.",
+      );
+    }
+
     if (!data.user || !data.session) {
+      if (data.user) await setPendingCookie(data.user.id);
       return ok({ user: null, pending: true }, 202);
     }
 

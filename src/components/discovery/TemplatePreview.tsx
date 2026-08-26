@@ -71,6 +71,7 @@ function SearchGlyph({ color }: { color: string }) {
 export function TemplatePreview({
     preview,
     priority = false,
+    orientation = "landscape",
 }: {
     preview: PreviewSpec;
     /**
@@ -79,8 +80,11 @@ export function TemplatePreview({
      * photographs nobody has looked at yet (NFR-001, first paint under 1.5s on 4G).
      */
     priority?: boolean;
+    /** Portrait stacks the hero and copy for phone device frames in the detail modal. */
+    orientation?: "landscape" | "portrait";
 }) {
     const { wordmark, nav, headline, subhead, cta, layout, motif, heroImage, palette } = preview;
+    const portrait = orientation === "portrait";
 
     // The design's own hero photograph where it ships one, drawn edge-to-edge so the tile
     // reads as the page it advertises; the code-drawn motif is the fallback for designs
@@ -99,8 +103,8 @@ export function TemplatePreview({
             sizes={`${TILE_WIDTH}px`}
             alt=""
             aria-hidden
-            width={640}
-            height={400}
+            width={portrait ? 390 : 640}
+            height={portrait ? 844 : 400}
             loading={priority ? "eager" : "lazy"}
             decoding="async"
             {...(priority ? { fetchPriority: "high" as const } : {})}
@@ -113,20 +117,32 @@ export function TemplatePreview({
     const copy = (
         <>
             <p
-                className="line-clamp-3 text-[13px] font-semibold leading-[1.12] tracking-tight"
+                className={
+                    portrait
+                        ? "line-clamp-4 text-[11px] font-semibold leading-[1.15] tracking-tight"
+                        : "line-clamp-3 text-[13px] font-semibold leading-[1.12] tracking-tight"
+                }
                 style={{ color: palette.ink }}
             >
                 {headline}
             </p>
             <p
-                className="mt-1 line-clamp-2 text-[7px] leading-[1.4]"
+                className={
+                    portrait
+                        ? "mt-1.5 line-clamp-3 text-[7px] leading-[1.4]"
+                        : "mt-1 line-clamp-2 text-[7px] leading-[1.4]"
+                }
                 style={{ color: palette.muted }}
             >
                 {subhead}
             </p>
             {cta && (
                 <span
-                    className="mt-2 inline-block self-start rounded-[3px] px-1.5 py-[3px] text-[6px] font-semibold"
+                    className={
+                        portrait
+                            ? "mt-2.5 inline-block self-start rounded-[3px] px-2 py-1 text-[6px] font-semibold"
+                            : "mt-2 inline-block self-start rounded-[3px] px-1.5 py-[3px] text-[6px] font-semibold"
+                    }
                     style={{ backgroundColor: palette.accent, color: palette.bg }}
                 >
                     {cta}
@@ -135,22 +151,34 @@ export function TemplatePreview({
         </>
     );
 
+    const navLabels = portrait ? nav.slice(0, 2) : nav;
+
     return (
         <div
             aria-hidden
-            className="relative flex aspect-16/10 w-full flex-col overflow-hidden"
+            className={
+                portrait
+                    ? "relative flex aspect-9/19.5 w-full flex-col overflow-hidden"
+                    : "relative flex aspect-16/10 w-full flex-col overflow-hidden"
+            }
             style={{ backgroundColor: palette.bg }}
         >
             {/* The template's own top bar: wordmark, its real navigation, search. */}
-            <div className="relative z-10 flex items-center gap-2 px-3 pt-2.5">
+            <div
+                className={
+                    portrait
+                        ? "relative z-10 flex items-center gap-1.5 px-2.5 pt-2"
+                        : "relative z-10 flex items-center gap-2 px-3 pt-2.5"
+                }
+            >
                 <span
                     className="truncate text-[8px] font-bold tracking-tight"
                     style={{ color: palette.ink }}
                 >
                     {wordmark}
                 </span>
-                <span className="ml-auto flex items-center gap-2 overflow-hidden">
-                    {nav.map((label) => (
+                <span className="ml-auto flex items-center gap-1.5 overflow-hidden">
+                    {navLabels.map((label) => (
                         <span key={label} className="whitespace-nowrap text-[6px]" style={{ color: palette.muted }}>
                             {label}
                         </span>
@@ -159,7 +187,19 @@ export function TemplatePreview({
                 <SearchGlyph color={palette.muted} />
             </div>
 
-            {layout === "split" && (
+            {portrait ? (
+                <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2.5 pt-1.5">
+                    <div
+                        className="h-[42%] w-full shrink-0 overflow-hidden rounded-md"
+                        style={{ backgroundColor: palette.panel }}
+                    >
+                        {art}
+                    </div>
+                    <div className="mt-2 flex min-h-0 flex-1 flex-col">{copy}</div>
+                </div>
+            ) : null}
+
+            {!portrait && layout === "split" ? (
                 <div className="flex flex-1 items-center gap-3 px-3 pb-3 pt-2">
                     <div className="flex min-w-0 flex-1 flex-col">{copy}</div>
                     <div
@@ -169,9 +209,9 @@ export function TemplatePreview({
                         {art}
                     </div>
                 </div>
-            )}
+            ) : null}
 
-            {layout === "showcase" && (
+            {!portrait && layout === "showcase" ? (
                 <div className="flex flex-1 items-center gap-3 px-3 pb-3 pt-2">
                     <div
                         className="h-full w-[42%] shrink-0 overflow-hidden rounded-md"
@@ -181,9 +221,9 @@ export function TemplatePreview({
                     </div>
                     <div className="flex min-w-0 flex-1 flex-col">{copy}</div>
                 </div>
-            )}
+            ) : null}
 
-            {layout === "full-bleed" && (
+            {!portrait && layout === "full-bleed" ? (
                 <>
                     <div className="absolute inset-0" style={{ backgroundColor: palette.panel }}>
                         {art}
@@ -199,9 +239,9 @@ export function TemplatePreview({
                         <div className="flex w-[68%] flex-col">{copy}</div>
                     </div>
                 </>
-            )}
+            ) : null}
 
-            {layout === "centered" && (
+            {!portrait && layout === "centered" ? (
                 <div className="flex flex-1 flex-col items-center px-3 pb-0 pt-2 text-center">
                     <div className="flex w-[82%] flex-col items-center [&>span]:self-center">{copy}</div>
                     <div
@@ -211,7 +251,7 @@ export function TemplatePreview({
                         {art}
                     </div>
                 </div>
-            )}
+            ) : null}
         </div>
     );
 }

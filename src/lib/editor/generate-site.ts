@@ -6,8 +6,8 @@ import {
 import type { Composition } from '@/lib/contracts';
 import { writingLabel } from '@/lib/editor/generation-steps';
 
-const POLL_MS = 400;
-const MAX_POLLS = 90;
+const POLL_MS = 1500;
+const MAX_POLLS = 40;
 
 export function generationProgressCopy(job: GenerationJobStatus): string {
     switch (job.status) {
