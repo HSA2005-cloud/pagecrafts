@@ -15,9 +15,9 @@ describe("confirmDestination", () => {
     expect(confirmDestination("signup", "https://evil.example")).toBe("/");
   });
 
-  it("sends a recovery link to set a password and a signup link to build", () => {
+    it("sends a recovery link to set a password and a signup link to home", () => {
     expect(confirmDestination("recovery", null)).toBe("/reset");
-    expect(confirmDestination("signup", null)).toBe("/new");
-    expect(confirmDestination("email", undefined)).toBe("/new");
+    expect(confirmDestination("signup", null)).toBe("/");
+    expect(confirmDestination("email", undefined)).toBe("/");
   });
 });

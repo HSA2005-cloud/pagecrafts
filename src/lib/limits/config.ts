@@ -53,10 +53,11 @@ export const AI_DAILY_GLOBAL: DailyCap = {
 // ever been made — a limit somebody cannot get back under by tidying up is a trap.
 export const PROJECTS_PER_USER = 25;
 
-// Free AI regenerations for one site on the Free AI package.
-// Advanced (Rs 699) raises this to ADVANCED_GENERATIONS_PER_PROJECT.
-// After that, a Rs 199 generation pass buys one more round (three looks).
+// AI regenerations per site, by account plan (Starter / Pro / Premium).
 export const FREE_GENERATIONS_PER_PROJECT = 3;
-export const ADVANCED_GENERATIONS_PER_PROJECT = 30;
+export const PRO_GENERATIONS_PER_PROJECT = 15;
+export const PREMIUM_GENERATIONS_PER_PROJECT = 45;
+/** @deprecated Pro plan replaces the old Advanced AI package. */
+export const ADVANCED_GENERATIONS_PER_PROJECT = PRO_GENERATIONS_PER_PROJECT;
 export const ADVANCED_PACKAGE_PRICE_INR = 699;
 export const GENERATION_PASS_PRICE_INR = 199;

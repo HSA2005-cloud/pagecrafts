@@ -10,6 +10,14 @@ import {
     photoSearchQuery,
     stampPhotoUrls,
 } from '@/lib/ai/generate/photos';
+
+// The body attribute, not the first data-motion in the file — motionCss opens with a
+// `[data-motion="none"]` rule, so a loose match reads the stylesheet instead of the page.
+const bodyMotion = (html: string) => html.match(/<body[^>]*data-motion="([a-z]+)"/)?.[1] ?? '';
+const heroVariant = (html: string) =>
+    html.match(/data-type="hero" data-variant="([a-z-]+)"/)?.[1] ?? '';
+const aboutVariant = (html: string) =>
+    html.match(/data-type="about" data-variant="([a-z-]+)"/)?.[1] ?? '';
 import { SCHEMA_VERSION, type ArtDirection, type Composition, type SectionInstance } from '@/lib/contracts';
 
 const ART: ArtDirection = {
@@ -115,19 +123,24 @@ describe('style presets — three looks from one brief', () => {
         // Casual shows one hero photograph in a split layout (not a grey wall of type).
         expect(home.casual).toContain('images.unsplash.com');
         expect(home.casual).toContain('<img src="');
-        expect(home.casual).toContain('data-type="hero" data-variant="split-image"');
+        // The layout is drawn per business now, so the assertion is the tier's pool rather
+        // than one variant. Every Photo-rich site sharing one hero was the thing the Rs 499
+        // tier is sold as not doing.
+        expect(['split-image', 'centred', 'minimal']).toContain(heroVariant(home.casual));
         expect(home.casual).toContain('site-header');
         // About lives on about.html after the multi-page split.
-        expect(about.casual).toContain('data-type="about" data-variant="text"');
-        // Photo-rich goes further: cinematic hero + media-split About + more photos site-wide.
+        expect(['text', 'media-split']).toContain(aboutVariant(about.casual));
+        // Photo-rich goes further: cinematic hero + more photos site-wide.
         expect(home.photos).toContain('images.unsplash.com');
-        expect(home.photos).toContain('data-type="hero" data-variant="image-bg"');
-        expect(about.photos).toContain('data-type="about" data-variant="media-split"');
+        expect(['image-bg', 'split-image', 'centred']).toContain(heroVariant(home.photos));
+        expect(['media-split', 'text']).toContain(aboutVariant(about.photos));
         expect((allHtml.photos.match(/images\.unsplash\.com/g) ?? []).length)
             .toBeGreaterThan((allHtml.casual.match(/images\.unsplash\.com/g) ?? []).length);
-        expect(home.casual).toContain('data-motion="none"');
-        expect(home.photos).toContain('data-motion="editorial"');
-        expect(home.motion).toContain('data-motion="kinetic"');
+        // Each tier keeps its character while it varies: quiet stays quiet, kinetic stays
+        // in motion. What must never happen is Casual animating like Animated.
+        expect(['none', 'whisper']).toContain(bodyMotion(home.casual));
+        expect(['whisper', 'calm', 'editorial', 'showcase']).toContain(bodyMotion(home.photos));
+        expect(['kinetic', 'showcase', 'editorial']).toContain(bodyMotion(home.motion));
         expect(home.motion).toContain('motion-stage');
         expect(home.motion).toContain('jalebi-coil');
         expect(home.casual).not.toContain('motion-stage');

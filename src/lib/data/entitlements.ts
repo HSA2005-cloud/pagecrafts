@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { EntitlementCheck, EntitlementKind, EntitlementSource } from "@/lib/contracts";
+import type { EntitlementCheck, EntitlementKind, EntitlementSource, AccountPlan } from "@/lib/contracts";
 import { ApiError } from "@/lib/errors/respond";
 import { requiredPlanForTemplate } from "@/lib/payments/pricing";
+import { supabaseAdminOrNull } from "./supabase-admin";
 
 // The server-side entitlement check (R3 D9, A-5, Doc 22 §6).
 //
@@ -122,6 +123,16 @@ export async function hasPremium(supabase: SupabaseClient, userId: string): Prom
     return (await checkEntitlement(supabase, userId, null, "premium")).granted;
 }
 
+/** Live account plan from entitlements — Starter when no paid plan row is active. */
+export async function accountPlan(
+    supabase: SupabaseClient,
+    userId: string,
+): Promise<AccountPlan> {
+    if (await hasPremium(supabase, userId)) return "premium";
+    if (await hasPro(supabase, userId)) return "pro";
+    return "starter";
+}
+
 /** True when the account holds the Advanced AI usage package. */
 export async function hasAdvanced(supabase: SupabaseClient, userId: string): Promise<boolean> {
     return (await checkEntitlement(supabase, userId, null, "advanced")).granted;
@@ -194,6 +205,10 @@ export async function assertCanUseStyle(
 /**
  * The gate publish calls. Throws rather than returning false, so a caller cannot forget to
  * look at the answer — the failure mode of a boolean gate is publishing anyway.
+ *
+ * Going live on a PageCrafts address is free once. When nothing is paid yet, a publish
+ * grant is written here so the host step can proceed. Editing after that first live
+ * publish needs a paid `edit_unlock` (see checkEditPermission).
  */
 export async function assertCanPublish(
     supabase: SupabaseClient,
@@ -202,19 +217,27 @@ export async function assertCanPublish(
 ): Promise<EntitlementCheck> {
     const check = await checkEntitlement(supabase, userId, projectId, "publish");
 
-    if (!check.granted) {
-        throw new ApiError(
-            "payment_required",
-            "This site needs to be paid for before it can go live.",
-            `projectId=${projectId}`,
-        );
+    if (check.granted) return check;
+
+    const row = {
+        user_id: userId,
+        project_id: projectId,
+        kind: "publish" as const,
+        source: "launch_offer" as const,
+        status: "active",
+    };
+    const writer = supabaseAdminOrNull() ?? supabase;
+    const { error } = await writer.from("entitlements").insert(row);
+
+    if (error && error.code !== "23505") {
+        throw new ApiError("internal", "Could not unlock publishing.", error.message);
     }
 
-    return check;
+    return { kind: "publish", granted: true, source: "launch_offer", expiresAt: null };
 }
 
-/** Doc 22 P5: the first change within this long after going live is free. */
-export const GOODWILL_WINDOW_DAYS = 7;
+/** No free edit window after the first live publish — unlock is Rs 249. */
+export const GOODWILL_WINDOW_DAYS = 0;
 const GOODWILL_WINDOW_MS = GOODWILL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
 export interface EditPermission {
@@ -224,19 +247,11 @@ export interface EditPermission {
 }
 
 /**
- * May this project still be edited? (R3 D13, Doc 22 P5)
+ * May this project still be edited?
  *
- * A site that has never gone live is simply a draft, and drafts are free to change. Once it
- * is published the rules change: editing it again needs an `edit_unlock` entitlement — with
- * the first change within seven days of publishing free, as a goodwill window.
- *
- * The window runs from the *first* successful publish, not the most recent. Measuring from
- * the latest one would renew itself on every republish, so anybody willing to press publish
- * again would never pay — which is not a goodwill window, it is a subscription nobody is
- * charged for.
- *
- * Decided here rather than in the editor, because a gate the client evaluates is a gate
- * (A-5). The panel may hide a button; this is what actually refuses the write.
+ * A site that has never gone live is a draft and free to change. Once it is live,
+ * editing again needs an `edit_unlock` entitlement (or Pro/Premium). There is no
+ * multi-day goodwill window — the first publish is the free one.
  */
 export async function checkEditPermission(
     supabase: SupabaseClient,
@@ -256,9 +271,11 @@ export async function checkEditPermission(
     const firstLive = (data ?? [])[0]?.created_at as string | undefined;
     if (!firstLive) return { allowed: true, reason: "never_published" };
 
-    const since = Date.now() - Date.parse(firstLive);
-    if (Number.isFinite(since) && since <= GOODWILL_WINDOW_MS) {
-        return { allowed: true, reason: "goodwill_window" };
+    if (GOODWILL_WINDOW_MS > 0) {
+        const since = Date.now() - Date.parse(firstLive);
+        if (Number.isFinite(since) && since <= GOODWILL_WINDOW_MS) {
+            return { allowed: true, reason: "goodwill_window" };
+        }
     }
 
     const unlock = await checkEntitlement(supabase, userId, projectId, "edit_unlock");
@@ -283,7 +300,7 @@ export async function assertCanEdit(
     if (!permission.allowed) {
         throw new ApiError(
             "payment_required",
-            `This site is live. Editing it again needs an unlock — changes in the first ${GOODWILL_WINDOW_DAYS} days after publishing are free.`,
+            "This site is live. Editing it again costs Rs 249 — that unlocks further changes and republishing to the same address.",
             `projectId=${projectId}`,
         );
     }

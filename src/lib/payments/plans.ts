@@ -1,5 +1,10 @@
 import type { AccountPlan } from "@/lib/contracts";
 import { ACCOUNT_PLAN_LABEL } from "@/lib/contracts";
+import {
+    FREE_GENERATIONS_PER_PROJECT,
+    PREMIUM_GENERATIONS_PER_PROJECT,
+    PRO_GENERATIONS_PER_PROJECT,
+} from "@/lib/limits/config";
 import { PREMIUM_PRICE_INR, PRO_PRICE_INR } from "@/lib/payments/pricing";
 
 /** Account plans. Prices are rupees, paid once through Razorpay. */
@@ -16,24 +21,24 @@ export const PLAN_COPY: Record<
     name: ACCOUNT_PLAN_LABEL.starter,
     price: "Free",
     description:
-      "Build with AI, use Starter designs and the Casual look, and publish free sites at no charge. Upgrade when you want Pro or Premium designs.",
+      "The default plan. Free Starter templates, the Casual look, and a limited number of AI rebuilds per site.",
     points: [
+      "Build and edit sites with AI",
       "All Starter catalogue designs",
-      "Casual look on AI-generated sites",
+      `${FREE_GENERATIONS_PER_PROJECT} AI generations per site`,
       "Publish free designs at no charge",
-      "AI generations capped per site (see AI packages)",
     ],
   },
   pro: {
     name: ACCOUNT_PLAN_LABEL.pro,
     price: `Rs ${PRO_PRICE_INR}`,
     description:
-      "One payment unlocks every Pro design in the catalogue and the Photo-rich look — not a single template. Stays until you change plan.",
+      "One payment through Razorpay. Unlocks every Pro template, the Photo-rich look, and five times the Starter AI allowance.",
     points: [
       "Everything in Starter",
       "All templates marked Pro",
       "Photo-rich look on AI sites",
-      "Publish without a separate design checkout",
+      `${PRO_GENERATIONS_PER_PROJECT} AI generations per site (5× Starter)`,
       "Edit live sites after the free window",
     ],
   },
@@ -41,12 +46,12 @@ export const PLAN_COPY: Record<
     name: ACCOUNT_PLAN_LABEL.premium,
     price: `Rs ${PREMIUM_PRICE_INR}`,
     description:
-      "One payment unlocks every Premium design, every Pro design, and the Animated look. Top account unlock — no auto-renew.",
+      "The top account unlock. One payment, no auto-renew — stays until you change plan.",
     points: [
       "Everything in Pro",
-      "All templates marked Premium",
+      "All templates — Premium and Pro",
       "Animated look on AI sites",
-      "Stays until you change plan",
+      `${PREMIUM_GENERATIONS_PER_PROJECT} AI generations per site (15× Starter)`,
     ],
   },
 };
@@ -60,4 +65,10 @@ export function planCovers(have: AccountPlan | null | undefined, need: "pro" | "
   if (!have || have === "starter") return false;
   if (need === "pro") return have === "pro" || have === "premium";
   return have === "premium";
+}
+
+export function generationsLimitForPlan(plan: AccountPlan): number {
+  if (plan === "premium") return PREMIUM_GENERATIONS_PER_PROJECT;
+  if (plan === "pro") return PRO_GENERATIONS_PER_PROJECT;
+  return FREE_GENERATIONS_PER_PROJECT;
 }
