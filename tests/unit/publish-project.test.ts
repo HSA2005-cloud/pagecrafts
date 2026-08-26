@@ -39,8 +39,6 @@ const FILES = [{ path: "index.html", content: "<h1>hi</h1>", encoding: "utf-8" a
  * fake that says yes to everything will happily agree that nothing happened.
  */
 function tables(repoFullName: string | null = null): Record<string, TableResponder> {
-    const written = row({ id: DEPLOYMENT_ID });
-
     return {
         projects: row({ id: PROJECT_ID, repo_full_name: repoFullName }),
         deployments: (query) => {
@@ -53,9 +51,6 @@ function tables(repoFullName: string | null = null): Record<string, TableRespond
         },
     };
 }
-
-/** Lets the detached publish work settle before assertions look at what it wrote. */
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -72,15 +67,17 @@ beforeEach(() => {
 });
 
 describe("publishProject", () => {
-    it("answers with the deployment to poll, before the site is live", async () => {
+    it("answers with the finished deployment once the host work is done", async () => {
         const fake = fakeSupabase(tables());
         const { publishProject } = await import("@/lib/data/publish-project");
 
         const result = await publishProject(fake.client, USER_ID, PROJECT_ID, KEY);
 
-        // The contract's shape, and the reason for it: the provider work has not finished
-        // when this returns.
-        expect(result).toEqual({ deploymentId: DEPLOYMENT_ID, status: "pending" });
+        expect(result).toEqual({
+            deploymentId: DEPLOYMENT_ID,
+            status: "live",
+            liveUrl: "https://kettle-co.pagecrafts.in",
+        });
     });
 
     it("refuses before recording anything when publishing is not paid for", async () => {
@@ -153,7 +150,6 @@ describe("publishProject", () => {
         const { publishProject } = await import("@/lib/data/publish-project");
 
         await publishProject(fake.client, USER_ID, PROJECT_ID, KEY);
-        await flush();
 
         const remembered = fake.queries.find(
             (q) => q.table === "projects" && q.op === "update",
@@ -173,12 +169,9 @@ describe("publishProject", () => {
         const fake = fakeSupabase(tables());
         const { publishProject } = await import("@/lib/data/publish-project");
 
-        // The caller still gets its 202: the attempt was started, and how it ended is what
-        // the row is for.
         const result = await publishProject(fake.client, USER_ID, PROJECT_ID, KEY);
-        expect(result.status).toBe("pending");
-
-        await flush();
+        expect(result.status).toBe("failed");
+        expect(result.error).toMatch(/Publishing did not finish|host said no/i);
 
         const finished = fake.queries.filter((q) => q.table === "deployments" && q.op === "update");
         expect(finished.at(-1)?.payload).toMatchObject({ status: "failed" });

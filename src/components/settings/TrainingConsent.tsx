@@ -48,13 +48,13 @@ export function TrainingConsent({
     const body = (
         <>
             <p className="text-base font-semibold text-foreground">
-                {framed ? "Help improve PageCrafts" : "AI and product improvement"}
+                {framed ? "Help improve PageCrafts" : "AI & product improvement"}
             </p>
 
             <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
                 {optedIn
-                    ? "Your descriptions and the sites made from them may be used to improve how PageCrafts writes. You can turn this off at any time."
-                    : "Your descriptions and the sites made from them are not used for anything but building your site. This is off unless you turn it on."}
+                    ? "Your prompts and sites may help improve PageCrafts. You can turn this off anytime."
+                    : "Your prompts and sites are only used to build your site. Off unless you turn it on."}
             </p>
 
             <div className="mt-4 flex items-center gap-3">

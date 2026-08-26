@@ -38,7 +38,7 @@ export default async function SignInPage({
                     </h1>
                     <p className="mt-5 max-w-md text-base leading-7 text-muted-foreground">
                         Sign in to pick up the site you were building. New here? Create an account
-                        on the right — building stays free until you go live.
+                        on the right — building and going live on PageCrafts stay free.
                     </p>
                     <Link
                         href="/"

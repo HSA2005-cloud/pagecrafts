@@ -134,6 +134,7 @@ export async function composeCustomSite(
 
     const reply = await model.strong.complete({
         job: 'compose',
+        prefer: 'groq',
         system: contained.system,
         user: render(tpl.user, {
             prompt: contained.values.prompt,

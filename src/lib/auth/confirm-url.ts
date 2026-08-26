@@ -19,5 +19,6 @@ export function confirmDestination(
 ): string {
   if (nextParam != null && nextParam !== "") return safeNext(nextParam);
   if (type === "recovery") return "/reset";
-  return "/new";
+  // After email confirmation, land on signed-in home — not the guest landing or /new.
+  return "/";
 }

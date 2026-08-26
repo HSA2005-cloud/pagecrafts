@@ -12,7 +12,7 @@ export interface NotifyPrefs {
   published: boolean;
   updated: boolean;
   payments: boolean;
-  product: boolean;
+  security: boolean;
 }
 
 export const DEFAULT_NOTIFY_PREFS: NotifyPrefs = {
@@ -20,7 +20,7 @@ export const DEFAULT_NOTIFY_PREFS: NotifyPrefs = {
   published: true,
   updated: true,
   payments: true,
-  product: false,
+  security: true,
 };
 
 export interface AccountResponse {
@@ -33,6 +33,9 @@ export interface AccountResponse {
   phone: string;
   billingLine: string;
   billingCity: string;
+  billingState: string;
+  billingPostal: string;
+  billingCountry: string;
   gstin: string;
   /** False when the billing columns are not on `users` yet. Never invents a card or bank number. */
   billingReady: boolean;
@@ -118,6 +121,9 @@ export interface AccountExport {
     phone: string;
     billingLine: string;
     billingCity: string;
+    billingState: string;
+    billingPostal: string;
+    billingCountry: string;
     gstin: string;
   };
   sites: { id: string; name: string; status: string; liveUrl: string | null }[];
