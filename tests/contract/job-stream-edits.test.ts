@@ -14,7 +14,7 @@ vi.mock('@/lib/ai/cost/persist', () => ({
 
 vi.mock('@/lib/limits/redis', async () => {
     const support = await import('../support/redis-mock');
-    return { redis: () => support.redisStub, isRedisConfigured: () => true };
+    return { redis: () => support.redisStub, isRedisConfigured: () => false };
 });
 
 import { redisMock as limits, resetRedisMock } from '../support/redis-mock';
@@ -35,6 +35,9 @@ const generate = (prompt: string) =>
         }) as never,
         { params: Promise.resolve({ id: 'p_1' }) } as never,
     );
+
+/** Clear enough that the clarity gate does not refuse before the job starts. */
+const CLEAR_PROMPT = 'a dental clinic for family check-ups in Koramangala';
 
 const stream = (id: string) =>
     STREAM(
@@ -92,7 +95,7 @@ afterEach(() => {
 
 describe('GET /api/v1/jobs/{id}/stream', () => {
     it('R10: emits plan, section, validate and done in order', async () => {
-        const { data } = await (await generate('a dental clinic in koramangala')).json();
+        const { data } = await (await generate(CLEAR_PROMPT)).json();
         await settled(data.job_id);
 
         const res = await stream(data.job_id);
@@ -109,7 +112,7 @@ describe('GET /api/v1/jobs/{id}/stream', () => {
 
     it('R11: emits fallback when generation is abandoned', async () => {
         setGateway(new MockGateway('error'));
-        const { data } = await (await generate('anything at all')).json();
+        const { data } = await (await generate(CLEAR_PROMPT)).json();
         await settled(data.job_id);
 
         const body = await (await stream(data.job_id)).text();
@@ -117,7 +120,7 @@ describe('GET /api/v1/jobs/{id}/stream', () => {
     });
 
     it('another user\'s job is not_found', async () => {
-        const { data } = await (await generate('a dental clinic')).json();
+        const { data } = await (await generate(CLEAR_PROMPT)).json();
         auth.requireUser.mockResolvedValue(sessionFor('u_2'));
         expect((await stream(data.job_id)).status).toBe(404);
     });

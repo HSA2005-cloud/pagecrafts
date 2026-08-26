@@ -4,6 +4,11 @@ import { friendlyMessage, OFFLINE_MESSAGE, UNREADABLE_MESSAGE } from './messages
 export interface CallResult<T> {
     data: T | null;
     error: string | null;
+    /**
+     * The route's own sentence when the envelope carried one.
+     * Prefer this for AI edit failures — friendlyMessage collapses some codes.
+     */
+    detail?: string | null;
     /** Present when the server answered with an error envelope. */
     code?: ErrorCode;
 }
@@ -39,9 +44,14 @@ async function call<T>(path: string, init?: RequestInit): Promise<CallResult<T>>
     }
 
     if (!body.ok) {
+        const detail =
+            typeof body.error.message === 'string' && body.error.message.trim()
+                ? body.error.message.trim()
+                : null;
         return {
             data: null,
             error: friendlyMessage(body.error.code, body.error.message),
+            detail,
             code: body.error.code,
         };
     }
@@ -58,6 +68,13 @@ export function apiPut<T>(path: string, payload: unknown): Promise<CallResult<T>
 }
 export function apiPost<T>(path: string, payload: unknown): Promise<CallResult<T>> {
     return call<T>(path, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function apiPostHeaders<T>(
+    path: string,
+    headers: Record<string, string>,
+): Promise<CallResult<T>> {
+    return call<T>(path, { method: 'POST', headers });
 }
 export function apiPatch<T>(path: string, payload: unknown): Promise<CallResult<T>> {
     return call<T>(path, { method: 'PATCH', body: JSON.stringify(payload) });

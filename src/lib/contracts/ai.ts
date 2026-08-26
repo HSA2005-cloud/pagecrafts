@@ -129,3 +129,16 @@ export interface AiResult<T> {
 export const SCHEMA_VERSION = 3;
 export const MAX_SECTIONS = 7;
 export const MAX_CLASSIFY_CHARS = 2_000;
+
+/**
+ * How long one instruction to the editor may be.
+ *
+ * The composer allowed 500 characters and the route accepted 300, so anything typed between
+ * the two was rejected after it was sent — "the last request could not be turned into a
+ * suggestion", for a request that was only slightly too long. One constant now, used by both.
+ *
+ * 300 was about fifty words, which is not enough to describe a change to a page. The ceiling
+ * is the provider's input limit (GROQ_MAX_REQUEST_TOKENS, 8,000 tokens ≈ 32,000 characters)
+ * minus the section being edited, so 1,000 is generous and still nowhere near it.
+ */
+export const MAX_INSTRUCTION_CHARS = 1_000;

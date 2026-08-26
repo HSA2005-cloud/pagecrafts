@@ -4,10 +4,16 @@ import { plan } from '../generate/plan';
 import { fillSection } from '../generate/fill';
 import { assemble } from '../generate/assemble';
 import { compositionToFiles } from '../generate/to-files';
-import { buildCustomStyleOptions, buildStyleOptions } from '../generate/options';
+import { buildCustomStyleOptions, buildStyleOptions, type PhotoLookup } from '../generate/options';
 import { composeCustomSite } from '../generate/compose-custom';
-import { estimateSiteBuild } from '../generate/complexity';
-import { bankPhotoUrl } from '../generate/photos';
+import { customBuildFits, estimateSiteBuild } from '../generate/complexity';
+import { expandBrief } from '../generate/expand-brief';
+import { aiConfig } from '../config';
+import {
+    bankPhotoUrl,
+    heroPhotoKeysFromComposition,
+    photoKeyFromUrl,
+} from '../generate/photos';
 import { checkAndRecord } from '../composition/validate';
 import { withOneRepair } from '../generate/repair';
 import { nearestTemplate } from '../generate/fallback';
@@ -32,6 +38,18 @@ export interface RunnerDeps {
     recordUsage?: (usage: Pick<Usage, 'inputTokens' | 'outputTokens'>) => Promise<void>;
     /** Releases resources held for the full lifetime of this detached job. */
     release?: () => Promise<void>;
+    /**
+     * Wraps the stock photo lookup with something better — the route wraps it with Gemini.
+     *
+     * A wrapper rather than a replacement, because the lookup handed in is the one that
+     * knows this job's salt and which heroes earlier Sets already used, and none of that
+     * should have to be rebuilt by every caller that wants to draw a picture. Whatever goes
+     * in front of it falls back to it.
+     *
+     * Left unset — tests, the harness, anything without a project — the stock lookup is used
+     * directly and the runner cannot tell the difference.
+     */
+    photoLookup?: (stock: PhotoLookup) => PhotoLookup;
 }
 
 /**
@@ -73,8 +91,23 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
     try {
         await advance('planning');
 
+        // Estimate on the short form brief so expand cannot flip every job to custom.
         const estimate = estimateSiteBuild(job.prompt);
-        const intent = await classify(job.prompt);
+
+        // Gemini expands the brief; Groq (prefer) builds from the detailed prompt.
+        const expanded = await expandBrief(job.prompt);
+        if (expanded.usage.model !== 'none') bill('expand', expanded.usage);
+        const buildPrompt = expanded.data.expandedPrompt || job.prompt;
+        if (expanded.data.expanded) {
+            await store.update(job.id, { buildPrompt });
+            await emit('plan', {
+                mode: 'expand',
+                expanded: true,
+                chars: buildPrompt.length,
+            });
+        }
+
+        const intent = await classify(buildPrompt);
         const provider = bill('classify', intent.usage);
         fallbackAttrs = {
             vertical: intent.data.vertical,
@@ -84,7 +117,21 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             sections: intent.data.sections,
         };
 
-        if (estimate.mode === 'custom') {
+        const budget = aiConfig();
+        const composeAffordable = customBuildFits(estimate, {
+            composeMaxTokens: budget.maxOutputTokens.compose,
+            tpm: budget.quota.tpm,
+        });
+
+        if (estimate.mode === 'custom' && !composeAffordable) {
+            console.warn(
+                `[generate] job ${job.id}: custom compose needs `
+                    + `${budget.maxOutputTokens.compose} output tokens against a `
+                    + `${budget.quota.tpm} TPM limit — building with the section recipe instead.`,
+            );
+        }
+
+        if (estimate.mode === 'custom' && composeAffordable) {
             await emit('plan', {
                 mode: 'custom',
                 band: estimate.band,
@@ -97,7 +144,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
                 ledger: [...ledger.all()],
             });
 
-            const composed = await composeCustomSite(job.prompt, intent.data);
+            const composed = await composeCustomSite(buildPrompt, intent.data);
             bill('compose', composed.usage);
             await emit('section', { type: 'custom', variant: 'files' });
 
@@ -105,7 +152,20 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             await emit('validate');
 
             const composition = composed.data.composition;
-            const variants = buildCustomStyleOptions(composition, composed.data.files);
+            const siblings = await store.listByProject(job.projectId);
+            const usedHeroes = usedHeroPhotoKeys(siblings, job.id);
+            const stock: PhotoLookup = (q) => lookupPhoto(q, job.id, usedHeroes);
+            const photoLookup = deps.photoLookup?.(stock) ?? stock;
+            // Real Casual / Photo-rich / Animated sites — not the old one-line CSS overlay
+            // that left Pro looking like Casual with a rounded thumbnail.
+            const variants = await buildCustomStyleOptions(
+                composition,
+                composed.data.files,
+                photoLookup,
+                buildPrompt,
+                job.id,
+                usedHeroes,
+            );
             const picked = variants[0];
             const files = picked?.files ?? composed.data.files;
             const endedAt = Date.now();
@@ -136,7 +196,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
         const p = await fetchProfile(intent.data.vertical);
         bill('profile', p.usage);
 
-        const planned = await plan(job.prompt, intent.data, p.data);
+        const planned = await plan(buildPrompt, intent.data, p.data);
         bill('plan', planned.usage);
         fallbackAttrs.sections = planned.data.map((section) => section.type);
 
@@ -157,7 +217,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             const ctx = {
                 vertical: intent.data.vertical,
                 tone: intent.data.tone,
-                prompt: job.prompt,
+                prompt: buildPrompt,
                 customerWord: p.data.vocabulary.customer,
             };
 
@@ -177,7 +237,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             if (outcome.repaired) await emit('repair', { section: section.type });
 
             props.set(section.id, outcome.data.data);
-            const preview = previewFiles(planned.data, props, intent.data.vertical, p.data, job.prompt, intent.data.tone);
+            const preview = previewFiles(planned.data, props, intent.data.vertical, p.data, buildPrompt, intent.data.tone);
             await advance('streaming', {
                 sectionsDone: i + 1,
                 ledger: [...ledger.all()],
@@ -195,7 +255,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             sections: planned.data,
             props,
             title: p.data.label,
-            description: job.prompt.slice(0, 160),
+            description: buildPrompt.slice(0, 160),
             tone: intent.data.tone,
         });
 
@@ -215,7 +275,20 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             }
         }
 
-        const variants = await buildStyleOptions(composition, lookupPhoto, job.prompt);
+        const siblings = await store.listByProject(job.projectId);
+        const usedHeroes = usedHeroPhotoKeys(siblings, job.id);
+        // The stock floor, with this job's salt and this project's used heroes already
+        // bound. Whatever the route puts in front of it — Gemini, on the live site — falls
+        // back to exactly this, so a drawn picture and a stock one obey the same rules.
+        const stock: PhotoLookup = (q) => lookupPhoto(q, job.id, usedHeroes);
+        const photoLookup = deps.photoLookup?.(stock) ?? stock;
+        const variants = await buildStyleOptions(
+            composition,
+            photoLookup,
+            buildPrompt,
+            job.id,
+            usedHeroes,
+        );
         const picked = variants[0];
         const files = picked?.files ?? compositionToFiles(composition);
         const endedAt = Date.now();
@@ -245,6 +318,8 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
         return done;
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+
+        console.error(`[generate] job ${job.id} failed, falling back — ${message}`);
 
         const fallback = nearestTemplate(
             fallbackAttrs,
@@ -351,13 +426,71 @@ function previewFiles(
     }
 }
 
-async function lookupPhoto(query: string): Promise<string> {
+function pickIndex(salt: string, length: number): number {
+    if (length <= 1) return 0;
+    let hash = 0;
+    for (let i = 0; i < salt.length; i += 1) {
+        hash = (hash * 31 + salt.charCodeAt(i)) >>> 0;
+    }
+    return hash % length;
+}
+
+/** Heroes already shown on earlier done Sets for this project. */
+function usedHeroPhotoKeys(
+    siblings: readonly Job[],
+    exceptJobId: string,
+): Set<string> {
+    const used = new Set<string>();
+    for (const sibling of siblings) {
+        if (sibling.id === exceptJobId || sibling.status !== 'done') continue;
+        for (const key of heroPhotoKeysFromComposition(sibling.composition)) {
+            used.add(key);
+        }
+        for (const variant of sibling.variants ?? []) {
+            for (const key of heroPhotoKeysFromComposition(variant.composition)) {
+                used.add(key);
+            }
+        }
+    }
+    return used;
+}
+
+// A whole page of results comes back and only items[0] was ever read, so every restaurant
+// in the country got the same photograph and generating again returned it a second time.
+// The salt is the job id; exclude skips heroes already used on earlier Sets.
+async function lookupPhoto(
+    query: string,
+    salt = '',
+    exclude: ReadonlySet<string> = new Set(),
+): Promise<string> {
     try {
         const { isImageSearchConfigured, searchImages } = await import('@/lib/images/unsplash');
-        if (!isImageSearchConfigured()) return bankPhotoUrl(query);
-        const { items } = await searchImages(query, 1);
-        return items[0]?.fullUrl ?? bankPhotoUrl(query);
+        if (!isImageSearchConfigured()) return bankPhotoUrl(query, salt, exclude);
+
+        const pickFresh = (
+            items: Array<{ id?: string; fullUrl: string }>,
+        ): string | undefined => {
+            const fresh = items.filter((item) => {
+                const key = photoKeyFromUrl(item.fullUrl);
+                const id = typeof item.id === 'string' ? item.id.toLowerCase() : '';
+                return !exclude.has(key) && (!id || !exclude.has(id));
+            });
+            const pool = fresh.length > 0 ? fresh : [];
+            if (!pool.length) return undefined;
+            return pool[pickIndex(`${salt}:${query}`, pool.length)]?.fullUrl;
+        };
+
+        const first = await searchImages(query, 1);
+        const fromFirst = pickFresh(first.items);
+        if (fromFirst) return fromFirst;
+
+        const second = await searchImages(query, 2);
+        const fromSecond = pickFresh(second.items);
+        if (fromSecond) return fromSecond;
+
+        // Prefer an unused bank photo over repeating a Set 1 Unsplash hero.
+        return bankPhotoUrl(query, salt, exclude);
     } catch {
-        return bankPhotoUrl(query);
+        return bankPhotoUrl(query, salt, exclude);
     }
 }

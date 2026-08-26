@@ -6,12 +6,14 @@ import { Check, Lock } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { CardIndex } from "@/components/ui/card-index";
+import type { AccountPlan } from "@/lib/contracts";
 import {
     COMPARE_LOOKS,
     DEMO_BRAND,
     lookTierPreviewHtml,
     type CompareLookId,
 } from "@/lib/demos/look-tiers";
+import { planCovers } from "@/lib/payments/plans";
 import { cn } from "@/lib/utils";
 
 const TIER_BADGE: Record<CompareLookId, string> = {
@@ -20,13 +22,30 @@ const TIER_BADGE: Record<CompareLookId, string> = {
     premium: "brand-gradient text-primary-foreground",
 };
 
-const TIER_BADGE_LABEL: Record<CompareLookId, string> = {
-    starter: "Free",
-    pro: "Pro",
-    premium: "Premium",
+const REQUIRED_PLAN: Record<CompareLookId, "pro" | "premium" | null> = {
+    starter: null,
+    pro: "pro",
+    premium: "premium",
 };
 
-export function LookCompareDemo() {
+function lookUnlocked(plan: AccountPlan, id: CompareLookId): boolean {
+    const need = REQUIRED_PLAN[id];
+    if (!need) return true;
+    return planCovers(plan, need);
+}
+
+function tileLabel(plan: AccountPlan, id: CompareLookId): string {
+    if (!lookUnlocked(plan, id)) return id === "pro" ? "Pro" : "Premium";
+    if (id === "starter") return "Free";
+    if (id === "pro") return "Pro unlocked";
+    return "Premium unlocked";
+}
+
+function footerPrice(plan: AccountPlan, id: CompareLookId, priceInr: number): string {
+    return lookUnlocked(plan, id) ? "Free" : priceInr === 0 ? "Free" : `Rs ${priceInr}`;
+}
+
+export function LookCompareDemo({ plan = "starter" }: { plan?: AccountPlan }) {
     const [look, setLook] = useState<CompareLookId>("starter");
     const active = COMPARE_LOOKS.find((item) => item.id === look) ?? COMPARE_LOOKS[0];
     const previews = useMemo(
@@ -49,16 +68,17 @@ export function LookCompareDemo() {
                     id="compare-heading"
                     className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
                 >
-                    Pick a <span className="hero-mix">look</span> — side by side
+                    Pick a <span className="hero-mix">look</span> — live preview
                 </h1>
                 <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-                    Same restaurant, three looks. Casual comes with Starter. Photo-rich unlocks
-                    with Pro (Rs {COMPARE_LOOKS[1].priceInr}) — every Pro design too. Animated
-                    unlocks with Premium (Rs {COMPARE_LOOKS[2].priceInr}). Fixed preview, not
-                    live AI.
+                    {plan === "premium"
+                        ? "Same restaurant, three live sites. Premium is active — every look and Pro design is unlocked."
+                        : plan === "pro"
+                          ? "Same restaurant, three live sites. Pro is active — Starter is Free, Photo-rich is unlocked, plus every Pro template. Continuous-scroll Premium unlocks with Premium."
+                          : "Same restaurant rendered three ways with our real generators. Starter is Free. Pro (Rs 499) unlocks the photographic look. Premium (Rs 999) unlocks continuous scroll. Click a card, then scroll the live preview."}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                    <Link href="/pricing" className="underline-offset-4 hover:underline">
+                    <Link href="/plans" className="underline-offset-4 hover:underline">
                         See all pricing
                     </Link>
                 </p>
@@ -67,7 +87,9 @@ export function LookCompareDemo() {
             <ul className="look-chunk-grid grid grid-cols-1 gap-5 lg:grid-cols-3">
                 {COMPARE_LOOKS.map((item, i) => {
                     const on = item.id === look;
-                    const paid = item.priceInr > 0;
+                    const unlocked = lookUnlocked(plan, item.id);
+                    const paid = !unlocked;
+                    const label = tileLabel(plan, item.id);
                     return (
                         <li
                             key={item.id}
@@ -85,29 +107,36 @@ export function LookCompareDemo() {
                                 )}
                             >
                                 <CardIndex n={i + 1} />
-                                <div className="relative h-48 overflow-hidden bg-muted">
+                                {/* Thumbnail: real page at 50% scale. Pointer-events off so the
+                                    card button still receives the click to switch the live frame. */}
+                                <div className="relative h-56 overflow-hidden bg-muted">
                                     <iframe
                                         title={`${item.label} preview`}
                                         srcDoc={previews[item.id]}
                                         sandbox="allow-scripts"
                                         tabIndex={-1}
-                                        className="pointer-events-none absolute left-0 top-0 h-[220%] w-[180%] origin-top-left scale-[0.56] border-0 bg-transparent"
+                                        className="pointer-events-none absolute left-0 top-0 h-[200%] w-[200%] origin-top-left scale-50 border-0 bg-transparent"
                                     />
                                     <span
                                         className={cn(
                                             "absolute right-2 top-2 z-[2] inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold shadow-sm",
-                                            TIER_BADGE[item.id],
+                                            unlocked && item.id !== "starter"
+                                                ? TIER_BADGE.starter
+                                                : TIER_BADGE[item.id],
                                         )}
                                     >
                                         {paid ? (
                                             <Lock className="size-3" strokeWidth={2} aria-hidden />
                                         ) : null}
-                                        {TIER_BADGE_LABEL[item.id]}
+                                        {label}
                                     </span>
                                 </div>
                                 <div className="relative z-[1] flex flex-1 flex-col gap-2 p-4">
                                     <h2 className="text-base font-semibold text-foreground">
                                         {item.label}
+                                        <span className="ml-2 text-xs font-medium text-muted-foreground">
+                                            {item.lookName}
+                                        </span>
                                     </h2>
                                     <p className="text-sm leading-5 text-muted-foreground">
                                         {item.blurb}
@@ -118,7 +147,7 @@ export function LookCompareDemo() {
                                             paid ? "text-gold" : "text-foreground",
                                         )}
                                     >
-                                        {item.priceInr === 0 ? "Free" : `Rs ${item.priceInr}`}
+                                        {footerPrice(plan, item.id, item.priceInr)}
                                     </p>
                                 </div>
                             </button>
@@ -134,12 +163,15 @@ export function LookCompareDemo() {
                         <span className="size-1.5 rounded-full bg-signal" />
                         <span className="size-1.5 rounded-full bg-bloom-sky" />
                         <span className="ml-2 truncate font-mono text-[10px] text-muted-foreground">
-                            {DEMO_BRAND.domain} · {active.label}
+                            {DEMO_BRAND.domain} · {active.label} · live preview
+                        </span>
+                        <span className="ml-auto hidden text-[10px] text-muted-foreground sm:inline">
+                            Scroll inside to explore
                         </span>
                     </div>
                     <iframe
                         key={look}
-                        title={`${DEMO_BRAND.name} ${active.label} preview`}
+                        title={`${DEMO_BRAND.name} ${active.label} live preview`}
                         srcDoc={srcDoc}
                         className="h-[min(70vh,42rem)] w-full bg-white"
                         sandbox="allow-scripts allow-same-origin"
@@ -206,29 +238,33 @@ export function LookCompareDemo() {
                             <td className="px-4 py-3 text-muted-foreground">Price</td>
                             {COMPARE_LOOKS.map((item) => (
                                 <td key={item.id} className="px-4 py-3">
-                                    {item.priceInr === 0 ? "Rs 0" : `Rs ${item.priceInr}`}
+                                    {footerPrice(plan, item.id, item.priceInr)}
                                 </td>
                             ))}
+                        </tr>
+                        <tr className="border-b border-border/70">
+                            <td className="px-4 py-3 text-muted-foreground">Layout</td>
+                            <td className="px-4 py-3">Centre-filled pages</td>
+                            <td className="px-4 py-3">Photo backdrop + page fades</td>
+                            <td className="px-4 py-3">Continuous scroll deck</td>
                         </tr>
                         <tr className="border-b border-border/70">
                             <td className="px-4 py-3 text-muted-foreground">Chrome</td>
-                            <td className="px-4 py-3">Sidebar</td>
+                            <td className="px-4 py-3">Simple header</td>
                             <td className="px-4 py-3">Blended top bar</td>
-                            <td className="px-4 py-3">Liquid scroll</td>
+                            <td className="px-4 py-3">Liquid sticky bar</td>
                         </tr>
                         <tr className="border-b border-border/70">
-                            <td className="px-4 py-3 text-muted-foreground">Page count</td>
-                            {COMPARE_LOOKS.map((item) => (
-                                <td key={item.id} className="px-4 py-3">
-                                    {item.pages.length}
-                                </td>
-                            ))}
+                            <td className="px-4 py-3 text-muted-foreground">Photography</td>
+                            <td className="px-4 py-3">One hero photo</td>
+                            <td className="px-4 py-3">Full-site topic photo</td>
+                            <td className="px-4 py-3">Hero + kinetic stage</td>
                         </tr>
                         <tr>
-                            <td className="px-4 py-3 text-muted-foreground">Booking CTA</td>
-                            <td className="px-4 py-3">Contact only</td>
-                            <td className="px-4 py-3">Table booking</td>
-                            <td className="px-4 py-3">Reservations section</td>
+                            <td className="px-4 py-3 text-muted-foreground">Motion</td>
+                            <td className="px-4 py-3">None</td>
+                            <td className="px-4 py-3">Parallax + page fades + card zoom</td>
+                            <td className="px-4 py-3">Scroll reveals + motif</td>
                         </tr>
                     </tbody>
                 </table>

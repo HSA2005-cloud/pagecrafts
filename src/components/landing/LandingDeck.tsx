@@ -32,12 +32,12 @@ export function LandingDeck() {
             <div className="page-deck">
                 <main>
                     <section id="top" className="page-slide">
-                        <div className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-10 px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+                        <div className="mx-auto grid w-full max-w-7xl min-h-0 grid-cols-1 items-center gap-8 px-6 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12">
                             <Hero />
                             <div
                                 data-reveal
                                 style={{ "--reveal": 1 } as CSSProperties}
-                                className="hidden sm:block"
+                                className="hidden min-w-0 sm:block"
                             >
                                 <HeroArtwork templates={templates} />
                             </div>

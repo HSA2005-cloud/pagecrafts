@@ -36,8 +36,7 @@ describe("a grant for one project", () => {
         });
     });
 
-    it("does not let a different project publish on it", async () => {
-        // Paying for one site is paying for one site.
+    it("grants each project its own free publish", async () => {
         const { db, projectId } = account();
         const other = db.insert("projects", { user_id: "u1", name: "Other", content_json: {} });
         db.insert("entitlements", {
@@ -50,23 +49,21 @@ describe("a grant for one project", () => {
 
         await expect(
             assertCanPublish(db.asUser("u1"), "u1", other.id as string),
-        ).rejects.toMatchObject({ code: "payment_required" });
+        ).resolves.toMatchObject({ granted: true, source: "launch_offer" });
     });
 
-    it("refuses when nothing has been paid, and says why", async () => {
+    it("grants a free publish when nothing has been paid yet", async () => {
         const { db, projectId } = account();
 
-        await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).rejects.toMatchObject({
-            code: "payment_required",
+        await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).resolves.toMatchObject({
+            granted: true,
+            source: "launch_offer",
         });
     });
 });
 
 describe("a lapsed grant is not a grant", () => {
-    it("ignores a row whose expiry has passed even though it still reads active", async () => {
-        // status and expires_at are separate columns and nothing sweeps them, so a
-        // subscription that ended at midnight still says 'active'. Trusting status alone
-        // would keep a lapsed account publishing indefinitely.
+    it("issues a fresh free grant when the old one lapsed", async () => {
         const { db, projectId } = account();
         db.insert("entitlements", {
             user_id: "u1",
@@ -77,8 +74,9 @@ describe("a lapsed grant is not a grant", () => {
             expires_at: iso(-HOUR),
         });
 
-        await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).rejects.toMatchObject({
-            code: "payment_required",
+        await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).resolves.toMatchObject({
+            granted: true,
+            source: "launch_offer",
         });
     });
 
@@ -98,7 +96,7 @@ describe("a lapsed grant is not a grant", () => {
         });
     });
 
-    it("ignores a revoked row", async () => {
+    it("issues a fresh free grant when the old one was revoked", async () => {
         const { db, projectId } = account();
         db.insert("entitlements", {
             user_id: "u1",
@@ -108,8 +106,9 @@ describe("a lapsed grant is not a grant", () => {
             status: "revoked",
         });
 
-        await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).rejects.toMatchObject({
-            code: "payment_required",
+        await expect(assertCanPublish(db.asUser("u1"), "u1", projectId)).resolves.toMatchObject({
+            granted: true,
+            source: "launch_offer",
         });
     });
 });

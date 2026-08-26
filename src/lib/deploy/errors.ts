@@ -54,6 +54,21 @@ export function toPublishError(
     }
 
     const detail = error instanceof Error ? error.message : String(error);
+    const status =
+        error && typeof error === 'object' && 'status' in error
+            ? Number((error as { status?: number }).status)
+            : undefined;
+
+    // Name / address already taken — surface the host's words so the owner can rename.
+    if (status === 409 && /taken|reserved|already/i.test(detail)) {
+        return new PublishError(
+            'validation_failed',
+            detail,
+            redact(detail),
+            siteId ?? null,
+            'provisioning_failed',
+        );
+    }
 
     return new PublishError(
         'hosting_error',

@@ -67,7 +67,7 @@ export async function TemplatesSlide({ params }: { params: Params }) {
                 <p className="max-w-xl text-sm leading-6 text-muted-foreground">
                     {prompt
                         ? "Closest matches first. Choose a design you love — you can customize it in the next step."
-                        : "Paid designs stay locked until you buy that one. Free designs you can use straight away."}
+                        : "Pro and Premium unlock every matching design — covered templates show as Free on your plan."}
                 </p>
                 {prompt && (
                     <PromptEcho

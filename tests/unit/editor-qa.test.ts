@@ -186,10 +186,10 @@ describe('editor QA (D16–D20)', () => {
         expect(preview).toContain('Preview');
         const composer = readFileSync('src/components/editor/ChatComposer.tsx', 'utf8');
         expect(composer).toContain('Queue follow-up');
-        expect(composer).toContain('Set up a custom domain');
-        expect(composer).toContain('Get started');
-        expect(composer).toContain('Custom domains are coming');
+        expect(composer).not.toContain('Set up a custom domain');
+        expect(composer).not.toContain('CustomDomainDialog');
         const topBar = readFileSync('src/components/editor/TopBar.tsx', 'utf8');
+        expect(topBar).toContain('GoLiveButton');
         expect(topBar).toContain('Back to Templates');
         expect(topBar).toContain('href="/#build"');
         expect(topBar).toContain('Save');
