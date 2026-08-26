@@ -23,6 +23,7 @@ import { sanitise } from '@/lib/ai/sanitise';
 import { sectionVariants } from '@/lib/editor/section-registry';
 import { isSiteGenerationRequest } from '@/lib/editor/site-intent';
 import { styleUpgradeFirewall } from '@/lib/editor/style-firewall';
+import { crossVerticalFirewall } from '@/lib/editor/cross-vertical-firewall';
 import {
     parseRenameIntent,
     renameComposition,
@@ -109,6 +110,10 @@ interface EditorState {
     chatError: string | null;
     chatProgress: string | null;
     chatJob: GenerationJobStatus | null;
+    // Set by the editor shell when the job it was watching fell back to a template instead
+    // of generating. Survives loadProject on purpose: it is set before the load and it is
+    // the first thing the person needs to read when the load finishes.
+    generationNotice: string | null;
     projectName: string | null;
     contentSchema: ContentSchema | null;
     content: ContentValues;
@@ -123,6 +128,8 @@ interface EditorState {
     historyLoading: boolean;
     historyError: string | null;
     restoringSha: string | null;
+    setGenerationNotice: (text: string | null) => void;
+    setProjectName: (name: string) => void;
     loadProject: (projectId: string) => Promise<void>;
     openFile: (path: string) => void;
     writeActive: (content: string) => void;
@@ -207,6 +214,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     chatError: null,
     chatProgress: null,
     chatJob: null,
+    generationNotice: null,
     projectName: null,
     contentSchema: null,
     content: {},
@@ -221,6 +229,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     historyLoading: false,
     historyError: null,
     restoringSha: null,
+
+    setGenerationNotice: (text) => set({ generationNotice: text }),
+
+    setProjectName: (name) => set({ projectName: name }),
 
     loadProject: async (projectId) => {
         autosave.cancel();
@@ -279,6 +291,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             }
         }
 
+        // "Your facts are on this design" was printed whenever the design had sections. It
+        // was never a claim the code had checked, and on a fallback it was flatly untrue --
+        // the facts were not on it, because generation had failed and a stock template had
+        // been dropped in. A notice set by the shell beats it, and says so.
+        const notice = get().generationNotice;
+        const opening = notice
+            ? notice
+            : schema && schema.sections.length > 0 && !composition
+              ? 'Your facts are on this design. Ask for a change, or pick a suggestion.'
+              : '';
+
         set({
             activeFile: pickEntryFile(vfs.paths()),
             lastSavedAt: updatedAt,
@@ -293,15 +316,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
                     : {},
             siteMeta: detail?.siteMeta ?? {},
             formEndpoint: detail?.formEndpoint ?? null,
-            chatMessages:
-                schema && schema.sections.length > 0 && !composition
-                    ? [
-                          {
-                              role: 'assistant',
-                              text: 'Your facts are on this design. Ask for a change, or pick a suggestion.',
-                          },
-                      ]
-                    : [],
+            chatMessages: opening ? [{ role: 'assistant', text: opening }] : [],
             // A project that opens but whose settings did not is worth saying; it is not
             // worth refusing to open over.
             contentError: detailError,
@@ -499,8 +514,27 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             return;
         }
 
+        const { contentSchema, siteMeta, projectName } = get();
         const sectionCount = composition?.sections.length ?? 0;
-        const { contentSchema } = get();
+        const hasContentPage = Boolean(contentSchema?.sections.length);
+        const crossBlocked = crossVerticalFirewall({
+            instruction: text,
+            vertical: composition?.vertical,
+            sectionCount,
+            hasContentPage,
+            contextText: [
+                composition?.meta.title,
+                siteMeta?.title,
+                projectName,
+                entryHtml?.slice(0, 4000),
+            ]
+                .filter(Boolean)
+                .join(' '),
+        });
+        if (crossBlocked) {
+            set({ chatError: crossBlocked });
+            return;
+        }
         const htmlSite = Boolean(contentSchema?.sections.length) && sectionCount === 0;
         if (htmlSite) {
             if (text.length > 300) {

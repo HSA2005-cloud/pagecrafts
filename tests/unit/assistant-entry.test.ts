@@ -34,7 +34,7 @@ describe("the assistant hand-off", () => {
     expect(header).toContain('href: "/#settings"');
     expect(header).not.toContain('href: "/compare"');
     expect(header).toContain("<ProfileMenu");
-    expect(header).toContain('href="/packages"');
+    expect(header).toContain('href="/plans"');
     expect(menu).toContain('href="/?slide=settings"');
     expect(menu).toContain("scrollIntoView");
     expect(menu).toContain("LogoutButton");

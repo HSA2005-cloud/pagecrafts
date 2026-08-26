@@ -53,15 +53,35 @@ function latestDeployment(rows: DeploymentRow[] | null | undefined): DeploymentR
   return rows.reduce((a, b) => (a.created_at >= b.created_at ? a : b));
 }
 
-function statusOf(rows: DeploymentRow[] | null | undefined): ProjectStatus {
-  return latestDeployment(rows)?.status ?? "draft";
+// C-05: never surface a URL that has not been confirmed to respond. Prefer the newest
+// live attempt so a failed republish does not hide a working link on Your sites.
+function liveUrlOf(rows: DeploymentRow[] | null | undefined): string | null {
+  if (!rows || rows.length === 0) return null;
+  const live = [...rows]
+    .filter((d) => d.status === "live" && d.live_url)
+    .sort((a, b) => (a.created_at >= b.created_at ? -1 : 1));
+  return live[0]?.live_url ?? null;
 }
 
-// C-05: never surface a URL that has not been confirmed to respond. The database
-// CHECK guarantees live_url is non-null when status is 'live'; anything else shows nothing.
-function liveUrlOf(rows: DeploymentRow[] | null | undefined): string | null {
-  const d = latestDeployment(rows);
-  return d && d.status === "live" ? d.live_url : null;
+function statusOf(rows: DeploymentRow[] | null | undefined): ProjectStatus {
+  const latest = latestDeployment(rows);
+  if (!latest) return "draft";
+  if (latest.status === "live") return "live";
+  const inflight = [
+    "pending",
+    "provisioning",
+    "pushing",
+    "enabling_hosting",
+    "verifying",
+  ] as const;
+  if ((inflight as readonly string[]).includes(latest.status)) {
+    return latest.status;
+  }
+  // Failed republish: still show Live when an earlier attempt is serving.
+  if (latest.status === "failed" && rows?.some((r) => r.status === "live")) {
+    return "live";
+  }
+  return latest.status;
 }
 
 /**
