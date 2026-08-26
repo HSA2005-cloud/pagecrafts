@@ -18,6 +18,15 @@ export interface SiteMeta {
   ogImageUrl?: string;
   /** Shop owner's UPI VPA — used on generated order-taking sites. */
   upiId?: string;
+  /**
+   * Pages finished in the walkthrough, as file paths.
+   *
+   * On Starter, confirming a page is final and it cannot be written again — see
+   * src/lib/data/page-locks.ts, which owns that rule. Kept here rather than in a table of
+   * its own: it is a short list of file names belonging to one project, and site_meta is
+   * already merged on patch.
+   */
+  confirmedPages?: string[];
 }
 
 /**

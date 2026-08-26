@@ -43,9 +43,12 @@ describe("choosing a template", () => {
     const shell = read("src", "components", "editor", "EditorShell.tsx");
     const split = read("src", "components", "editor", "EditorSplit.tsx");
 
-    const defaultSplit = shell.slice(shell.indexOf("<EditorSplit"));
+    // Default (non-advanced) layout: chat left, preview right.
+    const defaultSplit = shell.slice(
+      shell.indexOf("left={loading ? <PaneSkeleton /> : <ChatPanel"),
+    );
 
-    expect(defaultSplit.indexOf("<ChatPanel")).toBeGreaterThan(0);
+    expect(defaultSplit.indexOf("<ChatPanel")).toBeGreaterThanOrEqual(0);
     expect(defaultSplit.indexOf("<PreviewPane")).toBeGreaterThan(defaultSplit.indexOf("<ChatPanel"));
     expect(shell.includes("ContentPanel")).toBe(false);
     expect(split).toContain("DEFAULT_LEFT = 30");

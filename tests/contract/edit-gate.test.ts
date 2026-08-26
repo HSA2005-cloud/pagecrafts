@@ -113,13 +113,18 @@ describe("a live site, long past the goodwill window", () => {
     }
 });
 
-describe("the same site, inside the goodwill window", () => {
+describe("a live site, even just published", () => {
+    // GOODWILL_WINDOW_DAYS is 0: first publish is free, further edits need Rs 249 unlock.
     for (const path of writePaths) {
-        it(`${path.name} goes through`, async () => {
+        it(`${path.name} is refused without an unlock`, async () => {
             const { id } = liveSite(ago(2 * DAY));
 
             const response = await path.run(id);
-            expect(response.status, path.name).toBeLessThan(400);
+            const payload = await response.json();
+
+            expect(response.status, path.name).toBe(402);
+            expect(payload.ok).toBe(false);
+            expect(payload.error.code).toBe("payment_required");
         });
     }
 });

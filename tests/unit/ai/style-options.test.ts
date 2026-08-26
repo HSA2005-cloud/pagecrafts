@@ -7,9 +7,18 @@ import {
     CLOTHING_PHOTO_ID,
     DESSERT_PHOTO_ID,
     MITHAI_SEARCH,
+    photoKeyFromUrl,
     photoSearchQuery,
     stampPhotoUrls,
 } from '@/lib/ai/generate/photos';
+
+// The body attribute, not the first data-motion in the file — motionCss opens with a
+// `[data-motion="none"]` rule, so a loose match reads the stylesheet instead of the page.
+const bodyMotion = (html: string) => html.match(/<body[^>]*data-motion="([a-z]+)"/)?.[1] ?? '';
+const heroVariant = (html: string) =>
+    html.match(/data-type="hero" data-variant="([a-z-]+)"/)?.[1] ?? '';
+const aboutVariant = (html: string) =>
+    html.match(/data-type="about" data-variant="([a-z-]+)"/)?.[1] ?? '';
 import { SCHEMA_VERSION, type ArtDirection, type Composition, type SectionInstance } from '@/lib/contracts';
 
 const ART: ArtDirection = {
@@ -65,7 +74,7 @@ describe('style presets — three looks from one brief', () => {
         expect(photos.artDirection.motionId).not.toBe(STYLE_SPECS.motion.art.motionId);
         expect(photos.sections.find((s) => s.type === 'hero')?.variant).toBe('image-bg');
         expect(applyStyle(composition, STYLE_SPECS.casual).sections.find((s) => s.type === 'hero')?.variant)
-            .toBe('split-image');
+            .toBe('centred');
         expect(applyStyle(composition, STYLE_SPECS.casual).artDirection.themeId).toBe('sunlit-craft');
         expect(applyStyle(composition, STYLE_SPECS.motion).artDirection.motionId).toBe('kinetic');
     });
@@ -73,6 +82,84 @@ describe('style presets — three looks from one brief', () => {
     it('picks a mithai photograph for a sweets query', () => {
         expect(bankPhotoUrl('indian sweets mithai')).toContain(DESSERT_PHOTO_ID);
         expect(bankPhotoUrl('indian sweets mithai')).not.toBe(bankPhotoUrl('a gym in koramangala'));
+    });
+
+    it('never stamps bakery bread on a travel / nature / vlog brief', async () => {
+        const { BAKERY_SHELF_PHOTO_ID } = await import('@/lib/ai/generate/photos');
+        const travelQuery = photoSearchQuery(
+            'travel-vlog',
+            'Pragna Travel Vlogs',
+            'hero',
+            'Explore nature videos, share your journeys, connect with fellow viewers.',
+        );
+        expect(travelQuery.toLowerCase()).toMatch(/nature|travel|journey/);
+        expect(bankPhotoUrl(travelQuery, 'job_travel_1')).not.toContain(BAKERY_SHELF_PHOTO_ID);
+        expect(bankPhotoUrl(travelQuery, 'job_travel_1')).not.toMatch(
+            /photo-1509440159596-0249088772ff|photo-1555507036|photo-1414235077428|photo-1504674900247/,
+        );
+
+        const travelSite = {
+            ...composition,
+            vertical: 'travel-vlog',
+            meta: {
+                ...composition.meta,
+                title: 'Pragna Travel Vlogs',
+                description: 'Explore nature videos, share your journeys, connect with fellow viewers.',
+            },
+        };
+        const stamped = await stampPhotoUrls(travelSite);
+        const heroImage = stamped.sections.find((section) => section.type === 'hero')?.props.image as { url?: string };
+        expect(heroImage.url).toMatch(/images\.unsplash\.com\/photo-/);
+        expect(heroImage.url).not.toContain(BAKERY_SHELF_PHOTO_ID);
+    });
+
+    it('never stamps known-dead Unsplash ids, and hospital briefs get clinic photos', () => {
+        // These used to 404 on images.unsplash.com — Pick a look showed beige boxes + alt text.
+        const dead = [
+            'photo-1631217868264-e5b90bb7e629',
+            'photo-1424847653812-7ad6b33ea746',
+            'photo-1540189549336-e9fb1f3a1e3d',
+            'photo-1486427944299-d1955d23fd34',
+            'photo-1571902943202-507c674acf4a',
+            'photo-1501785888041-af3bc6ed3cfa',
+        ];
+        const samples = [
+            bankPhotoUrl('hospital neurosurgery bangalore', 'job_a'),
+            bankPhotoUrl('Preethi Brain Surgery clinic', 'job_b'),
+            bankPhotoUrl('chinese restaurant fine dining', 'job_c'),
+            bankPhotoUrl('bakery bread pastry', 'job_d'),
+            bankPhotoUrl('gym fitness yoga', 'job_e'),
+            bankPhotoUrl('travel vlog nature journey', 'job_f'),
+        ];
+        for (const url of samples) {
+            for (const id of dead) {
+                expect(url).not.toContain(id);
+            }
+        }
+        expect(bankPhotoUrl('hospital neurosurgery bangalore', 'job_a')).toMatch(
+            /photo-1519494026892-80bbd2d6fd0d|photo-1516549655169-df83a0774514|photo-1579684385127-1ef15d508118|photo-1586773860418-d37222d8fce3|photo-1666214280557-f1b5022eb634/,
+        );
+    });
+
+    it('gives Set 1 and Set 2 different restaurant heroes when salted by job id', () => {
+        const query = 'chinese restaurant fine dining bangalore';
+        const set1 = bankPhotoUrl(query, 'job_set_1');
+        const set2 = bankPhotoUrl(query, 'job_set_2');
+        expect(set1).toMatch(/images\.unsplash\.com\/photo-/);
+        expect(set2).toMatch(/images\.unsplash\.com\/photo-/);
+        expect(set1).not.toBe(set2);
+        // Same set again is stable.
+        expect(bankPhotoUrl(query, 'job_set_1')).toBe(set1);
+    });
+
+    it('never reuses a Set 1 hero when that photo is excluded for Set 2', () => {
+        const query = 'chinese restaurant fine dining bangalore';
+        const set1 = bankPhotoUrl(query, 'job_set_1');
+        const used = new Set([photoKeyFromUrl(set1)]);
+        // Even with the same salt that would have picked set1, exclude forces another.
+        const set2 = bankPhotoUrl(query, 'job_set_1', used);
+        expect(set2).not.toBe(set1);
+        expect(photoKeyFromUrl(set2)).not.toBe(photoKeyFromUrl(set1));
     });
 
     it('does not use a clothing shop photo for a sweet shop, even if the slot says shop interior', async () => {
@@ -112,22 +199,45 @@ describe('style presets — three looks from one brief', () => {
         expect(home.photos).toContain('data-style="photos"');
         expect(home.motion).toContain('data-style="motion"');
 
-        // Casual shows one hero photograph in a split layout (not a grey wall of type).
+        // Casual shows one hero photograph, centre-oriented in the viewport.
         expect(home.casual).toContain('images.unsplash.com');
         expect(home.casual).toContain('<img src="');
-        expect(home.casual).toContain('data-type="hero" data-variant="split-image"');
+        expect(['centred', 'split-image', 'minimal']).toContain(heroVariant(home.casual));
         expect(home.casual).toContain('site-header');
-        // About lives on about.html after the multi-page split.
-        expect(about.casual).toContain('data-type="about" data-variant="text"');
-        // Photo-rich goes further: cinematic hero + media-split About + more photos site-wide.
+        expect(home.casual).toMatch(/min-height:\s*min\(88(?:svh|dvh)/);
+        // Fully centre-paged on phone, tablet, and laptop — never top-aligned.
+        expect(home.casual).toMatch(/justify-content:\s*safe center/);
+        expect(home.casual).toMatch(/\[data-type="about"\][\s\S]*min-height:\s*min\(70(?:svh|dvh)/);
+        expect(home.casual).toMatch(/@media \(min-width:\s*48\.01rem\) and \(max-width:\s*64rem\)/);
+        expect(home.casual).toMatch(/@media \(max-width:\s*48rem\)[\s\S]*min-height:\s*calc\(100svh/);
+        expect(home.casual).toMatch(/min-height:\s*min\(80svh/);
+        expect(home.casual).not.toMatch(/\[data-style="casual"\] main[\s\S]{0,200}justify-content:\s*flex-start/);
+        expect(home.casual).not.toMatch(/@media \(max-width:\s*48rem\)[\s\S]*justify-content:\s*flex-start/);
+        // About still has a page on Starter / Pro multi-page sites.
+        expect(['text', 'media-split']).toContain(aboutVariant(about.casual));
+        // Photo-rich: cinematic hero + full-site topic photograph + page transitions.
         expect(home.photos).toContain('images.unsplash.com');
-        expect(home.photos).toContain('data-type="hero" data-variant="image-bg"');
-        expect(about.photos).toContain('data-type="about" data-variant="media-split"');
+        expect(home.photos).toContain('--page-photo');
+        expect(home.photos).toContain('pc-page-ready');
+        expect(home.photos).toContain('--pc-bg-shift');
+        expect(home.photos).toContain('scale(1.06)');
+        expect(heroVariant(home.photos)).toBe('image-bg');
+        expect(home.photos).toMatch(/\[data-style="photos"\] \[data-type="hero"\][\s\S]*?min-height:\s*100svh/);
+        expect(home.photos).toMatch(/\[data-style="photos"\] main[\s\S]*?padding-inline:\s*0/);
+        expect(['media-split', 'text']).toContain(aboutVariant(about.photos));
         expect((allHtml.photos.match(/images\.unsplash\.com/g) ?? []).length)
             .toBeGreaterThan((allHtml.casual.match(/images\.unsplash\.com/g) ?? []).length);
-        expect(home.casual).toContain('data-motion="none"');
-        expect(home.photos).toContain('data-motion="editorial"');
-        expect(home.motion).toContain('data-motion="kinetic"');
+        // Premium is a continuous scroll deck (like pagecrafts.in), not multi-page.
+        expect(home.motion).toContain('site-liquid');
+        expect(home.motion).toContain('liquid-deck');
+        expect(home.motion).toContain('liquid-slide');
+        expect(home.motion).toMatch(/min-height:\s*100svh/);
+        expect(home.motion).toMatch(/@media \(max-width:\s*48rem\)[\s\S]*min-height:\s*100svh/);
+        expect(home.motion).toContain('href="#about"');
+        expect(options.find((o) => o.id === 'motion')?.files['about.html']).toBeUndefined();
+        expect(['none', 'whisper']).toContain(bodyMotion(home.casual));
+        expect(['whisper', 'calm', 'editorial', 'showcase']).toContain(bodyMotion(home.photos));
+        expect(['kinetic', 'showcase', 'editorial']).toContain(bodyMotion(home.motion));
         expect(home.motion).toContain('motion-stage');
         expect(home.motion).toContain('jalebi-coil');
         expect(home.casual).not.toContain('motion-stage');

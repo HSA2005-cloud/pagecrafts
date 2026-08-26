@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Make AdithyaPatil-1609/pagecrafts the source of truth for this checkout.
 #
-# - Pull / fetch default to the ORIGINAL repo (AdithyaPatil-1609/pagecrafts).
+# - Pull, fetch, and push default to the ORIGINAL repo (AdithyaPatil-1609/pagecrafts).
 # - `gh` defaults to the ORIGINAL repo (PRs, issues, checks).
-# - Push: cursor[bot] cannot write to the original repo (403). Branches are
-#   pushed to the fork remote (`fork` / push-url of `origin`) so a human can
-#   open or merge a PR into the original. Prefer `scripts/pr-original.sh`.
+# - The fork remote (`fork`) stays available for legacy branches; do not push
+#   there for new work. Prefer `scripts/pr-original.sh` for PRs on the original.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -40,14 +39,13 @@ auth_url() {
 ORIGINAL_FETCH="$(auth_url "$ORIGINAL_REPO")"
 FORK_PUSH="$(auth_url "$FORK_REPO")"
 
-# origin: FETCH from original (so `git pull` / `git fetch origin` = original).
-#         PUSH to fork (only writable remote for this agent).
+# origin: fetch and push both target the original repo.
 if git remote get-url origin >/dev/null 2>&1; then
   git remote set-url origin "$ORIGINAL_FETCH"
-  git remote set-url --push origin "$FORK_PUSH"
+  git remote set-url --push origin "$ORIGINAL_FETCH"
 else
   git remote add origin "$ORIGINAL_FETCH"
-  git remote set-url --push origin "$FORK_PUSH"
+  git remote set-url --push origin "$ORIGINAL_FETCH"
 fi
 
 # upstream: always the original (fetch + push URL both original; push will 403
@@ -69,6 +67,7 @@ fi
 
 # Prefer original when a branch name exists on multiple remotes.
 git config checkout.defaultRemote origin
+git config remote.pushDefault origin
 git config --local "branch.main.remote" origin
 git config --local "branch.main.merge" refs/heads/main
 
@@ -105,7 +104,7 @@ export PAGECRAFTS_ORIGINAL_REPO="$ORIGINAL_REPO"
 export PAGECRAFTS_FORK_OWNER="$FORK_OWNER"
 export PAGECRAFTS_ORIGINAL_OWNER="$ORIGINAL_OWNER"
 
-echo "Original repo (pull / gh default): ${ORIGINAL_REPO}"
-echo "Fork (branch push only):           ${FORK_REPO}"
-echo "origin fetch -> original, origin push -> fork"
+echo "Original repo (pull / push / gh):    ${ORIGINAL_REPO}"
+echo "Fork (legacy remote only):           ${FORK_REPO}"
+echo "origin fetch + push -> original"
 command -v gh >/dev/null && gh repo set-default --view 2>/dev/null || true

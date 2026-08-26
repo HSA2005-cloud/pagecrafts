@@ -1,18 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { GOODWILL_WINDOW_DAYS, assertCanEdit, checkEditPermission } from "@/lib/data/entitlements";
+import { assertCanEdit, checkEditPermission } from "@/lib/data/entitlements";
 import { listDeployments } from "@/lib/data/deployments";
 import { createFakeDb } from "../support/fake-db";
 
-// R3 D13 — editing a site that is already live (Doc 22 P5).
-//
-// A draft is free to change. Once it has been published, changing it again needs an
-// `edit_unlock` — except for the first seven days, which are a goodwill window. All of it is
-// decided here rather than in the editor, because a gate the client evaluates is not a gate.
+// Editing a site that is already live needs Rs 249 unlock (no multi-day goodwill window).
 
 const DAY = 24 * 60 * 60 * 1000;
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
-const LIVE_URL = "https://kettle.pagecraft.in";
+const LIVE_URL = "https://kettle.pagecrafts.in";
 
 function site() {
     const db = createFakeDb({ users: [{ id: "u1" }] });
@@ -41,8 +37,6 @@ describe("a site nobody has published", () => {
     });
 
     it("is not unlocked by a publish that failed", async () => {
-        // A failed attempt did not put anything in front of anybody, so nothing has changed
-        // about what editing means.
         const { db, id } = site();
         db.insert("deployments", { project_id: id, status: "failed", created_at: ago(30 * DAY) });
 
@@ -52,29 +46,10 @@ describe("a site nobody has published", () => {
     });
 });
 
-describe("the goodwill window", () => {
-    it("lets the first days after publishing through without an unlock", async () => {
+describe("after the first live publish", () => {
+    it("locks editing immediately", async () => {
         const { db, id } = site();
-        published(db, id, ago(2 * DAY));
-
-        await expect(checkEditPermission(db.asUser("u1"), "u1", id)).resolves.toMatchObject({
-            allowed: true,
-            reason: "goodwill_window",
-        });
-    });
-
-    it("still applies on its last day", async () => {
-        const { db, id } = site();
-        published(db, id, ago(GOODWILL_WINDOW_DAYS * DAY - 60_000));
-
-        await expect(checkEditPermission(db.asUser("u1"), "u1", id)).resolves.toMatchObject({
-            reason: "goodwill_window",
-        });
-    });
-
-    it("has closed the day after", async () => {
-        const { db, id } = site();
-        published(db, id, ago(GOODWILL_WINDOW_DAYS * DAY + DAY));
+        published(db, id, ago(60_000));
 
         await expect(checkEditPermission(db.asUser("u1"), "u1", id)).resolves.toMatchObject({
             allowed: false,
@@ -82,25 +57,20 @@ describe("the goodwill window", () => {
         });
     });
 
-    it("runs from the first publish, not the most recent", async () => {
-        // Measuring from the latest publish would renew the window on every republish, so
-        // anybody willing to press publish again would never pay. That is not a goodwill
-        // window; it is a subscription nobody is charged for.
-        const { db, id } = site();
-        published(db, id, ago(60 * DAY)); // the original launch
-        published(db, id, ago(1 * DAY)); //  a republish yesterday
-
-        await expect(checkEditPermission(db.asUser("u1"), "u1", id)).resolves.toMatchObject({
-            allowed: false,
-            reason: "locked",
-        });
-    });
-});
-
-describe("after the window", () => {
-    it("an edit_unlock reopens editing", async () => {
+    it("stays locked after a republish", async () => {
         const { db, id } = site();
         published(db, id, ago(60 * DAY));
+        published(db, id, ago(1 * DAY));
+
+        await expect(checkEditPermission(db.asUser("u1"), "u1", id)).resolves.toMatchObject({
+            allowed: false,
+            reason: "locked",
+        });
+    });
+
+    it("an edit_unlock reopens editing", async () => {
+        const { db, id } = site();
+        published(db, id, ago(DAY));
         db.insert("entitlements", {
             user_id: "u1",
             project_id: id,
@@ -117,7 +87,7 @@ describe("after the window", () => {
 
     it("pro covers it too", async () => {
         const { db, id } = site();
-        published(db, id, ago(60 * DAY));
+        published(db, id, ago(DAY));
         db.insert("entitlements", { user_id: "u1", kind: "pro", source: "pro", status: "active" });
 
         await expect(checkEditPermission(db.asUser("u1"), "u1", id)).resolves.toMatchObject({
@@ -129,7 +99,7 @@ describe("after the window", () => {
     it("an unlock bought for another site does not carry over", async () => {
         const { db, id } = site();
         const other = db.insert("projects", { user_id: "u1", name: "Other", content_json: {} });
-        published(db, id, ago(60 * DAY));
+        published(db, id, ago(DAY));
         db.insert("entitlements", {
             user_id: "u1",
             project_id: other.id,
@@ -143,13 +113,13 @@ describe("after the window", () => {
         });
     });
 
-    it("refuses the write, and says what would let it through", async () => {
+    it("refuses the write with the Rs 249 message", async () => {
         const { db, id } = site();
-        published(db, id, ago(60 * DAY));
+        published(db, id, ago(DAY));
 
         await expect(assertCanEdit(db.asUser("u1"), "u1", id)).rejects.toMatchObject({
             code: "payment_required",
-            message: expect.stringContaining(`${GOODWILL_WINDOW_DAYS} days`),
+            message: expect.stringContaining("Rs 249"),
         });
     });
 });
@@ -168,14 +138,6 @@ describe("the publish history behind screen 02", () => {
     });
 
     it("keeps the failures, and explains them in the owner's words", async () => {
-        // A history that hid failures would be the dashboard that said "draft" forever —
-        // pleasant and useless. Somebody debugging needs those rows most of all.
-        //
-        // What it shows changed at R3 D18. It used to be whatever sentence the failing
-        // branch happened to write, and the provider's own strings went in beside it. Now
-        // the row stores a reason and the words are derived, so the history says what
-        // happened *and* what to do — and improving the wording improves rows already
-        // written rather than only the next one.
         const { db, id } = site();
         db.insert("deployments", {
             project_id: id,
@@ -194,9 +156,6 @@ describe("the publish history behind screen 02", () => {
     });
 
     it("still explains a failure recorded before reasons were stored", async () => {
-        // Rows written by the old code have prose and no reason. The migration backfills
-        // them to `unknown`, whose words are true of any of them; a row that somehow has
-        // neither must still not read as a blank.
         const { db, id } = site();
         db.insert("deployments", { project_id: id, status: "failed", created_at: ago(DAY), error: "boom" });
 
@@ -210,7 +169,7 @@ describe("the publish history behind screen 02", () => {
         db.insert("deployments", {
             project_id: id,
             status: "failed",
-            live_url: LIVE_URL, // a stale value from an earlier attempt
+            live_url: LIVE_URL,
             created_at: ago(DAY),
         });
 
