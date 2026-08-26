@@ -180,6 +180,15 @@ and fill must not say "see our pricing page".
 after-run died on a Groq TPD 429; a later clean six-run gated v27 as a
 machine pass. Human copy still 2 (skeleton).
 
+---
+
+## expand-brief.v1 — Gemini expands, Groq builds (2026-08-25)
+
+`expand-brief.v1` turns the short IntentCapture form (name, place, offer, …)
+into a detailed build brief. `runJob` calls it with `prefer: 'gemini'` before
+classify / plan / fill (which prefer Groq). Soft-fails to the original brief when
+Gemini is missing or the call fails.
+
 To reproduce the D11 baseline, pin v1:
 
 ```bash

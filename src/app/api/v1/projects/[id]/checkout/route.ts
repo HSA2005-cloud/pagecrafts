@@ -1,13 +1,16 @@
 import "server-only";
+import type { z } from "zod";
 
 import { withRoute } from "@/lib/kernel/with-route";
 import { ok } from "@/lib/errors/respond";
+import { optionalDiscountCheckoutSchema } from "@/lib/contracts/schemas";
 import { startPublishCheckout } from "@/lib/payments/checkout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Params = { id: string };
+type Body = z.infer<typeof optionalDiscountCheckoutSchema>;
 
 // POST /api/v1/projects/{id}/checkout — what does it cost to put this site live? (R3)
 //
@@ -18,7 +21,8 @@ type Params = { id: string };
 // Paying does not grant anything. The browser reporting success is a claim, not a fact —
 // anyone can make that call. The entitlement is written when the signed webhook arrives,
 // which is why /api/v1/payments/razorpay/webhook exists at all.
-export const POST = withRoute<undefined, Params>({
-  handler: async ({ supabase, params, userId }) =>
-    ok(await startPublishCheckout(supabase, userId, params.id)),
+export const POST = withRoute<Body, Params>({
+  schema: optionalDiscountCheckoutSchema,
+  handler: async ({ supabase, params, userId, body }) =>
+    ok(await startPublishCheckout(supabase, userId, params.id, body.discountCode)),
 });
