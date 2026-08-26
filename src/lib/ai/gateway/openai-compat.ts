@@ -13,7 +13,7 @@ import {
 import { backoffClock, delayForAttempt, MAX_RATE_LIMIT_ATTEMPTS } from './backoff';
 
 interface ChatCompletionResponse {
-    choices?: Array<{ message?: { content?: string | null } }>;
+    choices?: Array<{ message?: { content?: string | null }; finish_reason?: string | null }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
     error?: { message?: string; type?: string; code?: string };
 }
@@ -162,8 +162,19 @@ export class OpenAICompatGateway implements NamedGateway {
             limiter: ReturnType<typeof limiterFor>,
         ): Promise<CompleteReply> => {
             const data = (await res.json()) as ChatCompletionResponse;
-            const text = data.choices?.[0]?.message?.content ?? '';
+            const choice = data.choices?.[0];
+            const text = choice?.message?.content ?? '';
             limiter.record(data.usage?.prompt_tokens ?? 0, data.usage?.completion_tokens ?? 0);
+
+            if (choice?.finish_reason === 'length') {
+                throw new GatewayError(
+                    'generation_failed',
+                    `${this.name}: the reply was cut off at the ${maxOutputFor(req.job)}-token `
+                        + `output ceiling (${req.job}). Raise AI_OUTPUT_${req.job.toUpperCase()}_TOKENS `
+                        + 'or shorten the request.',
+                    false,
+                );
+            }
 
             const mode = body.response_format as { type?: string } | undefined;
 

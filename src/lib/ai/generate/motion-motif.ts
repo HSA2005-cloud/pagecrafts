@@ -47,7 +47,13 @@ export function motifFor(vertical: string, extra = ''): MotionMotifId {
     if (/\b(logistics|courier|freight|packers?|movers?|shipping)\b/.test(t)) return 'crate';
     if (/\b(university|universities|college|tuition|coaching)\b/.test(t)) return 'cap';
     if (/\b(ngo|charit|nonprofit|non profit|donate|volunteer)/.test(t)) return 'heart';
-    if (/\b(restaurant|cafe|café|dining|kitchen|chef|breakfast|dosa|idli|thali|food.?truck)\b/.test(t)) return 'steam';
+    // No motif on a restaurant. The steam glyph sat as a large translucent line drawing over
+    // the hero photograph, and on a plate of food it read as a smudge on the lens rather than
+    // as decoration — the one place the picture is already doing the work.
+    //
+    // The rule is kept rather than deleted so the reason survives: 'steam' is still a motif
+    // the renderer knows how to draw, and a food business that genuinely wants one can be
+    // routed back here. Nothing else changes for the other verticals.
     if (/\b(saree|sari|clothing|fashion|boutique|textile|tailor)\b/.test(t)) return 'drape';
     if (/\b(wedding|bridal|marriage)\b/.test(t)) return 'flower';
     if (/\b(electric|electrician|wiring)\b/.test(t)) return 'bolt';
@@ -81,9 +87,15 @@ function markup(id: MotionMotifId, body: string): string {
     return `<div class="motion-motif" data-motif="${id}" aria-hidden="true"><span class="motif-halo"></span>${body}${sparks()}</div>`;
 }
 
-/** Aurora, perspective grid and grain — the kinetic canvas behind the motif. */
+/** Aurora, perspective grid, floating 3D glass cards and grain — the kinetic canvas behind the motif. */
 export function motionStageMarkup(): string {
-    return `<div class="motion-stage" aria-hidden="true"><span class="motion-aurora"></span><span class="motion-grid"></span><span class="motion-grain"></span><span class="motion-flare"></span></div>`;
+    const card = (variant: string) =>
+        `<div class="motion-float-card motion-float-card-${variant}">`
+        + `<div class="dot-row"><span class="dot"></span><span class="dot dot-b"></span><span class="dot dot-c"></span></div>`
+        + `<span class="bar bar-wide"></span><span class="bar bar-narrow"></span>`
+        + `</div>`;
+
+    return `<div class="motion-stage" aria-hidden="true"><span class="motion-aurora"></span><span class="motion-grid"></span><span class="motion-grain"></span><span class="motion-flare"></span><div class="motion-float-cards">${card('a')}${card('b')}</div></div>`;
 }
 
 /** Oversized ghost type that marquee-scrolls through the hero. */

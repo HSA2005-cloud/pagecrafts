@@ -218,11 +218,33 @@ function stylesCss(bp: Blueprint): string {
     const chrome = chromeForTemplateTier(bp.tier);
     const starterHero =
         chrome === "sidebar"
-            ? `.hero { position: relative; isolation: isolate; padding: 5rem 2rem 4rem; }
-.hero-copy { position: relative; z-index: 1; max-width: 36rem; }
-.hero-frame { position: absolute; inset: 0; z-index: 0; border-radius: 0; }
-.hero-frame::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, color-mix(in srgb, var(--bg) 88%, transparent) 20%, transparent 75%); }
-.hero-photo, .hero-art { width: 100%; height: 100%; object-fit: cover; }
+            ? `.hero {
+  position: relative; isolation: isolate;
+  min-height: min(88dvh, 44rem);
+  display: flex; flex-direction: column; align-items: center; justify-content: safe center;
+  text-align: center; padding: 4rem 2rem;
+}
+.hero-copy { position: relative; z-index: 1; max-width: 36rem; margin-inline: auto; text-align: center; }
+.hero-frame {
+  position: relative; z-index: 0; border-radius: 0.75rem;
+  width: min(100%, 28rem); min-height: 14rem; margin: 1.5rem auto 0; overflow: hidden;
+}
+.hero-photo, .hero-art { width: 100%; height: 100%; object-fit: cover; display: block; }
+.section, .footer { text-align: center; max-width: 42rem; margin-inline: auto; }
+`
+            : "";
+
+    const proBackdrop =
+        chrome === "topbar" && bp.heroImage
+            ? `body {
+  background-image:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 78%, transparent), color-mix(in srgb, var(--bg) 92%, transparent)),
+    url("${bp.heroImage.src.replace(/"/g, "%22")}");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+.hero { min-height: 100dvh; display: flex; flex-direction: column; justify-content: safe center; }
 `
             : "";
 
@@ -246,6 +268,7 @@ a { color: inherit; }
 
 ${tierChromeCss(chrome)}
 ${starterHero}
+${proBackdrop}
 ${chrome === "sidebar" ? "" : LAYOUT_CSS[bp.layout]}
 
 .hero h1 { margin: 0; font-size: clamp(2.25rem, 5vw, 3.5rem); line-height: 1.05; letter-spacing: -0.025em; }

@@ -34,8 +34,7 @@ export function PrivacyAndData({ initial }: { initial: AccountResponse }) {
     <div className="rounded-2xl glass-panel p-5">
       <p className="text-base font-semibold text-foreground">Privacy &amp; Data</p>
       <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-        What we keep, whether it may help improve PageCrafts, and a copy you can take with you.
-        Title, SEO and domains for a site live on that site in the editor — not here.
+        Control how we use your data and get a copy of it.
       </p>
 
       <div className="mt-5 border-t border-border/60 pt-5">
@@ -45,8 +44,7 @@ export function PrivacyAndData({ initial }: { initial: AccountResponse }) {
       <div className="mt-5 border-t border-border/60 pt-5">
         <p className="text-sm font-medium text-foreground">Download my data</p>
         <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-          A downloadable copy of your account facts and the names of your sites. It does not
-          include file trees or published pages on the internet.
+          Download your account details and site names.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button
@@ -68,9 +66,8 @@ export function PrivacyAndData({ initial }: { initial: AccountResponse }) {
       <div className="mt-5 border-t border-border/60 pt-5">
         <p className="text-sm font-medium text-foreground">How long we keep it</p>
         <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-          We keep your account, sites, and version history while the account is open. Closing
-          the account removes that copy. Sites you have already published stay online — they
-          are yours, on hosting you were given.
+          We keep your account and sites while the account is open. Deleting the account removes
+          that copy. Published sites stay online.
         </p>
       </div>
     </div>

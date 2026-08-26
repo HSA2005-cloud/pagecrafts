@@ -33,7 +33,7 @@ export type Row = Record<string, unknown>;
  * after this map was written were silently owner-scoped too, which hid the vertical
  * profiles from every test that touched them.
  */
-type OwnerRule = "own_user_id" | "via_project" | "public";
+type OwnerRule = "own_user_id" | "via_project" | "public" | "none";
 
 const POLICIES: Record<string, OwnerRule> = {
     users: "own_user_id",
@@ -46,16 +46,20 @@ const POLICIES: Record<string, OwnerRule> = {
     generations: "own_user_id",
     entitlements: "own_user_id",
     ai_edit_proposals: "own_user_id",
+    domains: "own_user_id",
     // Reference data shared by every generation, written only by the service role.
     vertical_profiles: "public",
     vertical_profile_aliases: "public",
+    // Scratch-card catalogue: clients may SELECT but the policy is `using (false)`.
+    discount_codes: "none",
+    discount_redemptions: "own_user_id",
 };
 
 /** The tables this fake claims to model. Read by the parity test, not by the fake itself. */
 export const TRANSCRIBED_TABLES: readonly string[] = Object.keys(POLICIES);
 
 // Tables whose updated_at is maintained by a `before update` trigger.
-const TOUCHES_UPDATED_AT = new Set(["projects", "users"]);
+const TOUCHES_UPDATED_AT = new Set(["projects", "users", "domains"]);
 
 interface QueryError {
     message: string;
@@ -121,6 +125,8 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
         switch (rule) {
             case "public":
                 return true;
+            case "none":
+                return false;
             case "via_project":
                 return ownsProject(row.project_id, userId);
             default:
