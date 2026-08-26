@@ -21,10 +21,11 @@ const MESSAGES: Partial<Record<ErrorCode, string>> = {
 
 // Closing an account (M-account, C-12).
 //
-// Irreversible, so confirmation is deliberate: type the words, then re-enter the password.
-// Bought templates and looks are revoked with the account — that has to be said out loud.
+// Irreversible, so confirmation is deliberate: acknowledge, type the words, then re-enter
+// the password. Bought templates and looks are revoked with the account — that has to be
+// said out loud.
 export function DeleteAccount({ email }: { email: string }) {
-    const [open, setOpen] = useState(false);
+    const [step, setStep] = useState<"idle" | "confirm" | "form">("idle");
     const [typed, setTyped] = useState("");
     const [password, setPassword] = useState("");
     const [state, setState] = useState<"idle" | "deleting" | "failed">("idle");
@@ -34,7 +35,7 @@ export function DeleteAccount({ email }: { email: string }) {
         typed.trim().toLowerCase() === CONFIRM && password.length >= MIN_PASSWORD_LENGTH;
 
     function reset() {
-        setOpen(false);
+        setStep("idle");
         setTyped("");
         setPassword("");
         setState("idle");
@@ -80,7 +81,8 @@ export function DeleteAccount({ email }: { email: string }) {
                     <AlertTriangle className="size-4" strokeWidth={2} aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
-                    <p className="text-base font-semibold text-destructive">Delete your account</p>
+                    <p className="text-base font-semibold text-destructive">Danger Zone</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">Delete account</p>
                     <p className="mt-1.5 text-sm leading-6 text-foreground/90">
                         This permanently removes your account, every site you have made, their
                         files, and their version history.{" "}
@@ -92,20 +94,48 @@ export function DeleteAccount({ email }: { email: string }) {
                 </div>
             </div>
 
-            {!open ? (
+            {step === "idle" ? (
                 <Button
                     variant="destructive"
                     size="sm"
                     className="mt-4 min-h-11 rounded-lg font-semibold"
-                    onClick={() => setOpen(true)}
+                    onClick={() => setStep("confirm")}
                 >
                     Delete my account
                 </Button>
-            ) : (
+            ) : null}
+
+            {step === "confirm" ? (
                 <div className="mt-5 space-y-4 rounded-xl border border-destructive/40 bg-background/40 p-4">
                     <p className="text-sm font-medium text-destructive" role="status">
-                        Are you sure? This cannot be undone. Bought designs will be gone with the
-                        account.
+                        Are you sure you want to permanently delete this account? This cannot be
+                        undone.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            className="min-h-11 rounded-lg font-semibold"
+                            onClick={() => setStep("form")}
+                        >
+                            Yes, continue
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="min-h-11 rounded-lg font-medium"
+                            onClick={reset}
+                        >
+                            Keep my account
+                        </Button>
+                    </div>
+                </div>
+            ) : null}
+
+            {step === "form" ? (
+                <div className="mt-5 space-y-4 rounded-xl border border-destructive/40 bg-background/40 p-4">
+                    <p className="text-sm font-medium text-destructive" role="status">
+                        Final step — type the confirmation phrase and your password.
                     </p>
 
                     <div>
@@ -163,7 +193,7 @@ export function DeleteAccount({ email }: { email: string }) {
                         {error}
                     </p>
                 </div>
-            )}
+            ) : null}
         </div>
     );
 }

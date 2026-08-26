@@ -18,7 +18,7 @@ const envSchema = z.object({
     AI_OUTPUT_CLASSIFY_TOKENS: z.coerce.number().int().positive().default(1_024),
     AI_OUTPUT_GENERATE_TOKENS: z.coerce.number().int().positive().default(4_000),
     AI_OUTPUT_EDIT_TOKENS: z.coerce.number().int().positive().default(2_000),
-    AI_OUTPUT_COMPOSE_TOKENS: z.coerce.number().int().positive().default(12_000),
+    AI_OUTPUT_COMPOSE_TOKENS: z.coerce.number().int().positive().default(6_000),
 
     // Sampling, per operation (D12). Deliberately optional: left unset nothing is
     // sent and the provider's own default applies, which is what every
@@ -50,9 +50,29 @@ const envSchema = z.object({
     GEMINI_TIMEOUT_EDIT_MS: z.coerce.number().int().positive().default(30_000),
     GEMINI_TIMEOUT_COMPOSE_MS: z.coerce.number().int().positive().default(90_000),
 
-    // ── Gemini (final fallback) ──────────────────────────────────────────────
+    // ── Gemini (final fallback / Ask AI brief expand) ────────────────────────
     // Optional; the "at least one key" rule lives in the gateway builder.
+    // Extra keys round-robin and rotate on rate-limit / daily quota, same as Groq.
     GEMINI_API_KEY: z.string().default(''),
+    GEMINI_API_KEYS: z.string().default(''),
+    GEMINI_API_KEY_2: z.string().default(''),
+    GEMINI_API_KEY_3: z.string().default(''),
+    GEMINI_API_KEY_4: z.string().default(''),
+    GEMINI_API_KEY_5: z.string().default(''),
+    GEMINI_API_KEY_6: z.string().default(''),
+    GEMINI_API_KEY_7: z.string().default(''),
+    GEMINI_API_KEY_8: z.string().default(''),
+    // Pictures, not words. A separate model because image generation is a separate quota
+    // and a separate failure mode from the text calls this provider also serves.
+    GEMINI_IMAGE_MODEL: z.string().default('imagen-3.0-generate-002'),
+    // How many photographs one build may draw. A generated site asks for a photo per
+    // section per look, which left alone is twenty images for one website.
+    AI_IMAGES_PER_SITE: z.coerce.number().int().min(0).default(4),
+    // Wall clock for the whole set. Past it the remaining slots take stock immediately, so
+    // a slow image service delays a build rather than holding it open.
+    AI_IMAGE_BUDGET_MS: z.coerce.number().int().min(0).default(75_000),
+    // 'off' turns generation off everywhere without pulling the keys out of Vercel.
+    AI_IMAGE_GENERATION: z.enum(['on', 'off']).default('on'),
     GEMINI_MODEL_FAST: z.string().default('gemini-3.5-flash-lite'),
     GEMINI_MODEL_STRONG: z.string().default('gemini-3.5-flash'),
     GEMINI_RPM: z.coerce.number().int().positive().default(5),
@@ -124,13 +144,23 @@ export interface ProviderPricing {
 export interface ProviderConfig {
     /** First key; empty means this provider is skipped. */
     apiKey: string;
-    /** Every key for this provider, de-duped. Groq round-robins these. */
+    /** Every key for this provider, de-duped. Groq and Gemini round-robin these. */
     apiKeys: string[];
     models: { fast: string; strong: string };
     /** OpenAI-compatible base URL. Empty for Gemini (it uses the native SDK). */
     baseUrl: string;
     quota: ProviderQuota;
     pricing: ProviderPricing;
+}
+
+export interface ImageConfig {
+    /** False when generation is switched off; keys are checked separately. */
+    enabled: boolean;
+    model: string;
+    /** Most photographs one build may draw before the rest come from stock. */
+    maxPerSite: number;
+    /** Wall clock for the whole set, from the first lookup. */
+    budgetMs: number;
 }
 
 /** Undefined means "send nothing and let the provider decide". */
@@ -161,6 +191,9 @@ export interface AiConfig {
     models: { fast: string; strong: string };
     quota: ProviderQuota;
     pricing: ProviderPricing;
+
+    /** Photographs for a generated site — see lib/images/site-photos.ts. */
+    images: ImageConfig;
 
     timeouts: Record<AiOperation, number>;
     maxOutputTokens: Record<AiOperation, number>;
@@ -235,11 +268,22 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
         v.GROQ_API_KEY_7,
         v.GROQ_API_KEY_8,
     );
+    const geminiKeys = parseApiKeys(
+        v.GEMINI_API_KEY,
+        v.GEMINI_API_KEYS,
+        v.GEMINI_API_KEY_2,
+        v.GEMINI_API_KEY_3,
+        v.GEMINI_API_KEY_4,
+        v.GEMINI_API_KEY_5,
+        v.GEMINI_API_KEY_6,
+        v.GEMINI_API_KEY_7,
+        v.GEMINI_API_KEY_8,
+    );
 
     const providers: Record<Provider, ProviderConfig> = {
         gemini: {
-            apiKey: v.GEMINI_API_KEY,
-            apiKeys: parseApiKeys(v.GEMINI_API_KEY),
+            apiKey: geminiKeys[0] ?? '',
+            apiKeys: geminiKeys,
             models: { fast: v.GEMINI_MODEL_FAST, strong: v.GEMINI_MODEL_STRONG },
             baseUrl: '',
             quota: {
@@ -303,6 +347,12 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
         models: active.models,
         quota: active.quota,
         pricing: active.pricing,
+        images: {
+            enabled: v.AI_IMAGE_GENERATION === 'on',
+            model: v.GEMINI_IMAGE_MODEL,
+            maxPerSite: v.AI_IMAGES_PER_SITE,
+            budgetMs: v.AI_IMAGE_BUDGET_MS,
+        },
         timeouts: {
             classify: v.GEMINI_TIMEOUT_CLASSIFY_MS,
             generate: v.GEMINI_TIMEOUT_GENERATE_MS,

@@ -25,6 +25,13 @@ describe('art direction — every dial has a definition', () => {
         expect(Object.keys(IMAGERY).sort()).toEqual([...IMAGERY_IDS].sort());
     });
 
+    it('never turns photographs black-and-white', () => {
+        for (const [id, treatment] of Object.entries(IMAGERY)) {
+            expect(treatment.filter, id).not.toMatch(/grayscale/i);
+            expect(treatment.filter, id).not.toMatch(/gray\s*\(/i);
+        }
+    });
+
     it('gives every theme a complete palette', () => {
         for (const [id, theme] of Object.entries(THEMES)) {
             for (const key of ['bg', 'ink', 'muted', 'accent', 'accentInk', 'panel', 'rule']) {

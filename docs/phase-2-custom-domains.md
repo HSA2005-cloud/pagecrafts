@@ -181,35 +181,34 @@ renewal fails at 2am on a Sunday for a customer whose shop opens at 9.
 
 Each stage is shippable and each de-risks the next.
 
-**Stage 1 · Connect a domain they already own.** No money, no registrar, no renewals. Proves
-the Cloudflare custom-hostname path end to end — which is the same code stages 3–5 need. One
-table, one endpoint, one screen. *A day.*
+**Stage 1 · Connect a domain they already own. — SHIPPED (custom-domain-connect).** No money, no
+registrar, no renewals. Proves the custom-hostname path end to end — which is the same code
+stages 3–5 need. One table, one endpoint, one screen.
 
-**Stage 2 · Search and quote.** Read-only against the registrar. Shows availability and
-price, buys nothing. Flushes out rate limits, caching and per-TLD pricing before money is
-involved. *Two days.*
+**Stage 2 · Search and quote. — SHIPPED (search/quote UI + registrar seam; all plans).** Read-only
+against the registrar. Shows availability and price, buys nothing. Flushes out rate limits,
+caching and per-TLD pricing before money is involved.
 
-**Stage 3 · Purchase.** Authorise → register → capture → attach. The state machine, the
-failure paths, the receipts. *Three to four days.*
+**Stage 3 · Purchase. — SHIPPED (Go Live path + ResellerClub register + CF zone/NS + Razorpay).**
+Authorise → register → capture → attach. Renewals and transfer-out UI still open.
 
 **Stage 4 · Renewals.** Job, reminders, auto-renew, grace, runbook. *Two days.*
 
 **Stage 5 · Transfer-out.** Auth code on request. Small, and non-negotiable. *Half a day.*
 
-Stage 1 alone would satisfy most customers who already have a domain. Consider shipping it
-and watching how many people ask to *buy* one before building stages 2–5.
+Stages 1–3 cover first-time buy. Do not sell at volume without Stage 4.
 
 ---
 
 ## Where the UI hooks in
 
-`src/components/editor/ChatComposer.tsx` already has the placeholder:
+Go Live only (editor top bar). Flow:
 
-> "Custom domains are coming. For now your site lives on a PageCrafts address."
+1. One-time deploy warning  
+2. Default `*.pagecrafts.in` address **or** **Choose a Custom Domain**  
+3. Suggest `.in` / `.co.in` / `.com` → confirm → pay → register + Cloudflare DNS  
 
-That banner becomes the entry point. The publish screen gains a choice — free PageCrafts
-address, or your own — with the free one preselected, because it is the one that works
-instantly and costs nothing.
+Ops checklist: `docs/production-domains-setup.md`.
 
 ---
 

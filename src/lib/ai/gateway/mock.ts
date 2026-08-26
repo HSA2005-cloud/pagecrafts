@@ -152,6 +152,34 @@ export class MockGateway {
             }));
         }
 
+        // Clarity gate — refuse gibberish so generate does not invent a site.
+        if (typeof req.system === 'string' && /clear enough to build/i.test(req.system)) {
+            const lower = p.toLowerCase();
+            const junk =
+                /asdf|qwer|zxcv|xxxxxx|aaaaaa|gibberish|lorem ipsum/.test(lower) ||
+                lower.replace(/[^a-z]/g, '').length < 8;
+            return this.reply(
+                JSON.stringify(
+                    junk
+                        ? { usable: false, confidence: 'low' }
+                        : { usable: true, confidence: 'high' },
+                ),
+            );
+        }
+
+        // Gemini expand stage — turn a short form brief into a detailed build prompt.
+        if (typeof req.system === 'string' && /detailed build brief/i.test(req.system)) {
+            const seed = p.replace(/<\/?description>/g, '').trim() || 'a local business website';
+            return this.reply(
+                JSON.stringify({
+                    expandedPrompt:
+                        `${seed} Build a complete marketing website with a clear hero, ` +
+                        `services, about, and contact sections. Keep every fact the person gave. ` +
+                        `Write concrete section copy for a visitor who wants to book or buy.`,
+                }),
+            );
+        }
+
         return this.reply(JSON.stringify(matchClassification(p)));
     }
 }

@@ -44,13 +44,29 @@ export function chatSuggestions(input: {
         ];
     }
 
+    // Ask rewrites the words in one section. edit.v1 says it outright — "you change the
+    // content of ONE section" and "never write HTML" — so a layout is not something it can
+    // return, and "use a slide-through layout" came back as "that change did not go
+    // through" every time. Two of the four chips were asking for the one thing the path
+    // cannot do, and they were the app's own suggestions.
+    //
+    // Each one now names a change to the copy, and says it in full rather than in three
+    // words, the way the starter branch above already does.
     const next: ChatSuggestion[] = [];
 
     if (types.has('hero')) {
-        next.push({ id: 'hero-graphical', label: 'Make the hero more graphical' });
+        next.push({
+            id: 'hero-headline',
+            label: 'Sharpen the headline',
+            send: 'Rewrite the hero heading so it names the business and what it sells',
+        });
     }
 
-    next.push({ id: 'slide-through', label: 'Use a slide-through layout' });
+    next.push({
+        id: 'warmer',
+        label: 'Make the copy warmer',
+        send: 'Make the copy warmer and more personal, keeping every fact exactly as it is',
+    });
 
     if (last) {
         next.push({
@@ -61,7 +77,19 @@ export function chatSuggestions(input: {
     }
 
     if (types.has('menu') || types.has('services')) {
-        next.push({ id: 'offerings', label: 'Make the list of offerings richer' });
+        next.push({
+            id: 'offerings',
+            label: 'Make the list of offerings richer',
+            send: 'Give each item on the list a fuller description, inventing nothing new',
+        });
+    }
+
+    if (types.has('contact')) {
+        next.push({
+            id: 'contact-clear',
+            label: 'Make it easier to get in touch',
+            send: 'Rewrite the contact section so the hours and the way to reach us are plain',
+        });
     }
 
     if (next.length < 4) {
