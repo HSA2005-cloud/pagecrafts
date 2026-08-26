@@ -84,6 +84,35 @@ describe('style presets — three looks from one brief', () => {
         expect(bankPhotoUrl('indian sweets mithai')).not.toBe(bankPhotoUrl('a gym in koramangala'));
     });
 
+    it('never stamps bakery bread on a travel / nature / vlog brief', async () => {
+        const { BAKERY_SHELF_PHOTO_ID } = await import('@/lib/ai/generate/photos');
+        const travelQuery = photoSearchQuery(
+            'travel-vlog',
+            'Pragna Travel Vlogs',
+            'hero',
+            'Explore nature videos, share your journeys, connect with fellow viewers.',
+        );
+        expect(travelQuery.toLowerCase()).toMatch(/nature|travel|journey/);
+        expect(bankPhotoUrl(travelQuery, 'job_travel_1')).not.toContain(BAKERY_SHELF_PHOTO_ID);
+        expect(bankPhotoUrl(travelQuery, 'job_travel_1')).not.toMatch(
+            /photo-1509440159596-0249088772ff|photo-1555507036|photo-1414235077428|photo-1504674900247/,
+        );
+
+        const travelSite = {
+            ...composition,
+            vertical: 'travel-vlog',
+            meta: {
+                ...composition.meta,
+                title: 'Pragna Travel Vlogs',
+                description: 'Explore nature videos, share your journeys, connect with fellow viewers.',
+            },
+        };
+        const stamped = await stampPhotoUrls(travelSite);
+        const heroImage = stamped.sections.find((section) => section.type === 'hero')?.props.image as { url?: string };
+        expect(heroImage.url).toMatch(/images\.unsplash\.com\/photo-/);
+        expect(heroImage.url).not.toContain(BAKERY_SHELF_PHOTO_ID);
+    });
+
     it('gives Set 1 and Set 2 different restaurant heroes when salted by job id', () => {
         const query = 'chinese restaurant fine dining bangalore';
         const set1 = bankPhotoUrl(query, 'job_set_1');
