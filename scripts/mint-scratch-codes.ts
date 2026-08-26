@@ -11,8 +11,12 @@ import {
 // One-time physical cards (default):
 //   npm run pay:mint-codes -- --count 50 --percent 20 --applies all --batch "fair-2026"
 //
-// One shared code up to 1 lakh people (each account once):
-//   npm run pay:mint-codes -- --count 1 --percent 10 --uses 100000 --applies all --batch "sale-10"
+// Unique reusable codes (each string is different; each can be used by up to 1 lakh people,
+// once per account):
+//   npm run pay:mint-codes -- --count 10 --percent 10 --uses 100000 --applies all --batch "sale-10-unique"
+//
+// One global shared code (everyone types the same string):
+//   npm run pay:mint-codes -- --count 1 --percent 10 --uses 100000 --code PC-SALE-TEN2 --applies all --batch "sale-10"
 //
 // Writes CSV to stdout. Codes are stored in the database; Razorpay is not involved.
 
@@ -45,8 +49,7 @@ async function main(): Promise<void> {
     }
 
     const uses = Number(arg("uses", "1"));
-    const defaultCount = uses > 1 ? "1" : "10";
-    const count = Number(arg("count", defaultCount));
+    const count = Number(arg("count", "10"));
     const percent = Number(arg("percent", "20"));
     const applies = (arg("applies", "all") ?? "all") as DiscountAppliesTo;
     const batch = arg("batch", `scratch-${new Date().toISOString().slice(0, 10)}`);
@@ -60,10 +63,7 @@ async function main(): Promise<void> {
         fail("--percent must be a whole number from 1 to 100.");
     }
     if (!Number.isInteger(uses) || uses < 1 || uses > 100_000) {
-        fail("--uses must be a whole number from 1 to 100000 (one lakh people on one code).");
-    }
-    if (uses > 1 && count !== 1) {
-        fail("A shared code (--uses above 1) is minted with --count 1. Print that one code everywhere.");
+        fail("--uses must be a whole number from 1 to 100000 (people per unique code).");
     }
     if (!APPLIES.includes(applies)) {
         fail(`--applies must be one of: ${APPLIES.join(", ")}`);
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
 
     console.error(
         uses > 1
-            ? `\n  minted shared code ${rows[0]?.code} — ${percent}% off, up to ${uses} people (once each)\n`
+            ? `\n  minted ${rows.length} unique reusable ${percent}% codes (up to ${uses} people each, once per account) in batch ${batch}\n`
             : `\n  minted ${rows.length} one-time ${percent}% ${applies} codes in batch ${batch}\n`,
     );
 }

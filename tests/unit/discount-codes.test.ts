@@ -109,4 +109,11 @@ describe("scratch-card codes", () => {
         expect(field).toContain("Coupon code");
         expect(field).toContain("onApplied");
     });
+
+    it("mint script allows many unique reusable codes in one batch", () => {
+        const mint = readFileSync(join(process.cwd(), "scripts/mint-scratch-codes.ts"), "utf8");
+        expect(mint).not.toMatch(/uses\s*>\s*1\s*&&\s*count\s*!==\s*1/);
+        expect(mint).toContain("--count 10 --percent 10 --uses 100000");
+        expect(mint).toContain("unique reusable");
+    });
 });

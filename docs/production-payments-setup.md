@@ -115,13 +115,24 @@ Razorpay and grants immediately).
 2. Apply the `discount_codes` migrations (`npx supabase db push` or your usual migrate).
 3. Mint.
 
-**Shared sale code (one code, up to 1 lakh people, once per account):**
+**Unique reusable codes (many different strings; each can be used again and again):**
+
+Each minted `PC-XXXX-XXXX` is a distinct code. `--uses 100000` means that *one* string can be
+redeemed by up to 1 lakh people. A person can still use a given code only **once per account**.
 
 ```bash
-npm run pay:mint-codes -- --count 1 --percent 10 --uses 100000 --applies all --batch "sale-10"
+npm run pay:mint-codes -- --count 10 --percent 10 --uses 100000 --applies all --batch "sale-10-unique"
 ```
 
-Print or share that one `code`. Everyone types the same value on `/plans` before they pay.
+Print each `code` on a different card, or hand them out one per campaign partner. Do not mint
+this against localhost if you need the codes on pagecrafts.in — point `.env.local` at
+**production** Supabase, or insert the same rows in the production SQL editor.
+
+**One global sale code (everyone types the same value):**
+
+```bash
+npm run pay:mint-codes -- --count 1 --percent 10 --uses 100000 --code PC-SALE-TEN2 --applies all --batch "sale-10"
+```
 
 **One-time physical cards:**
 
