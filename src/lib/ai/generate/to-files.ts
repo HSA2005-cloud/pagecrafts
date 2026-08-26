@@ -57,8 +57,10 @@ function imageSlot(path: string, value: unknown, fallbackAlt: string): string {
     const query = rec ? asString(rec.query) : (typeof value === 'string' ? value : '');
     const alt = (rec ? asString(rec.alt) : '') || fallbackAlt;
     const url = rec ? asString(rec.url) : '';
+    // Eager: Pick-a-look cards use a short scaled iframe. `loading="lazy"` never
+    // intersects that viewport, so heroes shipped as empty beige boxes with alt text.
     const photo = url
-        ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" />`
+        ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" loading="eager" decoding="async" fetchpriority="high" />`
         : '';
     return `<div class="img-slot" data-slot="${escapeHtml(path)}" role="img" aria-label="${escapeHtml(alt)}" data-query="${escapeHtml(query)}">${photo}</div>`;
 }
@@ -184,7 +186,7 @@ function renderInner(
                 const caption = asString(img.alt) || asString(img.query);
                 const query = asString(img.query);
                 const photo = asString(img.url)
-                    ? `<img src="${escapeHtml(asString(img.url))}" alt="${escapeHtml(caption || 'Gallery')}" loading="lazy" decoding="async" />`
+                    ? `<img src="${escapeHtml(asString(img.url))}" alt="${escapeHtml(caption || 'Gallery')}" loading="eager" decoding="async" />`
                     : '';
                 return `<figure><div class="img-slot" role="img" aria-label="${escapeHtml(caption || 'Gallery')}" data-query="${escapeHtml(query)}">${photo}</div>${query ? slot('span', `${path}.query`, escapeHtml(query), ' hidden') : ''
                     }${caption ? slot('figcaption', `${path}.alt`, escapeHtml(caption)) : ''

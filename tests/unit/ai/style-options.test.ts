@@ -84,6 +84,32 @@ describe('style presets — three looks from one brief', () => {
         expect(bankPhotoUrl('indian sweets mithai')).not.toBe(bankPhotoUrl('a gym in koramangala'));
     });
 
+    it('never stamps known-dead Unsplash ids, and hospital briefs get clinic photos', () => {
+        // These used to 404 on images.unsplash.com — Pick a look showed beige boxes + alt text.
+        const dead = [
+            'photo-1631217868264-e5b90bb7e629',
+            'photo-1424847653812-7ad6b33ea746',
+            'photo-1540189549336-e9fb1f3a1e3d',
+            'photo-1486427944299-d1955d23fd34',
+            'photo-1571902943202-507c674acf4a',
+        ];
+        const samples = [
+            bankPhotoUrl('hospital neurosurgery bangalore', 'job_a'),
+            bankPhotoUrl('Preethi Brain Surgery clinic', 'job_b'),
+            bankPhotoUrl('chinese restaurant fine dining', 'job_c'),
+            bankPhotoUrl('bakery bread pastry', 'job_d'),
+            bankPhotoUrl('gym fitness yoga', 'job_e'),
+        ];
+        for (const url of samples) {
+            for (const id of dead) {
+                expect(url).not.toContain(id);
+            }
+        }
+        expect(bankPhotoUrl('hospital neurosurgery bangalore', 'job_a')).toMatch(
+            /photo-1519494026892-80bbd2d6fd0d|photo-1516549655169-df83a0774514|photo-1579684385127-1ef15d508118|photo-1586773860418-d37222d8fce3|photo-1666214280557-f1b5022eb634/,
+        );
+    });
+
     it('gives Set 1 and Set 2 different restaurant heroes when salted by job id', () => {
         const query = 'chinese restaurant fine dining bangalore';
         const set1 = bankPhotoUrl(query, 'job_set_1');

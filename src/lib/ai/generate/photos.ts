@@ -16,9 +16,9 @@ const BANK = [
     'photo-1504674900247-0877df9cc836', // plated food
     'photo-1559339352-11d035aa65de', // restaurant service
     'photo-1416879595882-3373a0480b5b', // outdoor dining
-    'photo-1424847653812-7ad6b33ea746', // pasta plate
+    'photo-1565299624946-b28f40a0ae38', // pizza plate
     'photo-1466978913421-dad2ebd01d17', // restaurant bar
-    'photo-1540189549336-e9fb1f3a1e3d', // salad bowl
+    'photo-1546069901-ba9599a7e63c', // salad bowl
     'photo-1476224203421-9ac39bcb3327', // brunch table
     'photo-1499750310107-5fef28a66643', // desk
     'photo-1512917774080-9991f1c4c750', // house at dusk
@@ -41,9 +41,9 @@ const RESTAURANT_PHOTOS = [
     'photo-1504674900247-0877df9cc836',
     'photo-1559339352-11d035aa65de',
     'photo-1416879595882-3373a0480b5b',
-    'photo-1424847653812-7ad6b33ea746',
+    'photo-1565299624946-b28f40a0ae38',
     'photo-1466978913421-dad2ebd01d17',
-    'photo-1540189549336-e9fb1f3a1e3d',
+    'photo-1546069901-ba9599a7e63c',
     'photo-1476224203421-9ac39bcb3327',
 ] as const;
 
@@ -58,7 +58,22 @@ const BAKERY_PHOTOS = [
     'photo-1509440159596-0249088772ff',
     'photo-1517433670267-08bbd4be890f',
     'photo-1555507036-ab1f4038808a',
-    'photo-1486427944299-d1955d23fd34',
+    'photo-1578985545062-69928b1d9587',
+] as const;
+
+/** Clinic / hospital / surgery — every id must 200 on images.unsplash.com. */
+const CLINIC_PHOTOS = [
+    'photo-1519494026892-80bbd2d6fd0d',
+    'photo-1516549655169-df83a0774514',
+    'photo-1579684385127-1ef15d508118',
+    'photo-1586773860418-d37222d8fce3',
+    'photo-1666214280557-f1b5022eb634',
+] as const;
+
+const GYM_PHOTOS = [
+    'photo-1534438327276-14e5300c3a48',
+    'photo-1517836357463-d25dfeac3438',
+    'photo-1571019614242-c5c5dee9f50b',
 ] as const;
 
 const KEYWORD_PHOTO: Array<[RegExp, readonly string[]]> = [
@@ -66,11 +81,8 @@ const KEYWORD_PHOTO: Array<[RegExp, readonly string[]]> = [
     [/\b(bakery|bread|pastry|cake|patisserie)\b/i, BAKERY_PHOTOS],
     [/\b(cafe|coffee|chai)\b/i, CAFE_PHOTOS],
     [/\b(restaurant|dining|kitchen)\b/i, RESTAURANT_PHOTOS],
-    [/\b(gym|fitness|yoga)\b/i, ['photo-1534438327276-14e5300c3a48', 'photo-1571902943202-507c674acf4a']],
-    [/\b(clinic|dental|hospital|doctor|veterinary|vet)\b/i, [
-        'photo-1519494026892-80bbd2d6fd0d',
-        'photo-1631217868264-e5b90bb7e629',
-    ]],
+    [/\b(gym|fitness|yoga)\b/i, GYM_PHOTOS],
+    [/\b(clinic|dental|hospital|doctor|veterinary|vet|surgery|surgical|surgeon|neurosurg|medical|healthcare)\b/i, CLINIC_PHOTOS],
     [/\b(saree|clothing|fashion|boutique|apparel|garment|dress|textile)\b/i, [CLOTHING_PHOTO_ID]],
 ];
 
