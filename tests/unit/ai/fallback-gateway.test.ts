@@ -143,4 +143,26 @@ describe('FallbackGateway', () => {
         expect(elapsed).toBeGreaterThanOrEqual(60);
         expect(elapsed).toBeLessThan(1000);
     });
+
+    it('tries a preferred provider first even when it is not head of the order', async () => {
+        const groq = stub('groq', reply('groq'));
+        const gemini = stub('gemini', reply('gemini'));
+        const out = await new FallbackGateway([groq], undefined, [gemini, groq]).complete({
+            ...req,
+            prefer: 'gemini',
+        });
+        expect(out.provider).toBe('gemini');
+        expect(gemini.complete).toHaveBeenCalledOnce();
+        expect(groq.complete).not.toHaveBeenCalled();
+    });
+
+    it('falls through the default chain when the preferred provider fails', async () => {
+        const groq = stub('groq', reply('groq'));
+        const gemini = stub('gemini', new GatewayError('rate_limited', 'gemini 429', true));
+        const out = await new FallbackGateway([groq], undefined, [gemini, groq]).complete({
+            ...req,
+            prefer: 'gemini',
+        });
+        expect(out.provider).toBe('groq');
+    });
 });

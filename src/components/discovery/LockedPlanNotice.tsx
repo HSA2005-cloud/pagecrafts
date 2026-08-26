@@ -50,7 +50,7 @@ export function LockedPlanNotice({
                     }),
                 )}
             >
-                See User Plans
+                Upgrade to {badge}
             </Link>
         </div>
     );

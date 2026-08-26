@@ -24,7 +24,16 @@ export interface Job {
     id: string;
     projectId: string;
     userId: string;
+    /** What the person typed. Never overwritten — it is shown back to them. */
     prompt: string;
+    /**
+     * The expanded brief the build actually ran on, when Gemini widened the short one.
+     *
+     * Kept beside `prompt` rather than replacing it: the expansion is an instruction the
+     * system wrote to itself, injection-guard tags and all, and it was being shown to the
+     * person as their own description.
+     */
+    buildPrompt?: string;
     status: JobStatus;
     sectionsDone: number;
     sectionsTotal: number;

@@ -4,7 +4,10 @@ export type CreationIssueKind =
     | 'chat'
     | 'load'
     | 'photos'
-    | 'keys';
+    | 'keys'
+    | 'busy'
+    | 'daily_cap'
+    | 'too_long';
 
 export interface CreationIssue {
     kind: CreationIssueKind;
@@ -19,6 +22,20 @@ function looksLikeMissingKey(message: string): boolean {
 
 function looksLikePhotos(message: string): boolean {
     return /\b(photo|image|unsplash|picture)\b/i.test(message);
+}
+
+/** Groq's per-day token allowance, which unlike a per-minute 429 does not recover by waiting. */
+function looksLikeDailyCap(message: string): boolean {
+    return /tokens per day|\bTPD\b|tokens\/day|daily token cap|daily allowance/i.test(message);
+}
+
+function looksLikeBusy(message: string): boolean {
+    return /rate[ _-]?limit|\b429\b|too many requests|tokens per minute|\bTPM\b|capacity/i.test(message);
+}
+
+/** finish_reason "length" — the model stopped mid-reply at the output ceiling. */
+function looksLikeTooLong(message: string): boolean {
+    return /cut off|token ceiling|max_tokens|too large|payload too large|\b413\b/i.test(message);
 }
 
 function looksLikeMissingAsset(message: string): boolean {
@@ -63,12 +80,47 @@ export function explainCreationIssue(
                     'Repair the site so every page works, using placeholder photos where real ones could not load.',
             };
         }
+
+        // The three causes that actually happen, named. This used to be one sentence for
+        // every failure, which meant nobody — including the people building this — could
+        // tell "come back tomorrow" from "shorten your description" without the server log.
+        if (looksLikeDailyCap(message)) {
+            return {
+                kind: 'daily_cap',
+                title: "Today's AI budget is used up",
+                what: 'PageCrafts has hit its limit with the AI provider for today. It resets overnight;'
+                    + ' nothing you typed was wrong and nothing was lost.',
+                instruction:
+                    'Generate this website again from my description once the daily allowance has reset.',
+            };
+        }
+        if (looksLikeBusy(message)) {
+            return {
+                kind: 'busy',
+                title: 'The AI is busy right now',
+                what: 'Too many builds are running at once. Waiting a minute is usually enough.',
+                instruction:
+                    'Generate this website again from my description and make sure every page works.',
+            };
+        }
+        if (looksLikeTooLong(message)) {
+            return {
+                kind: 'too_long',
+                title: 'That description asked for more than one build can hold',
+                what: 'The site was still being written when it ran out of room. A shorter description,'
+                    + ' or fewer sections, will finish.',
+                instruction:
+                    'Generate this website again from my description, keeping it to the most important'
+                    + ' pages so every one of them completes.',
+            };
+        }
+
         return {
             kind: 'generation',
             title: 'This site did not finish building',
             what: 'The website started, but a page or section did not complete.',
             instruction:
-                'Generate this website again from my description and make sure every page works.',
+                'Rebuild this site from the same business brief and finish every page cleanly.',
         };
     }
 

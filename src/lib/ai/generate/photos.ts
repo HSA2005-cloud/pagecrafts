@@ -11,7 +11,10 @@ const unsplash = (id: string) => `https://images.unsplash.com/${id}${PHOTO}`;
 const BANK = [
     'photo-1509440159596-0249088772ff', // bakery shelf
     'photo-1554118811-1e0d58224f24', // café table
-    'photo-1414235077428-338989a2e8c0', // restaurant
+    'photo-1414235077428-338989a2e8c0', // restaurant dining
+    'photo-1517248135467-4c7edcad34c4', // restaurant interior
+    'photo-1504674900247-0877df9cc836', // plated food
+    'photo-1559339352-11d035aa65de', // restaurant service
     'photo-1499750310107-5fef28a66643', // desk
     'photo-1512917774080-9991f1c4c750', // house at dusk
     'photo-1476514525535-07fb3b4ae5f1', // lake
@@ -26,15 +29,43 @@ export const DESSERT_PHOTO_ID = 'photo-1551024506-0bccd828d307';
 /** Fashion retail interior. Only for clothing/saree/boutique queries. */
 export const CLOTHING_PHOTO_ID = 'photo-1441986300917-64674bd600d8';
 
-const KEYWORD_PHOTO: Array<[RegExp, string]> = [
-    [/\b(sweet|mithai|dessert|laddu|ladoo|jalebi|halwa|peda|barfi|gulab|confection|chocolate|cupcake)\b/i, DESSERT_PHOTO_ID],
-    [/\b(bakery|bread|pastry|cake|patisserie)\b/i, 'photo-1509440159596-0249088772ff'],
-    [/\b(cafe|coffee|chai)\b/i, 'photo-1554118811-1e0d58224f24'],
-    [/\b(restaurant|dining|kitchen)\b/i, 'photo-1414235077428-338989a2e8c0'],
-    [/\b(gym|fitness|yoga)\b/i, 'photo-1534438327276-14e5300c3a48'],
-    [/\b(clinic|dental|hospital|doctor|veterinary|vet)\b/i, 'photo-1519494026892-80bbd2d6fd0d'],
-    [/\b(saree|clothing|fashion|boutique|apparel|garment|dress|textile)\b/i, CLOTHING_PHOTO_ID],
+/** Dining / restaurant heroes — salted so Set 1 and Set 2 are not the same photo. */
+const RESTAURANT_PHOTOS = [
+    'photo-1414235077428-338989a2e8c0',
+    'photo-1517248135467-4c7edcad34c4',
+    'photo-1504674900247-0877df9cc836',
+    'photo-1559339352-11d035aa65de',
+] as const;
+
+const CAFE_PHOTOS = [
+    'photo-1554118811-1e0d58224f24',
+    'photo-1495474472287-4d71bcdd2085',
+    'photo-1501339847302-ac426a4a7cbb',
+] as const;
+
+const BAKERY_PHOTOS = [
+    'photo-1509440159596-0249088772ff',
+    'photo-1517433670267-08bbd4be890f',
+    'photo-1555507036-ab1f4038808a',
+] as const;
+
+const KEYWORD_PHOTO: Array<[RegExp, readonly string[]]> = [
+    [/\b(sweet|mithai|dessert|laddu|ladoo|jalebi|halwa|peda|barfi|gulab|confection|chocolate|cupcake)\b/i, [DESSERT_PHOTO_ID]],
+    [/\b(bakery|bread|pastry|cake|patisserie)\b/i, BAKERY_PHOTOS],
+    [/\b(cafe|coffee|chai)\b/i, CAFE_PHOTOS],
+    [/\b(restaurant|dining|kitchen)\b/i, RESTAURANT_PHOTOS],
+    [/\b(gym|fitness|yoga)\b/i, ['photo-1534438327276-14e5300c3a48']],
+    [/\b(clinic|dental|hospital|doctor|veterinary|vet)\b/i, ['photo-1519494026892-80bbd2d6fd0d']],
+    [/\b(saree|clothing|fashion|boutique|apparel|garment|dress|textile)\b/i, [CLOTHING_PHOTO_ID]],
 ];
+
+function hashPick(text: string, size: number): number {
+    let hash = 0;
+    for (let i = 0; i < text.length; i += 1) {
+        hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+    }
+    return size > 0 ? hash % size : 0;
+}
 
 /** Search Unsplash for Indian mithai, never "sweet shop" (that returns villas). */
 export const MITHAI_SEARCH = 'indian mithai ladoo barfi gulab jamun tray';
@@ -62,16 +93,19 @@ export function photoSearchQuery(vertical: string, title: string, query: string)
     return unique.join(' ');
 }
 
-export function bankPhotoUrl(query: string): string {
+/**
+ * Offline / fallback photograph. `salt` (usually the job id) picks which photo in a
+ * keyword pool — without it, every restaurant Set reused the same dining table.
+ */
+export function bankPhotoUrl(query: string, salt = ''): string {
     const text = query.trim();
-    for (const [re, id] of KEYWORD_PHOTO) {
-        if (re.test(text)) return unsplash(id);
+    const key = `${salt}:${text}`;
+    for (const [re, ids] of KEYWORD_PHOTO) {
+        if (re.test(text)) {
+            return unsplash(ids[hashPick(key, ids.length)] ?? ids[0]);
+        }
     }
-    let hash = 0;
-    for (let i = 0; i < text.length; i += 1) {
-        hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-    }
-    return unsplash(BANK[hash % BANK.length] ?? BANK[0]);
+    return unsplash(BANK[hashPick(key, BANK.length)] ?? BANK[0]);
 }
 
 function imageQuery(value: unknown): string {
@@ -100,6 +134,8 @@ export async function stampPhotoUrls(
     lookup: (query: string) => Promise<string> = async (query) => bankPhotoUrl(query),
     /** When set, only these section types receive photographs (Starter stamps the hero alone). */
     onlyTypes?: ReadonlyArray<Composition['sections'][number]['type']>,
+    /** Job / attempt salt so regenerate (Set 2) does not reuse Set 1's bank photo. */
+    salt = '',
 ): Promise<Composition> {
     const cache = new Map<string, string>();
     const title = composition.meta.title ?? '';
@@ -112,7 +148,7 @@ export async function stampPhotoUrls(
         if (hit) return hit;
         // Live Unsplash on "sweet shop" returns villas and clothing rails.
         const url = isMithaiShop(composition.vertical, title, search)
-            ? bankPhotoUrl(search)
+            ? bankPhotoUrl(search, salt)
             : await lookup(search);
         cache.set(key, url);
         return url;

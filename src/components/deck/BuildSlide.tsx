@@ -76,21 +76,20 @@ export function BuildSlide({
                         Name, place, and what they do. We write every page from those facts.
                     </p>
                     <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                        On Free, you can create or regenerate a site{" "}
+                        On Starter, you can create or regenerate a site{" "}
                         <span className="font-medium text-foreground">3 times</span> (each round
-                        gives three looks). Need more? Upgrade to{" "}
-                        <span className="font-medium text-foreground">Advanced</span> for 10× AI
-                        usage — that is separate from Starter, Pro, and Premium design tiers.
+                        gives three looks). Pro gives 5× AI usage; Premium gives 15× — both on
+                        User Plans.
                     </p>
                     <Link
-                        href="/packages"
+                        href="/plans"
                         className={buttonVariants({
                             variant: "outline-brand",
                             size: "sm",
                             className: "mt-3 rounded-full font-semibold",
                         })}
                     >
-                        View AI rebuilds
+                        View User Plans
                         <ArrowRight aria-hidden />
                     </Link>
                     <div className="mt-5">

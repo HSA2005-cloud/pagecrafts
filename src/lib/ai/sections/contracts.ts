@@ -111,7 +111,7 @@ export const SECTION_CONTRACTS: Record<SectionKey, SectionContract> = {
     about: define('about', 'About', ['text', 'media-split'], [
         t('heading', 'Heading'), rt('body', 'Body', 900), img('image', 'Image'),
     ]),
-    services: define('services', 'Services', ['cards', 'grid', 'timeline'], [
+    services: define('services', 'Services', ['cards', 'grid', 'timeline', 'tabs'], [
         t('heading', 'Heading'),
         list('items', 'Items', [t('title', 'Title', 60), rt('body', 'Description', 240)], 8),
     ]),

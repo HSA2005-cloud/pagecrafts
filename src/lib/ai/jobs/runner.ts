@@ -6,7 +6,9 @@ import { assemble } from '../generate/assemble';
 import { compositionToFiles } from '../generate/to-files';
 import { buildCustomStyleOptions, buildStyleOptions } from '../generate/options';
 import { composeCustomSite } from '../generate/compose-custom';
-import { estimateSiteBuild } from '../generate/complexity';
+import { customBuildFits, estimateSiteBuild } from '../generate/complexity';
+import { expandBrief } from '../generate/expand-brief';
+import { aiConfig } from '../config';
 import { bankPhotoUrl } from '../generate/photos';
 import { checkAndRecord } from '../composition/validate';
 import { withOneRepair } from '../generate/repair';
@@ -73,8 +75,23 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
     try {
         await advance('planning');
 
+        // Estimate on the short form brief so expand cannot flip every job to custom.
         const estimate = estimateSiteBuild(job.prompt);
-        const intent = await classify(job.prompt);
+
+        // Gemini expands the brief; Groq (prefer) builds from the detailed prompt.
+        const expanded = await expandBrief(job.prompt);
+        if (expanded.usage.model !== 'none') bill('expand', expanded.usage);
+        const buildPrompt = expanded.data.expandedPrompt || job.prompt;
+        if (expanded.data.expanded) {
+            await store.update(job.id, { buildPrompt });
+            await emit('plan', {
+                mode: 'expand',
+                expanded: true,
+                chars: buildPrompt.length,
+            });
+        }
+
+        const intent = await classify(buildPrompt);
         const provider = bill('classify', intent.usage);
         fallbackAttrs = {
             vertical: intent.data.vertical,
@@ -84,7 +101,21 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             sections: intent.data.sections,
         };
 
-        if (estimate.mode === 'custom') {
+        const budget = aiConfig();
+        const composeAffordable = customBuildFits(estimate, {
+            composeMaxTokens: budget.maxOutputTokens.compose,
+            tpm: budget.quota.tpm,
+        });
+
+        if (estimate.mode === 'custom' && !composeAffordable) {
+            console.warn(
+                `[generate] job ${job.id}: custom compose needs `
+                    + `${budget.maxOutputTokens.compose} output tokens against a `
+                    + `${budget.quota.tpm} TPM limit — building with the section recipe instead.`,
+            );
+        }
+
+        if (estimate.mode === 'custom' && composeAffordable) {
             await emit('plan', {
                 mode: 'custom',
                 band: estimate.band,
@@ -97,7 +128,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
                 ledger: [...ledger.all()],
             });
 
-            const composed = await composeCustomSite(job.prompt, intent.data);
+            const composed = await composeCustomSite(buildPrompt, intent.data);
             bill('compose', composed.usage);
             await emit('section', { type: 'custom', variant: 'files' });
 
@@ -136,7 +167,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
         const p = await fetchProfile(intent.data.vertical);
         bill('profile', p.usage);
 
-        const planned = await plan(job.prompt, intent.data, p.data);
+        const planned = await plan(buildPrompt, intent.data, p.data);
         bill('plan', planned.usage);
         fallbackAttrs.sections = planned.data.map((section) => section.type);
 
@@ -157,7 +188,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             const ctx = {
                 vertical: intent.data.vertical,
                 tone: intent.data.tone,
-                prompt: job.prompt,
+                prompt: buildPrompt,
                 customerWord: p.data.vocabulary.customer,
             };
 
@@ -177,7 +208,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             if (outcome.repaired) await emit('repair', { section: section.type });
 
             props.set(section.id, outcome.data.data);
-            const preview = previewFiles(planned.data, props, intent.data.vertical, p.data, job.prompt, intent.data.tone);
+            const preview = previewFiles(planned.data, props, intent.data.vertical, p.data, buildPrompt, intent.data.tone);
             await advance('streaming', {
                 sectionsDone: i + 1,
                 ledger: [...ledger.all()],
@@ -195,7 +226,7 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             sections: planned.data,
             props,
             title: p.data.label,
-            description: job.prompt.slice(0, 160),
+            description: buildPrompt.slice(0, 160),
             tone: intent.data.tone,
         });
 
@@ -215,7 +246,12 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
             }
         }
 
-        const variants = await buildStyleOptions(composition, lookupPhoto, job.prompt);
+        const variants = await buildStyleOptions(
+            composition,
+            (q) => lookupPhoto(q, job.id),
+            buildPrompt,
+            job.id,
+        );
         const picked = variants[0];
         const files = picked?.files ?? compositionToFiles(composition);
         const endedAt = Date.now();
@@ -245,6 +281,8 @@ export async function runJob(job: Job, deps: RunnerDeps = {}): Promise<Job> {
         return done;
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+
+        console.error(`[generate] job ${job.id} failed, falling back — ${message}`);
 
         const fallback = nearestTemplate(
             fallbackAttrs,
@@ -351,13 +389,27 @@ function previewFiles(
     }
 }
 
-async function lookupPhoto(query: string): Promise<string> {
+function pickIndex(salt: string, length: number): number {
+    if (length <= 1) return 0;
+    let hash = 0;
+    for (let i = 0; i < salt.length; i += 1) {
+        hash = (hash * 31 + salt.charCodeAt(i)) >>> 0;
+    }
+    return hash % length;
+}
+
+// A whole page of results comes back and only items[0] was ever read, so every restaurant
+// in the country got the same photograph and generating again returned it a second time.
+// The salt is the job id, which is why two attempts differ and two businesses differ.
+async function lookupPhoto(query: string, salt = ''): Promise<string> {
     try {
         const { isImageSearchConfigured, searchImages } = await import('@/lib/images/unsplash');
-        if (!isImageSearchConfigured()) return bankPhotoUrl(query);
+        if (!isImageSearchConfigured()) return bankPhotoUrl(query, salt);
         const { items } = await searchImages(query, 1);
-        return items[0]?.fullUrl ?? bankPhotoUrl(query);
+        if (!items.length) return bankPhotoUrl(query, salt);
+        return items[pickIndex(`${salt}:${query}`, items.length)]?.fullUrl
+            ?? bankPhotoUrl(query, salt);
     } catch {
-        return bankPhotoUrl(query);
+        return bankPhotoUrl(query, salt);
     }
 }
