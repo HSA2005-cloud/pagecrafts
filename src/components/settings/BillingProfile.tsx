@@ -11,6 +11,9 @@ export function BillingProfile({ initial }: { initial: AccountResponse }) {
     const [phone, setPhone] = useState(initial.phone);
     const [billingLine, setBillingLine] = useState(initial.billingLine);
     const [billingCity, setBillingCity] = useState(initial.billingCity);
+    const [billingState, setBillingState] = useState(initial.billingState);
+    const [billingPostal, setBillingPostal] = useState(initial.billingPostal);
+    const [billingCountry, setBillingCountry] = useState(initial.billingCountry);
     const [gstin, setGstin] = useState(initial.gstin);
     const [state, setState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
 
@@ -21,7 +24,16 @@ export function BillingProfile({ initial }: { initial: AccountResponse }) {
             const response = await fetch("/api/v1/account/profile", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ displayName, phone, billingLine, billingCity, gstin }),
+                body: JSON.stringify({
+                    displayName,
+                    phone,
+                    billingLine,
+                    billingCity,
+                    billingState,
+                    billingPostal,
+                    billingCountry,
+                    gstin,
+                }),
             });
             if (!response.ok) throw new Error("refused");
             setState("saved");
@@ -33,10 +45,9 @@ export function BillingProfile({ initial }: { initial: AccountResponse }) {
     if (!initial.billingReady) {
         return (
             <div className="rounded-2xl glass-panel p-5">
-                <p className="text-base font-semibold text-foreground">You, and the bill</p>
+                <p className="text-base font-semibold text-foreground">Billing Details</p>
                 <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-                    Receipt name and address are not stored on this account yet. We never keep a
-                    card or bank number — those stay with Razorpay when you go live.
+                    Receipt name and address are not stored on this account yet.
                 </p>
             </div>
         );
@@ -44,10 +55,9 @@ export function BillingProfile({ initial }: { initial: AccountResponse }) {
 
     return (
         <form onSubmit={(event) => void save(event)} className="rounded-2xl glass-panel p-5">
-            <p className="text-base font-semibold text-foreground">You, and the bill</p>
+            <p className="text-base font-semibold text-foreground">Billing Details</p>
             <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-                When you buy a look, Razorpay takes the payment. We keep the name and address for
-                the receipt — never a card or bank account number.
+                Name and address for receipts. Card details stay with the payment provider.
             </p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -89,6 +99,33 @@ export function BillingProfile({ initial }: { initial: AccountResponse }) {
                     />
                 </label>
                 <label className="text-sm">
+                    <span className="text-muted-foreground">State</span>
+                    <Input
+                        className="mt-1.5"
+                        value={billingState}
+                        onChange={(e) => setBillingState(e.target.value)}
+                        autoComplete="address-level1"
+                    />
+                </label>
+                <label className="text-sm">
+                    <span className="text-muted-foreground">PIN / ZIP code</span>
+                    <Input
+                        className="mt-1.5"
+                        value={billingPostal}
+                        onChange={(e) => setBillingPostal(e.target.value)}
+                        autoComplete="postal-code"
+                    />
+                </label>
+                <label className="text-sm">
+                    <span className="text-muted-foreground">Country</span>
+                    <Input
+                        className="mt-1.5"
+                        value={billingCountry}
+                        onChange={(e) => setBillingCountry(e.target.value)}
+                        autoComplete="country-name"
+                    />
+                </label>
+                <label className="text-sm sm:col-span-2">
                     <span className="text-muted-foreground">GSTIN (optional)</span>
                     <Input
                         className="mt-1.5"

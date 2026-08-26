@@ -30,6 +30,21 @@ export class ApiError extends Error {
     }
 }
 
+/**
+ * True for an ApiError even when the class object differs across a reloaded
+ * module graph (`instanceof` then fails and the route would answer `internal`).
+ */
+export function isApiError(err: unknown): err is ApiError {
+    if (err instanceof ApiError) return true;
+    if (!err || typeof err !== 'object') return false;
+    const candidate = err as { name?: unknown; code?: unknown; message?: unknown };
+    return (
+        candidate.name === 'ApiError' &&
+        typeof candidate.code === 'string' &&
+        typeof candidate.message === 'string'
+    );
+}
+
 export function ok<T>(data: T, status = 200) {
     return NextResponse.json<ApiResult<T>>({ ok: true, data }, { status });
 }
@@ -45,7 +60,7 @@ export async function guard(handler: () => Promise<Response>): Promise<Response>
     try {
         return await handler();
     } catch (err) {
-        if (err instanceof ApiError) return fail(err.code, err.message, err.detail);
+        if (isApiError(err)) return fail(err.code, err.message, err.detail);
 
         captureError(err, { tags: { boundary: 'guard' } });
         console.error('[api]', err);

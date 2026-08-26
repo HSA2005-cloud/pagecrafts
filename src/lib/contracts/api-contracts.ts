@@ -51,7 +51,9 @@ export interface EditProjectResponse {
 
 export interface PublishProjectResponse {
   deploymentId: string;
-  status: "pending";
+  status: "pending" | "live" | "failed";
+  liveUrl?: string | null;
+  error?: string | null;
 }
 
 export interface DeploymentResponse {

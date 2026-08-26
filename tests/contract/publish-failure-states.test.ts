@@ -209,15 +209,32 @@ describe("each failure mode, end to end", () => {
         });
     }
 
-    it("tells the owner a slow site is on its way, not that it failed", async () => {
-        // The propagation case. `verifying` is not a failure and the row must not read like
-        // one — but silence is worse: somebody who pressed publish two minutes ago and sees
-        // nothing assumes it broke.
+    it("says a finished publish is live even when origins were never probed", async () => {
+        // Speed path: mark live after push + DNS without waiting on custom-domain probes.
         const { db, projectId } = seeded();
         const attempt = await publishProject(
             db.asUser(OWNER), OWNER, projectId, nextKey(), provider({ live: false }),
         );
         await settled(db, attempt.deploymentId);
+
+        const [summary] = await listProjects(db.asUser(OWNER), OWNER);
+
+        expect(summary!.status).toBe("live");
+        expect(summary!.failure).toBeNull();
+        expect(summary!.liveUrl).toBe("https://meeras-cafe.pagecrafts.in");
+    });
+
+    it("still surfaces a verifying row left by an older attempt", async () => {
+        // Propagation case kept for poll/resume: verifying is not a failure.
+        const { db, projectId } = seeded();
+        const project = db.rows("projects").find((p) => p.id === projectId)!;
+        project.repo_full_name = "meeras-cafe";
+        db.insert("deployments", {
+            project_id: projectId,
+            status: "verifying",
+            live_url: null,
+            failure_reason: "not_answering_yet",
+        });
 
         const [summary] = await listProjects(db.asUser(OWNER), OWNER);
 
@@ -247,12 +264,20 @@ describe("each failure mode, end to end", () => {
         expect(summary!.failure).toBeNull();
     });
 
-    it("refuses an unpaid publish in the same words the dashboard would use", async () => {
+    // Not paying is no longer a way to fail. Going live on a PageCrafts address is free, so
+    // an unpaid project publishes like any other and the dashboard has nothing to explain.
+    // Custom domain registration is still paid, separately and later.
+    it("does not treat an unpaid publish as a failure at all", async () => {
         const { db, projectId } = seeded({ paid: false });
 
-        await expect(
-            publishProject(db.asUser(OWNER), OWNER, projectId, nextKey(), provider()),
-        ).rejects.toMatchObject({ code: "payment_required" });
+        const attempt = await publishProject(
+            db.asUser(OWNER), OWNER, projectId, nextKey(), provider(),
+        );
+
+        expect(attempt.deploymentId).toBeTruthy();
+
+        const [summary] = await listProjects(db.asUser(OWNER), OWNER);
+        expect(summary!.failure).toBeNull();
     });
 
     it("covers every failure mode the publish path can actually produce", () => {
@@ -330,16 +355,35 @@ describe("retrying after a failure", () => {
         // key, so this guard is the one that stops a double click.
         const { db, projectId } = seeded();
         const client = db.asUser(OWNER);
-        const slow = provider({ live: false });
+        const log = { provisions: 0, pushes: 0 };
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
 
-        const first = await publishProject(client, OWNER, projectId, nextKey(), slow);
-        await settled(db, first.deploymentId);
+        const slow: DeployProvider & { log: typeof log } = {
+            ...provider({ log }),
+            async pushBuild() {
+                log.pushes += 1;
+                await gate;
+                return { commitSha: "abc1234" };
+            },
+        };
 
-        // The attempt is resting in `verifying`, which is still in flight.
+        const firstPromise = publishProject(client, OWNER, projectId, nextKey(), slow);
+        // Let the first attempt open its row and reach pushing.
+        for (let i = 0; i < 200; i += 1) {
+            if (db.rows("deployments").some((r) => r.status === "pushing")) break;
+            await new Promise((r) => setTimeout(r, 5));
+        }
+
         const second = await publishProject(client, OWNER, projectId, nextKey(), slow);
+        release();
+        const first = await firstPromise;
 
         expect(second.deploymentId).toBe(first.deploymentId);
-        expect(slow.log.provisions).toBe(1);
+        expect(second.status).toBe("pending");
+        expect(log.provisions).toBe(1);
         expect(db.rows("deployments")).toHaveLength(1);
     });
 

@@ -95,6 +95,22 @@ describe('loadAiConfig', () => {
         expect(cfg.providers.groq.apiKey).toBe('k1');
     });
 
+    it('reads extra Gemini keys and de-dupes, keeping GEMINI_API_KEY first', () => {
+        const cfg = loadAiConfig({
+            GEMINI_API_KEY: 'g1',
+            GEMINI_API_KEYS: 'g2, g1, g3',
+            GEMINI_API_KEY_4: 'g4',
+        });
+        expect(cfg.providers.gemini.apiKeys).toEqual(['g1', 'g2', 'g3', 'g4']);
+        expect(cfg.providers.gemini.apiKey).toBe('g1');
+    });
+
+    it('accepts GEMINI_API_KEYS alone', () => {
+        const cfg = loadAiConfig({ GEMINI_API_KEYS: 'a b c d' });
+        expect(cfg.providers.gemini.apiKeys).toEqual(['a', 'b', 'c', 'd']);
+        expect(cfg.providers.gemini.apiKey).toBe('a');
+    });
+
     it('accepts GROQ_API_KEYS alone', () => {
         const cfg = loadAiConfig({ GROQ_API_KEYS: 'a b c' });
         expect(cfg.providers.groq.apiKeys).toEqual(['a', 'b', 'c']);
