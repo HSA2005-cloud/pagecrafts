@@ -24,7 +24,7 @@ export default async function PlansPage() {
     }
 
     return (
-        <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 pb-16 pt-8">
+        <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pb-16 pt-8">
             <Link
                 href="/templates"
                 className="w-fit rounded-md font-mono text-[11px] uppercase tracking-[0.22em] text-bloom-sky focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

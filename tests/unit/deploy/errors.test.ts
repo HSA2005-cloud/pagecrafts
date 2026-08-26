@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { toPublishError, notEntitled } from '@/lib/deploy/errors';
+import { reasonForError } from '@/lib/deploy/failure';
 
 describe('publish errors', () => {
     it('turns any failure into hosting_error with a readable message', () => {
@@ -21,5 +22,14 @@ describe('publish errors', () => {
     it('never puts a provider status code in the customer message', () => {
         const err = toPublishError('verifying', new Error('500 Internal Server Error'));
         expect(err.message).not.toMatch(/\d{3}/);
+    });
+
+    it('maps missing deploy credentials to a provisioning failure', () => {
+        expect(reasonForError(new Error('Deploy credential is not configured'))).toBe(
+            'provisioning_failed',
+        );
+        expect(reasonForError(new Error('Missing environment variable: HOSTING_API_BASE'))).toBe(
+            'provisioning_failed',
+        );
     });
 });

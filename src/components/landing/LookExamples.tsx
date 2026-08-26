@@ -120,8 +120,8 @@ function AnimatedExample() {
 
 const LOOKS = [
     { label: "Casual", line: "Simple, colourful, and a little inviting — one photo up top.", Preview: CasualExample },
-    { label: "Photo-rich", line: "A cinematic hero and real photographs throughout the page.", Preview: PhotoExample },
-    { label: "Animated", line: "A kinetic canvas — oversized type, glow, and motion from this business.", Preview: AnimatedExample },
+    { label: "Photo-rich", line: "Editorial type, a cinematic hero, and real photographs throughout the page.", Preview: PhotoExample },
+    { label: "Animated", line: "A kinetic canvas — Bodoni display type, champagne gold, and motion from this business.", Preview: AnimatedExample },
 ];
 
 export function LookExamples() {

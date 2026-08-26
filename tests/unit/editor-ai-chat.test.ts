@@ -266,6 +266,15 @@ function generateServer() {
 }
 
 describe('AI chat — full site from Ask', () => {
+    // The cross-vertical firewall blocks "create a sweet-shop site" when the
+    // existing composition is a different business type. Align the sample to
+    // the request so the firewall lets it through — that is the real scenario.
+    beforeEach(() => {
+        const composition = { ...useEditorStore.getState().composition! };
+        composition.vertical = 'sweet-shop';
+        useEditorStore.setState({ composition });
+    });
+
     it('proposes a generated site without writing files', async () => {
         const fetchMock = generateServer();
         vi.stubGlobal('fetch', fetchMock);
@@ -296,6 +305,10 @@ describe('AI chat — full site from Ask', () => {
     });
 
     it('discards a generated site and leaves the project as it was', async () => {
+        // This test asks for a restaurant — align the vertical.
+        const composition = { ...useEditorStore.getState().composition! };
+        composition.vertical = 'restaurant';
+        useEditorStore.setState({ composition });
         vi.stubGlobal('fetch', generateServer());
 
         const beforeJson = useEditorStore.getState().vfs.read('composition.json');

@@ -38,6 +38,7 @@ export async function classify(text: string): Promise<AiResult<IntentAttributes>
 
         const reply = await model.fast.complete({
             job: 'classify',
+            prefer: 'groq',
             system: contained.system,
             user: render(tpl.user, { text: contained.values.text }),
             schema: classifySchema,
